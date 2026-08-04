@@ -1,0 +1,4 @@
+interface:
+  display_name: "仕様準拠実装"
+  short_description: "確定済み仕様をコードへ対応付け、実装・テストまで完遂する"
+  default_prompt: "$implement-from-spec を使って、この確定済み仕様を実装し、受け入れ条件まで検証してください。"

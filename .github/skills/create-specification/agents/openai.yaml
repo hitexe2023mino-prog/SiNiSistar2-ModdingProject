@@ -1,0 +1,4 @@
+interface:
+  display_name: "新規仕様作成"
+  short_description: "アイデアを批評し、実装・検証可能な新規仕様書を作成する"
+  default_prompt: "$create-specification を使って、このアイデアを批評的に設計し、実装・検証可能な仕様書を新規作成してください。"
