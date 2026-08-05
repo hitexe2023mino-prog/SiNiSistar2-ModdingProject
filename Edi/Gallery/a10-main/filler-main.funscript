@@ -1,0 +1,12 @@
+{
+  "version": "1.0",
+  "inverted": false,
+  "range": 90,
+  "actions": [
+    { "at": 0, "pos": 20 },
+    { "at": 500, "pos": 65 },
+    { "at": 1000, "pos": 30 },
+    { "at": 1500, "pos": 75 },
+    { "at": 2000, "pos": 20 }
+  ]
+}

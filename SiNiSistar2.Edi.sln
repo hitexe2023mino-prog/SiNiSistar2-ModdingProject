@@ -1,0 +1,31 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiNiSistar2.Edi.Core", "src\SiNiSistar2.Edi.Core\SiNiSistar2.Edi.Core.csproj", "{211CF907-F310-4690-9DF7-64D1E01EE5EC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiNiSistar2.Edi.Plugin", "src\SiNiSistar2.Edi.Plugin\SiNiSistar2.Edi.Plugin.csproj", "{91BBC8C1-BB14-45AB-AE0E-19E5D8BDEDFC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiNiSistar2.Edi.Core.Tests", "tests\SiNiSistar2.Edi.Core.Tests\SiNiSistar2.Edi.Core.Tests.csproj", "{66D774FD-3271-4B6C-8B37-05AE0B619E2F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{211CF907-F310-4690-9DF7-64D1E01EE5EC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{211CF907-F310-4690-9DF7-64D1E01EE5EC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{211CF907-F310-4690-9DF7-64D1E01EE5EC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{211CF907-F310-4690-9DF7-64D1E01EE5EC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{91BBC8C1-BB14-45AB-AE0E-19E5D8BDEDFC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{91BBC8C1-BB14-45AB-AE0E-19E5D8BDEDFC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{91BBC8C1-BB14-45AB-AE0E-19E5D8BDEDFC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{91BBC8C1-BB14-45AB-AE0E-19E5D8BDEDFC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{66D774FD-3271-4B6C-8B37-05AE0B619E2F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{66D774FD-3271-4B6C-8B37-05AE0B619E2F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{66D774FD-3271-4B6C-8B37-05AE0B619E2F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{66D774FD-3271-4B6C-8B37-05AE0B619E2F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

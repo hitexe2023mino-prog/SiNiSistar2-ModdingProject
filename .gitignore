@@ -7,3 +7,15 @@ SiNiSistar2_Data/StreamingAssets
 
 # media files
 Mod/Player
+
+# .NET build outputs
+**/bin/
+**/obj/
+artifacts/
+
+# BepInEx runtime outputs (runtime dependencies and plugin DLLs stay tracked)
+BepInEx/cache/
+BepInEx/diagnostics/
+BepInEx/LogOutput*.log
+BepInEx/ErrorLog.log
+BepInEx/config/*.cfg

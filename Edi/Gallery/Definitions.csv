@@ -1,0 +1,4 @@
+Name,FileName,StartTime,EndTime,Type,Loop,Description
+Filler Main,filler-main,0,2000,filler,true,Default A10 piston filler
+Filler Breast,filler-breast,0,2000,filler,true,Default synchronized UFO TW filler
+Filler Breast Swollen,filler-breast-swollen,0,2000,filler,true,Stronger breast filler for 膨乳; requires hardware approval

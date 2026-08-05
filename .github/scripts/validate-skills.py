@@ -9,7 +9,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SKILLS_ROOT = ROOT / ".github" / "skills"
+SKILLS_ROOT = ROOT / ".agents" / "skills"
+CLAUDE_SKILLS_ROOT = ROOT / ".claude" / "skills"
 ALLOWED_FRONTMATTER = {"name", "description"}
 NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 LINK_PATTERN = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
@@ -100,6 +101,49 @@ def validate_skill(skill_dir: Path) -> list[str]:
     return errors
 
 
+def render_claude_adapter(name: str, description: str) -> str:
+    """Return the complete Claude Code adapter for a canonical skill."""
+    return (
+        "---\n"
+        f"name: {name}\n"
+        f"description: {description}\n"
+        "---\n\n"
+        "# Claude Code Adapter\n\n"
+        f"[正本のスキル指示](../../../.agents/skills/{name}/SKILL.md)を最後まで読み、"
+        "そこに記載された手順と停止条件に従う。正本から参照される相対パスは、"
+        "正本の `SKILL.md` があるディレクトリを基準に解決する。\n"
+    )
+
+
+def validate_claude_adapter(canonical_dir: Path) -> list[str]:
+    errors: list[str] = []
+    canonical_file = canonical_dir / "SKILL.md"
+    try:
+        canonical_fields, _ = parse_frontmatter(canonical_file)
+    except ValueError:
+        # validate_skill reports the actionable canonical frontmatter error.
+        return errors
+    name = canonical_fields.get("name", canonical_dir.name)
+    adapter_file = CLAUDE_SKILLS_ROOT / name / "SKILL.md"
+    relative = adapter_file.relative_to(ROOT)
+
+    if not adapter_file.is_file():
+        return [f"{relative}: Claude Code adapter is required"]
+
+    expected = render_claude_adapter(name, canonical_fields.get("description", ""))
+    actual = adapter_file.read_text(encoding="utf-8")
+    if actual != expected:
+        errors.append(
+            f"{relative}: adapter must match the canonical name and description "
+            "and delegate to its SKILL.md"
+        )
+    return errors
+
+
+def is_under(path: Path, directory: Path) -> bool:
+    return path == directory or directory in path.parents
+
+
 def main() -> int:
     if not SKILLS_ROOT.is_dir():
         print(f"ERROR: missing skills directory: {SKILLS_ROOT}")
@@ -114,11 +158,27 @@ def main() -> int:
     for misplaced in ROOT.rglob("SKILL.md"):
         if ".git" in misplaced.parts:
             continue
-        if SKILLS_ROOT not in misplaced.parents:
-            errors.append(f"{misplaced.relative_to(ROOT)}: skill must be under .github/skills")
+        if not is_under(misplaced, SKILLS_ROOT) and not is_under(
+            misplaced, CLAUDE_SKILLS_ROOT
+        ):
+            errors.append(
+                f"{misplaced.relative_to(ROOT)}: skill must be under .agents/skills "
+                "or .claude/skills"
+            )
 
     for skill_dir in skill_dirs:
         errors.extend(validate_skill(skill_dir))
+        errors.extend(validate_claude_adapter(skill_dir))
+
+    canonical_names = {path.name for path in skill_dirs}
+    claude_names = {
+        path.parent.name for path in CLAUDE_SKILLS_ROOT.glob("*/SKILL.md")
+    }
+    for extra_name in sorted(claude_names - canonical_names):
+        errors.append(
+            f".claude/skills/{extra_name}: adapter has no canonical skill under "
+            ".agents/skills"
+        )
 
     if errors:
         print(f"Skill validation failed with {len(errors)} error(s):")
@@ -126,7 +186,10 @@ def main() -> int:
             print(f"- {error}")
         return 1
 
-    print(f"Validated {len(skill_dirs)} skills: " + ", ".join(path.name for path in skill_dirs))
+    print(
+        f"Validated {len(skill_dirs)} canonical skills and Claude Code adapters: "
+        + ", ".join(path.name for path in skill_dirs)
+    )
     return 0
 
 
