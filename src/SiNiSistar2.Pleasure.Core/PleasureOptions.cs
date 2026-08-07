@@ -70,17 +70,17 @@ public sealed record PleasureOptions
     /// <summary>Draws the pleasure gauge, sensitivity and climax count on screen.</summary>
     public bool ShowOverlay { get; init; } = true;
 
-    /// <summary>Ring centre as a fraction of screen width. Defaults to the game's HP/MP dial.</summary>
-    public float OverlayCentreX { get; init; } = PleasureOverlayLayout.Default.CentreX;
+    public float GaugeCentreX { get; init; } = PleasureOverlayLayout.Default.Gauge.CentreX;
 
-    /// <summary>Gauge centre measured up from the bottom edge, as a fraction of screen height.</summary>
-    public float OverlayBottomOffset { get; init; } = PleasureOverlayLayout.Default.BottomOffset;
+    public float GaugeBottomOffset { get; init; } = PleasureOverlayLayout.Default.Gauge.BottomOffset;
 
-    /// <summary>Ring radius as a fraction of screen height, just outside the dial.</summary>
-    public float OverlayRadius { get; init; } = PleasureOverlayLayout.Default.Radius;
+    public float GaugeSize { get; init; } = PleasureOverlayLayout.Default.Gauge.Size;
 
-    /// <summary>Ring thickness as a fraction of screen height.</summary>
-    public float OverlayThickness { get; init; } = PleasureOverlayLayout.Default.Thickness;
+    public float CrossCentreX { get; init; } = PleasureOverlayLayout.Default.Cross.CentreX;
+
+    public float CrossBottomOffset { get; init; } = PleasureOverlayLayout.Default.Cross.BottomOffset;
+
+    public float CrossSize { get; init; } = PleasureOverlayLayout.Default.Cross.Size;
 
     /// <summary>Shows the cross that breaks as the climax limit is approached.</summary>
     public bool ShowCross { get; init; } = true;

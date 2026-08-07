@@ -30,9 +30,12 @@ public sealed class PleasurePlugin : BasePlugin
     private const string ExpectedMetadataSha256 =
         "A56278D0162B6C148312B56FBE208B54BA9AF2D3BAD609EBF9349B7AE7DDC84B";
 
-    private ConfigEntry<float>? _centreX;
-    private ConfigEntry<float>? _bottomOffset;
-    private ConfigEntry<float>? _ringRadius;
+    private ConfigEntry<float>? _gaugeX;
+    private ConfigEntry<float>? _gaugeY;
+    private ConfigEntry<float>? _gaugeSize;
+    private ConfigEntry<float>? _crossX;
+    private ConfigEntry<float>? _crossY;
+    private ConfigEntry<float>? _crossSize;
     private Harmony? _harmony;
     private PleasureObserver? _observer;
 
@@ -92,9 +95,12 @@ public sealed class PleasurePlugin : BasePlugin
         PleasureRuntime.Overlay = profile.Overlay;
         PleasureRuntime.SaveOverlay = layout =>
         {
-            _centreX!.Value = layout.CentreX;
-            _bottomOffset!.Value = layout.BottomOffset;
-            _ringRadius!.Value = layout.Radius;
+            _gaugeX!.Value = layout.Gauge.CentreX;
+            _gaugeY!.Value = layout.Gauge.BottomOffset;
+            _gaugeSize!.Value = layout.Gauge.Size;
+            _crossX!.Value = layout.Cross.CentreX;
+            _crossY!.Value = layout.Cross.BottomOffset;
+            _crossSize!.Value = layout.Cross.Size;
             Config.Save();
         };
 
@@ -124,8 +130,8 @@ public sealed class PleasurePlugin : BasePlugin
         if (profile.ShowOverlay)
         {
             Log.LogInfo(
-                "Press F9 in game to move and resize the gauge with the mouse: drag to move, wheel "
-                + "to resize, Enter to save, Escape to cancel.");
+                "Press F9 in game to place the overlay with the mouse: Tab picks the gauge or the "
+                + "cross, drag moves it, the wheel resizes it, Enter saves and Escape cancels.");
         }
 
         if (profile.ProbeMeasurements)
@@ -249,20 +255,24 @@ public sealed class PleasurePlugin : BasePlugin
             "ShowOverlay",
             true,
             "Draw the pleasure gauge, sensitivity and climax count on screen.");
-        _centreX = Config.Bind(
+        _gaugeX = Config.Bind(
             "Overlay",
-            "OverlayCentreX",
-            PleasureOverlayLayout.Default.CentreX,
-            "Ring centre as a fraction of screen width. The default sits on the game's HP/MP dial.");
-        _bottomOffset = Config.Bind(
-            "Overlay", "OverlayBottomOffset", PleasureOverlayLayout.Default.BottomOffset, "Gauge centre measured up from the bottom edge.");
-        _ringRadius = Config.Bind(
+            "GaugeCentreX",
+            PleasureOverlayLayout.Default.Gauge.CentreX,
+            "Gauge centre as a fraction of screen width. Easiest set in game with F9.");
+        _gaugeY = Config.Bind(
             "Overlay",
-            "OverlayRadius",
-            PleasureOverlayLayout.Default.Radius,
-            "Ring radius as a fraction of screen height. Raise it to sit further outside the dial.");
-        ConfigEntry<float> ringThickness = Config.Bind(
-            "Overlay", "OverlayThickness", PleasureOverlayLayout.Default.Thickness, "Ring thickness.");
+            "GaugeBottomOffset",
+            PleasureOverlayLayout.Default.Gauge.BottomOffset,
+            "Gauge centre measured up from the bottom edge.");
+        _gaugeSize = Config.Bind(
+            "Overlay", "GaugeSize", PleasureOverlayLayout.Default.Gauge.Size, "Gauge radius.");
+        _crossX = Config.Bind(
+            "Overlay", "CrossCentreX", PleasureOverlayLayout.Default.Cross.CentreX, "Cross centre, fraction of width.");
+        _crossY = Config.Bind(
+            "Overlay", "CrossBottomOffset", PleasureOverlayLayout.Default.Cross.BottomOffset, "Cross centre from the bottom.");
+        _crossSize = Config.Bind(
+            "Overlay", "CrossSize", PleasureOverlayLayout.Default.Cross.Size, "Cross height.");
         ConfigEntry<bool> showCross = Config.Bind(
             "Overlay",
             "ShowCross",
@@ -296,10 +306,12 @@ public sealed class PleasurePlugin : BasePlugin
             LogTransitions = logTransitions.Value,
             ProbeMeasurements = probe.Value,
             ShowOverlay = showOverlay.Value,
-            OverlayCentreX = _centreX.Value,
-            OverlayBottomOffset = _bottomOffset.Value,
-            OverlayRadius = _ringRadius.Value,
-            OverlayThickness = ringThickness.Value,
+            GaugeCentreX = _gaugeX.Value,
+            GaugeBottomOffset = _gaugeY.Value,
+            GaugeSize = _gaugeSize.Value,
+            CrossCentreX = _crossX.Value,
+            CrossBottomOffset = _crossY.Value,
+            CrossSize = _crossSize.Value,
             ShowCross = showCross.Value,
         };
     }

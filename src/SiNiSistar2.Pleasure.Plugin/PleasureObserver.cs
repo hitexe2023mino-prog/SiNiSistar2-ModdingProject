@@ -26,6 +26,7 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _sawFirstSlot;
     private bool _editing;
     private PleasureOverlayLayout? _layoutBeforeEdit;
+    private bool _editingCross;
     private Texture2D? _liquid;
     private Texture2D? _cross;
     private Texture2D? _haze;
@@ -354,36 +355,70 @@ public sealed class PleasureObserver : MonoBehaviour
 
         PleasureOverlayLayout layout = PleasureRuntime.Overlay;
         float height = Screen.height;
-        float centreX = Screen.width * layout.CentreX;
 
-        // Anchored to the bottom, because the game's HUD is. Measuring down from the top let the
-        // gauge drift off the dial as soon as the window was not the height it was measured on.
-        float centreY = height - (height * layout.BottomOffset);
-        float radius = height * layout.Radius;
+        OverlayPlacement gauge = layout.Gauge;
+        float gaugeX = Screen.width * gauge.CentreX;
+        float gaugeY = height - (height * gauge.BottomOffset);
+        float radius = height * gauge.Size;
 
         RefreshLiquid(meter.Value);
         if (_liquid is not null)
         {
             float diameter = radius * 2f;
-            Draw(new Rect(centreX - radius, centreY - radius, diameter, diameter), _liquid, Color.white);
+            Draw(new Rect(gaugeX - radius, gaugeY - radius, diameter, diameter), _liquid, Color.white);
         }
 
-        if (PleasureRuntime.Overlay.ShowCross)
+        if (layout.ShowCross)
         {
             RefreshCross();
             if (_cross is not null)
             {
-                float crossHeight = radius * 1.5f;
+                OverlayPlacement cross = layout.Cross;
+                float crossHeight = height * cross.Size;
+                float crossWidth = crossHeight * 0.66f;
+                float crossX = Screen.width * cross.CentreX;
+                float crossY = height - (height * cross.BottomOffset);
                 Draw(
-                    new Rect(
-                        centreX - (crossHeight * 0.33f),
-                        centreY - radius - crossHeight - (height * 0.01f),
-                        crossHeight * 0.66f,
-                        crossHeight),
+                    new Rect(crossX - (crossWidth / 2f), crossY - (crossHeight / 2f), crossWidth, crossHeight),
                     _cross,
                     Color.white);
             }
         }
+
+        if (_editing)
+        {
+            DrawSelectionMarker(radius, gaugeX, gaugeY, height, layout);
+        }
+    }
+
+    /// <summary>Rings whichever element the editor is currently moving, so the target is never in doubt.</summary>
+    [HideFromIl2Cpp]
+    private void DrawSelectionMarker(float radius, float gaugeX, float gaugeY, float height, PleasureOverlayLayout layout)
+    {
+        _haze ??= PleasureArt.Solid(Color.white);
+
+        float x;
+        float y;
+        float half;
+        if (_editingCross)
+        {
+            x = Screen.width * layout.Cross.CentreX;
+            y = height - (height * layout.Cross.BottomOffset);
+            half = height * layout.Cross.Size * 0.5f;
+        }
+        else
+        {
+            x = gaugeX;
+            y = gaugeY;
+            half = radius;
+        }
+
+        var tint = new Color(1f, 0.85f, 0.35f, 0.85f);
+        const float edge = 2f;
+        Draw(new Rect(x - half, y - half, half * 2f, edge), _haze, tint);
+        Draw(new Rect(x - half, y + half - edge, half * 2f, edge), _haze, tint);
+        Draw(new Rect(x - half, y - half, edge, half * 2f), _haze, tint);
+        Draw(new Rect(x + half - edge, y - half, edge, half * 2f), _haze, tint);
     }
 
     /// <summary>
@@ -426,31 +461,40 @@ public sealed class PleasureObserver : MonoBehaviour
                 current.Use();
                 break;
 
-            case EventType.MouseDrag:
-            {
-                PleasureOverlayLayout layout = PleasureRuntime.Overlay;
-                PleasureRuntime.Overlay = layout with
-                {
-                    CentreX = Math.Clamp(layout.CentreX + (current.delta.x / Screen.width), 0f, 1f),
-
-                    // The offset is measured up from the bottom, so dragging down shrinks it.
-                    BottomOffset = Math.Clamp(layout.BottomOffset - (current.delta.y / Screen.height), 0f, 1f),
-                };
+            case EventType.KeyDown when current.keyCode == KeyCode.Tab:
+                _editingCross = !_editingCross;
                 current.Use();
                 break;
-            }
+
+            case EventType.MouseDrag:
+                Adjust(placement => placement with
+                {
+                    CentreX = Math.Clamp(placement.CentreX + (current.delta.x / Screen.width), 0f, 1f),
+
+                    // Measured up from the bottom, so dragging downward reduces it.
+                    BottomOffset = Math.Clamp(placement.BottomOffset - (current.delta.y / Screen.height), 0f, 1f),
+                });
+                current.Use();
+                break;
 
             case EventType.ScrollWheel:
-            {
-                PleasureOverlayLayout layout = PleasureRuntime.Overlay;
-                PleasureRuntime.Overlay = layout with
+                Adjust(placement => placement with
                 {
-                    Radius = Math.Clamp(layout.Radius - (current.delta.y * 0.002f), 0.01f, 0.5f),
-                };
+                    Size = Math.Clamp(placement.Size - (current.delta.y * 0.002f), 0.01f, 0.5f),
+                });
                 current.Use();
                 break;
-            }
         }
+    }
+
+    /// <summary>Applies a change to whichever element is selected, leaving the other alone.</summary>
+    [HideFromIl2Cpp]
+    private void Adjust(Func<OverlayPlacement, OverlayPlacement> change)
+    {
+        PleasureOverlayLayout layout = PleasureRuntime.Overlay;
+        PleasureRuntime.Overlay = _editingCross
+            ? layout with { Cross = change(layout.Cross) }
+            : layout with { Gauge = change(layout.Gauge) };
     }
 
     [HideFromIl2Cpp]
@@ -464,7 +508,9 @@ public sealed class PleasureObserver : MonoBehaviour
 
         _editing = true;
         _layoutBeforeEdit = PleasureRuntime.Overlay;
-        PleasureRuntime.Log?.LogInfo("Layout editing started. Drag to move, wheel to resize, Enter to save, Escape to cancel.");
+        PleasureRuntime.Log?.LogInfo(
+            "Layout editing started. Tab picks the gauge or the cross, drag moves it, the wheel "
+            + "resizes it, Enter saves and Escape cancels.");
     }
 
     [HideFromIl2Cpp]
@@ -475,8 +521,9 @@ public sealed class PleasureObserver : MonoBehaviour
         PleasureOverlayLayout layout = PleasureRuntime.Overlay;
         PleasureRuntime.SaveOverlay?.Invoke(layout);
         PleasureRuntime.Log?.LogInfo(
-            $"Layout saved: OverlayCentreX={layout.CentreX:F3}, OverlayBottomOffset={layout.BottomOffset:F3}, "
-            + $"OverlayRadius={layout.Radius:F3}.");
+            $"Layout saved: GaugeCentreX={layout.Gauge.CentreX:F3}, GaugeBottomOffset={layout.Gauge.BottomOffset:F3}, "
+            + $"GaugeSize={layout.Gauge.Size:F3}, CrossCentreX={layout.Cross.CentreX:F3}, "
+            + $"CrossBottomOffset={layout.Cross.BottomOffset:F3}, CrossSize={layout.Cross.Size:F3}.");
     }
 
     [HideFromIl2Cpp]
@@ -502,12 +549,15 @@ public sealed class PleasureObserver : MonoBehaviour
         }
 
         PleasureOverlayLayout layout = PleasureRuntime.Overlay;
-        GUI.Box(new Rect(12f, 12f, 470f, 96f), GUIContent.none);
-        GUI.Label(new Rect(24f, 20f, 450f, 22f), "Pleasure gauge layout — drag to move, wheel to resize");
-        GUI.Label(new Rect(24f, 44f, 450f, 22f), "Enter: save to config    Escape: cancel    F9: save and close");
+        OverlayPlacement selected = _editingCross ? layout.Cross : layout.Gauge;
+        string name = _editingCross ? "cross" : "gauge";
+
+        GUI.Box(new Rect(12f, 12f, 520f, 96f), GUIContent.none);
+        GUI.Label(new Rect(24f, 20f, 500f, 22f), $"Editing the {name}    Tab: switch element");
+        GUI.Label(new Rect(24f, 44f, 500f, 22f), "Drag: move    Wheel: resize    Enter: save    Escape: cancel");
         GUI.Label(
-            new Rect(24f, 68f, 450f, 22f),
-            $"OverlayCentreX={layout.CentreX:F3}  OverlayBottomOffset={layout.BottomOffset:F3}  OverlayRadius={layout.Radius:F3}");
+            new Rect(24f, 68f, 500f, 22f),
+            $"CentreX={selected.CentreX:F3}  BottomOffset={selected.BottomOffset:F3}  Size={selected.Size:F3}");
     }
 
     /// <summary>

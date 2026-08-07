@@ -38,22 +38,32 @@ public sealed record BreastSuperTuning(bool Enabled, float Chance, float Sensiti
 }
 
 /// <summary>
-/// Where the pleasure ring is drawn, as fractions of the screen so it survives a resolution change
-/// (SPEC003 5.4).
+/// Where one overlay element sits, as fractions of the screen so it survives a resolution change.
 ///
-/// The defaults place it concentric with the game's own HP/MP dial and just outside it. Values are
-/// exposed because the dial's position is read off a screenshot rather than from the game, and a
-/// different aspect ratio may need a nudge.
+/// The vertical position is measured up from the bottom edge because the game's HUD is anchored
+/// there; measuring down from the top moved every element as soon as the window was not the height
+/// the values were chosen on.
+/// </summary>
+public sealed record OverlayPlacement(float CentreX, float BottomOffset, float Size);
+
+/// <summary>
+/// Where the overlay's elements sit (SPEC003 5.4).
+///
+/// Each element carries its own placement. They mark different things — one is the state of the
+/// current hold, the other is how much of the run is left — and a HUD that suits one screen rarely
+/// wants both in the same relationship on another.
 /// </summary>
 public sealed record PleasureOverlayLayout(
-    float CentreX,
-    float BottomOffset,
-    float Radius,
-    float Thickness,
+    OverlayPlacement Gauge,
+    OverlayPlacement Cross,
     float FlashSeconds,
     bool ShowCross)
 {
-    public static PleasureOverlayLayout Default { get; } = new(0.283f, 0.115f, 0.086f, 0.007f, 1.5f, true);
+    public static PleasureOverlayLayout Default { get; } = new(
+        new OverlayPlacement(0.283f, 0.115f, 0.086f),
+        new OverlayPlacement(0.283f, 0.275f, 0.129f),
+        1.5f,
+        true);
 }
 
 /// <summary>The validated configuration the plugin acts on (SPEC003 6.2).</summary>
@@ -140,10 +150,14 @@ public static class PleasureProfileFactory
             options.ProbeMeasurements,
             options.ShowOverlay,
             new PleasureOverlayLayout(
-                options.OverlayCentreX,
-                options.OverlayBottomOffset,
-                Math.Max(0.01f, options.OverlayRadius),
-                Math.Max(0.001f, options.OverlayThickness),
+                new OverlayPlacement(
+                    options.GaugeCentreX,
+                    options.GaugeBottomOffset,
+                    Math.Max(0.01f, options.GaugeSize)),
+                new OverlayPlacement(
+                    options.CrossCentreX,
+                    options.CrossBottomOffset,
+                    Math.Max(0.01f, options.CrossSize)),
                 Math.Max(0.01f, options.ClimaxOverlaySeconds),
                 options.ShowCross));
 
