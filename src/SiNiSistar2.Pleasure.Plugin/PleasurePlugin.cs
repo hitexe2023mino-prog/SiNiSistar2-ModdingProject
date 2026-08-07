@@ -231,6 +231,20 @@ public sealed class PleasurePlugin : BasePlugin
             "ShowOverlay",
             true,
             "Draw the pleasure gauge, sensitivity and climax count on screen.");
+        ConfigEntry<float> centreX = Config.Bind(
+            "Overlay",
+            "OverlayCentreX",
+            PleasureOverlayLayout.Default.CentreX,
+            "Ring centre as a fraction of screen width. The default sits on the game's HP/MP dial.");
+        ConfigEntry<float> centreY = Config.Bind(
+            "Overlay", "OverlayCentreY", PleasureOverlayLayout.Default.CentreY, "Ring centre, fraction of screen height.");
+        ConfigEntry<float> ringRadius = Config.Bind(
+            "Overlay",
+            "OverlayRadius",
+            PleasureOverlayLayout.Default.Radius,
+            "Ring radius as a fraction of screen height. Raise it to sit further outside the dial.");
+        ConfigEntry<float> ringThickness = Config.Bind(
+            "Overlay", "OverlayThickness", PleasureOverlayLayout.Default.Thickness, "Ring thickness.");
 
         return new PleasureOptions
         {
@@ -258,6 +272,10 @@ public sealed class PleasurePlugin : BasePlugin
             LogTransitions = logTransitions.Value,
             ProbeMeasurements = probe.Value,
             ShowOverlay = showOverlay.Value,
+            OverlayCentreX = centreX.Value,
+            OverlayCentreY = centreY.Value,
+            OverlayRadius = ringRadius.Value,
+            OverlayThickness = ringThickness.Value,
         };
     }
 

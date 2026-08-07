@@ -23,9 +23,11 @@ public sealed class PleasureObserver : MonoBehaviour
     private string? _lastSaveFile;
     private double _lastFrameTime;
     private float _lastMaxDurability;
-    private Texture2D? _backdrop;
+    private Texture2D? _track;
     private Texture2D? _active;
     private Texture2D? _idle;
+    private Texture2D? _sensitivity;
+    private Texture2D? _flash;
 
     public PleasureObserver(IntPtr pointer)
         : base(pointer)
@@ -279,6 +281,14 @@ public sealed class PleasureObserver : MonoBehaviour
             + $"{ClimaxLimit.Compute(PleasureRuntime.Profile.Climax.LimitBase, PleasureRuntime.Profile.Climax.LimitPerDurability, status.m_MaxDurability)}.");
     }
 
+    /// <summary>
+    /// Draws pleasure as a ring concentric with the game's own HP/MP dial.
+    ///
+    /// The dial already spends its left half on HP and its right half on MP, so a fourth reading
+    /// cannot go inside it. Sitting just outside as a full ring keeps the shape language of the
+    /// HUD — same centre, same arc idiom — instead of parking a floating box in a corner, which is
+    /// what made the first attempt read as debug output rather than part of the game.
+    /// </summary>
     [HideFromIl2Cpp]
     private void DrawGauge()
     {
@@ -288,66 +298,146 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        float sensitivity = PleasureRuntime.Sensitivity?.Value ?? 0f;
-        int count = PleasureRuntime.Climaxes.Count;
-        ClimaxTuning climax = PleasureRuntime.Profile.Climax;
-        int limit = ClimaxLimit.Compute(climax.LimitBase, climax.LimitPerDurability, _lastMaxDurability);
+        PleasureOverlayLayout layout = PleasureRuntime.Profile.Overlay;
+        float height = Screen.height;
+        float centreX = Screen.width * layout.CentreX;
+        float centreY = height * layout.CentreY;
+        float radius = height * layout.Radius;
+        float thickness = Math.Max(2f, height * layout.Thickness);
 
-        const float x = 12f;
-        const float y = 12f;
-        const float width = 232f;
+        bool live = PleasureRuntime.CanAccumulate;
 
-        GUI.Box(new Rect(x, y, width, 76f), GUIContent.none);
+        // The unfilled track is drawn first and dimly, echoing the dotted ring the dial already has.
+        DrawArc(centreX, centreY, radius, thickness, 1f, TrackTexture());
+        DrawArc(centreX, centreY, radius, thickness, meter.Value, live ? ActiveTexture() : IdleTexture());
 
-        // The gauge is drawn even at zero gain: seeing it sit still is how the player can tell the
-        // MOD is loaded but untuned, rather than loaded and broken.
-        GUI.Label(new Rect(x + 8f, y + 4f, width - 16f, 20f), $"快楽  {meter.Value * 100f:F0}%");
-        DrawBar(new Rect(x + 8f, y + 24f, width - 16f, 10f), meter.Value, PleasureRuntime.CanAccumulate);
-
-        GUI.Label(
-            new Rect(x + 8f, y + 36f, width - 16f, 20f),
-            $"感度  {sensitivity:F2} / {PleasureRuntime.Sensitivity?.Cap ?? 0f:F0}");
-        GUI.Label(
-            new Rect(x + 8f, y + 54f, width - 16f, 20f),
-            limit > 0 ? $"絶頂  {count} / {limit}" : $"絶頂  {count}");
+        DrawSensitivityRing(centreX, centreY, radius + (thickness * 1.6f), thickness * 0.45f);
+        DrawClimaxPips(centreX, centreY, radius + (thickness * 3.2f));
     }
 
+    /// <summary>
+    /// Sensitivity as a thinner outer ring. It only ever grows, so it reads as a rim that fills in
+    /// permanently while the pleasure ring inside it rises and falls.
+    /// </summary>
     [HideFromIl2Cpp]
-    private void DrawBar(Rect area, float fill, bool active)
+    private void DrawSensitivityRing(float centreX, float centreY, float radius, float thickness)
     {
-        GUI.DrawTexture(area, BackdropTexture());
-        if (fill <= 0f)
+        SensitivityTrack? track = PleasureRuntime.Sensitivity;
+        if (track is null || track.Cap <= 0f)
         {
             return;
         }
 
-        var filled = new Rect(area.x, area.y, area.width * Math.Clamp(fill, 0f, 1f), area.height);
+        DrawArc(centreX, centreY, radius, Math.Max(1f, thickness), track.Value / track.Cap, SensitivityTexture());
+    }
 
-        // Dimmed while pleasure cannot rise, so the gauge also says whether the situation is one
-        // where it could move at all.
-        GUI.DrawTexture(filled, active ? ActiveTexture() : IdleTexture());
+    /// <summary>
+    /// The climax count as pips around the top of the dial. A count is discrete, so dots say it
+    /// better than a bar, and the remaining pips show how much headroom the limit still allows.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void DrawClimaxPips(float centreX, float centreY, float radius)
+    {
+        ClimaxTuning tuning = PleasureRuntime.Profile.Climax;
+        int limit = ClimaxLimit.Compute(tuning.LimitBase, tuning.LimitPerDurability, _lastMaxDurability);
+        int count = PleasureRuntime.Climaxes.Count;
+        if (limit <= 0 || limit > 24)
+        {
+            return;
+        }
+
+        float size = Math.Max(3f, Screen.height * 0.0045f);
+        const float spreadDegrees = 90f;
+        float step = limit == 1 ? 0f : spreadDegrees / (limit - 1);
+        float first = -spreadDegrees / 2f;
+
+        for (var index = 0; index < limit; index++)
+        {
+            double radians = (first + (step * index)) * Math.PI / 180d;
+            float x = centreX + (float)(radius * Math.Sin(radians));
+            float y = centreY - (float)(radius * Math.Cos(radians));
+            GUI.DrawTexture(
+                new Rect(x - (size / 2f), y - (size / 2f), size, size),
+                index < count ? ActiveTexture() : TrackTexture());
+        }
+    }
+
+    /// <summary>
+    /// Draws a ring by stepping small quads along it. IMGUI has no arc primitive, and a texture
+    /// cannot be clipped to an angle, so the arc is walked instead. The quads overlap slightly so
+    /// the ring reads as continuous rather than as beads.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private static void DrawArc(
+        float centreX,
+        float centreY,
+        float radius,
+        float thickness,
+        float fill,
+        Texture2D texture)
+    {
+        float clamped = Math.Clamp(fill, 0f, 1f);
+        if (clamped <= 0f || radius <= 0f)
+        {
+            return;
+        }
+
+        var segments = (int)Math.Ceiling(clamped * 180f);
+        float sweep = clamped * 360f;
+        float size = thickness * 1.5f;
+
+        for (var index = 0; index <= segments; index++)
+        {
+            double degrees = sweep * index / Math.Max(1, segments);
+            double radians = degrees * Math.PI / 180d;
+
+            // Starts at twelve o'clock and fills clockwise, the direction the dial's own arcs run.
+            float x = centreX + (float)(radius * Math.Sin(radians));
+            float y = centreY - (float)(radius * Math.Cos(radians));
+            GUI.DrawTexture(new Rect(x - (size / 2f), y - (size / 2f), size, size), texture);
+        }
     }
 
     [HideFromIl2Cpp]
     private void DrawClimaxFlash()
     {
-        if (Time.timeAsDouble >= PleasureRuntime.ClimaxFlashUntil)
+        double remaining = PleasureRuntime.ClimaxFlashUntil - Time.timeAsDouble;
+        if (remaining <= 0d)
         {
             return;
         }
 
-        var area = new Rect(0f, Screen.height * 0.38f, Screen.width, 48f);
-        GUI.Label(area, $"絶頂  {PleasureRuntime.Climaxes.Count}");
+        // A ring that blooms outward from the dial, so the moment is announced where the gauge
+        // lives rather than by text across the middle of the screen.
+        PleasureOverlayLayout layout = PleasureRuntime.Profile.Overlay;
+        float height = Screen.height;
+        float progress = 1f - (float)Math.Clamp(remaining / Math.Max(0.01f, layout.FlashSeconds), 0d, 1d);
+        float radius = height * layout.Radius * (1f + (progress * 0.6f));
+        float thickness = Math.Max(2f, height * layout.Thickness * (1f - progress));
+
+        DrawArc(
+            Screen.width * layout.CentreX,
+            height * layout.CentreY,
+            radius,
+            thickness,
+            1f,
+            FlashTexture());
     }
 
     [HideFromIl2Cpp]
-    private Texture2D BackdropTexture() => _backdrop ??= SolidTexture(new Color(0f, 0f, 0f, 0.65f));
+    private Texture2D TrackTexture() => _track ??= SolidTexture(new Color(0.10f, 0.08f, 0.10f, 0.55f));
 
     [HideFromIl2Cpp]
-    private Texture2D ActiveTexture() => _active ??= SolidTexture(new Color(1f, 0.24f, 0.62f, 0.95f));
+    private Texture2D ActiveTexture() => _active ??= SolidTexture(new Color(0.93f, 0.20f, 0.55f, 0.92f));
 
     [HideFromIl2Cpp]
-    private Texture2D IdleTexture() => _idle ??= SolidTexture(new Color(0.55f, 0.35f, 0.45f, 0.75f));
+    private Texture2D IdleTexture() => _idle ??= SolidTexture(new Color(0.52f, 0.24f, 0.38f, 0.72f));
+
+    [HideFromIl2Cpp]
+    private Texture2D SensitivityTexture() => _sensitivity ??= SolidTexture(new Color(0.72f, 0.62f, 0.78f, 0.60f));
+
+    [HideFromIl2Cpp]
+    private Texture2D FlashTexture() => _flash ??= SolidTexture(new Color(1f, 0.62f, 0.82f, 0.55f));
 
     [HideFromIl2Cpp]
     private static Texture2D SolidTexture(Color color)

@@ -69,6 +69,18 @@ public sealed record PleasureOptions
 
     /// <summary>Draws the pleasure gauge, sensitivity and climax count on screen.</summary>
     public bool ShowOverlay { get; init; } = true;
+
+    /// <summary>Ring centre as a fraction of screen width. Defaults to the game's HP/MP dial.</summary>
+    public float OverlayCentreX { get; init; } = PleasureOverlayLayout.Default.CentreX;
+
+    /// <summary>Ring centre as a fraction of screen height.</summary>
+    public float OverlayCentreY { get; init; } = PleasureOverlayLayout.Default.CentreY;
+
+    /// <summary>Ring radius as a fraction of screen height, just outside the dial.</summary>
+    public float OverlayRadius { get; init; } = PleasureOverlayLayout.Default.Radius;
+
+    /// <summary>Ring thickness as a fraction of screen height.</summary>
+    public float OverlayThickness { get; init; } = PleasureOverlayLayout.Default.Thickness;
 }
 
 /// <summary>

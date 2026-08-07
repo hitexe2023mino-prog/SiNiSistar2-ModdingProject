@@ -37,6 +37,24 @@ public sealed record BreastSuperTuning(bool Enabled, float Chance, float Sensiti
     public bool HasEffect => Enabled && Chance > 0f;
 }
 
+/// <summary>
+/// Where the pleasure ring is drawn, as fractions of the screen so it survives a resolution change
+/// (SPEC003 5.4).
+///
+/// The defaults place it concentric with the game's own HP/MP dial and just outside it. Values are
+/// exposed because the dial's position is read off a screenshot rather than from the game, and a
+/// different aspect ratio may need a nudge.
+/// </summary>
+public sealed record PleasureOverlayLayout(
+    float CentreX,
+    float CentreY,
+    float Radius,
+    float Thickness,
+    float FlashSeconds)
+{
+    public static PleasureOverlayLayout Default { get; } = new(0.282f, 0.867f, 0.115f, 0.007f, 1.5f);
+}
+
 /// <summary>The validated configuration the plugin acts on (SPEC003 6.2).</summary>
 public sealed record PleasureProfile(
     bool Enabled,
@@ -49,7 +67,8 @@ public sealed record PleasureProfile(
     bool RaiseDuringDefeatPerformance,
     bool LogTransitions,
     bool ProbeMeasurements,
-    bool ShowOverlay)
+    bool ShowOverlay,
+    PleasureOverlayLayout Overlay)
 {
     public static PleasureProfile Inactive { get; } = new(
         false,
@@ -62,7 +81,8 @@ public sealed record PleasureProfile(
         false,
         false,
         false,
-        false);
+        false,
+        PleasureOverlayLayout.Default);
 
     /// <summary>
     /// True when the MOD would do anything observable. HP0 suppression alone counts: it is the
@@ -117,7 +137,13 @@ public static class PleasureProfileFactory
             options.RaiseDuringDefeatPerformance,
             options.LogTransitions,
             options.ProbeMeasurements,
-            options.ShowOverlay);
+            options.ShowOverlay,
+            new PleasureOverlayLayout(
+                options.OverlayCentreX,
+                options.OverlayCentreY,
+                Math.Max(0.01f, options.OverlayRadius),
+                Math.Max(0.001f, options.OverlayThickness),
+                Math.Max(0.01f, options.ClimaxOverlaySeconds)));
 
         if (!pleasure.HasEffect)
         {
