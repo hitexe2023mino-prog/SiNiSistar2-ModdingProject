@@ -17,7 +17,7 @@ This is the **probe stage**. The only behaviour change is removing the HP0 defea
 
 ## Automated coverage
 
-`dotnet test SiNiSistar2.Edi.sln -c Release` → 42 for this MOD, 89 for SPEC002, 143 for SPEC001, 0 failures.
+`dotnet test SiNiSistar2.Edi.sln -c Release` → 54 for this MOD, 89 for SPEC002, 143 for SPEC001, 0 failures.
 
 ## 要件台帳
 
@@ -44,11 +44,11 @@ This is the **probe stage**. The only behaviour change is removing the HP0 defea
 | FR-219 | 感度を減少させる経路を持たない | `SensitivityTrack.Add`（非正を無視） | `SensitivityAndClimaxTests.SensitivityNeverFalls`、AC-215 実機 | Tested |
 | FR-220 | 感度は上限で頭打ち、減少ではない | `SensitivityTrack` | `SensitivityAndClimaxTests.TheCapStopsGrowth...` | Tested |
 | FR-221 | 条件成立で `BreastSuper` を正規経路で付与 | — | AC-217 | Not started |
-| FR-222 | 感度と絶頂回数をスロット単位で保存しセーブに同期 | `SidecarDocument`、`SlotKey`（保存先の決定まで） | `SidecarDocumentTests`（7件）、AC-218 | Tested / Not started（同期未実装） |
-| FR-223 | 随伴ファイルの書き込みは原子的 | — | AC-219 | Not started |
+| FR-222 | 感度と絶頂回数をスロット単位で保存しセーブに同期 | `SidecarStore`、`PleasureRuntime.LoadSlot` / `SaveSlot`、`PleasureObserver.ProbeSaveSlot`、`SavePointPatches` | `SidecarStoreTests`（8件）、`SidecarDocumentTests`、AC-218 実機 | Tested / unverified |
+| FR-223 | 随伴ファイルの書き込みは原子的 | `SidecarStore.Save`（一時ファイル＋置換） | `SidecarStoreTests.SavingLeavesNoTemporaryFile` ほか | Tested |
 | FR-224 | ファイルがなければ初期値 | `SidecarDocument.Parse` | `SidecarDocumentTests` | Tested |
-| FR-225 | 非対応スキーマは読まず上書きしない | `SidecarDocument.Parse`（`UnsupportedSchema`） | `SidecarDocumentTests.AnUnsupportedSchema...` | Tested |
-| FR-226 | 随伴ファイルの失敗でゲームを止めない | `SidecarParse`（例外を投げない） | `SidecarDocumentTests`（4件） | Tested |
+| FR-225 | 非対応スキーマは読まず上書きしない | `SidecarDocument.Parse`、`SidecarStore`（スロットを施錠） | `SidecarStoreTests.ANewerSchemaLocksTheSlot...` | Tested |
+| FR-226 | 随伴ファイルの失敗でゲームを止めない | `SidecarStore`（失敗を戻り値で返す）、`PleasureRuntime.SaveSlot` | `SidecarStoreTests.AnUnwritableRoot...` ほか | Tested |
 | FR-227 | 他MODへ依存宣言しない | `PleasurePlugin`（`BepInDependency` なし） | AC-222 実機 | Implemented / unverified |
 | FR-228 | SPEC001が依存する面を変更しない | 参照なし | AC-223 実機 | Implemented / unverified |
 | FR-229 | SPEC002の管理面へ介入しない | 参照なし | AC-223 実機 | Implemented / unverified |

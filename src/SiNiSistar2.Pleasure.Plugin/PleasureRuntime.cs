@@ -31,6 +31,12 @@ internal static class PleasureRuntime
     /// <summary>Writes the layout back to the config file. Supplied by the plugin at load.</summary>
     internal static Action<PleasureOverlayLayout>? SaveOverlay { get; set; }
 
+    /// <summary>Carries sensitivity and the climax count alongside the game's save slots.</summary>
+    internal static SidecarStore? Sidecar { get; set; }
+
+    /// <summary>Which slot the sidecar is following, or null before one has been identified.</summary>
+    internal static string? CurrentSlotKey { get; private set; }
+
     internal static ManualLogSource? Log { get; set; }
 
     internal static PleasureMeter? Meter { get; set; }
@@ -156,34 +162,76 @@ internal static class PleasureRuntime
     }
 
     /// <summary>
-    /// Starts a fresh run for a newly loaded save.
+    /// Points the run at a save slot and restores whatever that slot holds.
     ///
-    /// The climax count belongs to a save, not to the process. Without it, a retry after a game
-    /// over came back with the count still at the limit and the next hold killed the player
-    /// immediately. Sensitivity goes with it: it is one-way within a run, but loading moves to a
-    /// different point in the story and cannot inherit a later run's total.
-    ///
-    /// This is the interim behaviour until the sidecar file lands (SPEC003 FR-222); at that point
-    /// the values are restored from the save rather than cleared.
+    /// The climax count and sensitivity belong to a save, not to the process. Without this a retry
+    /// after a game over came back still at the limit and the next hold killed the player at once.
+    /// Restoring rather than clearing is what makes loading an earlier save mean what it says: the
+    /// values go back to where that save left them (SPEC003 4.4, FR-222).
     /// </summary>
-    internal static void BeginRunFromSave(string reason)
+    internal static void LoadSlot(string slotKey, string reason)
     {
-        int hadClimaxes = Climaxes.Count;
-        float hadSensitivity = Sensitivity?.Value ?? 0f;
+        CurrentSlotKey = slotKey;
 
-        Climaxes.ResetCount();
-        Sensitivity?.LoadFrom(0f);
+        SidecarLoad load = Sidecar?.Load(slotKey) ?? new SidecarLoad(null, null, false);
+        SidecarDocument? stored = load.Document;
+        if (stored is not null)
+        {
+            Sensitivity?.LoadFrom(stored.Sensitivity);
+            Climaxes.LoadFrom(stored.ClimaxCount);
+        }
+        else
+        {
+            Sensitivity?.LoadFrom(0f);
+            Climaxes.ResetCount();
+        }
+
         Meter?.Reset();
         PendingClimax = false;
         ClimaxFlashUntil = 0d;
 
-        if (hadClimaxes > 0 || hadSensitivity > 0f)
+        string state = stored is not null
+            ? $"restored climaxes {Climaxes.Count}, sensitivity {Sensitivity?.Value ?? 0f:F2}"
+            : "no sidecar yet, starting from zero";
+        string notice = load.Notice is null ? string.Empty : $" The stored file {load.Notice}.";
+        Log?.LogInfo($"Slot '{slotKey}' ({reason}): {state}.{notice}");
+    }
+
+    /// <summary>
+    /// Reloads the current slot. Used when the player comes back from a defeat, which returns them
+    /// to the last save and should return these values with them.
+    /// </summary>
+    internal static void ReloadCurrentSlot(string reason)
+    {
+        if (CurrentSlotKey is null)
         {
-            Log?.LogInfo(
-                $"A save was loaded ({reason}); the run restarts. Climaxes {hadClimaxes} -> 0, "
-                + $"sensitivity {hadSensitivity:F2} -> 0.00. Persisting these across saves is not "
-                + "implemented yet (SPEC003 FR-222).");
+            return;
         }
+
+        LoadSlot(CurrentSlotKey, reason);
+    }
+
+    /// <summary>
+    /// Writes the run to the sidecar. A failure is reported and nothing else happens: losing a
+    /// write must never interrupt play (SPEC003 FR-226).
+    /// </summary>
+    internal static void SaveSlot(string reason)
+    {
+        if (CurrentSlotKey is null || Sidecar is null)
+        {
+            return;
+        }
+
+        string? failure = Sidecar.Save(CurrentSlotKey, Sensitivity?.Value ?? 0f, Climaxes.Count);
+        if (failure is not null)
+        {
+            Log?.LogWarning($"Slot '{CurrentSlotKey}' could not be written ({reason}): {failure}");
+            return;
+        }
+
+        Log?.LogInfo(
+            $"Slot '{CurrentSlotKey}' saved ({reason}): climaxes {Climaxes.Count}, "
+            + $"sensitivity {Sensitivity?.Value ?? 0f:F2}.");
     }
 
     internal static void Reset()

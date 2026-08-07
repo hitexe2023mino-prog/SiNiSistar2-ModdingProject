@@ -23,7 +23,6 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _labelUnavailable;
     private bool _gameplayActive;
     private bool _wasDead;
-    private bool _sawFirstSlot;
     private bool _editing;
     private PleasureOverlayLayout? _layoutBeforeEdit;
     private bool _editingCross;
@@ -155,7 +154,7 @@ public sealed class PleasureObserver : MonoBehaviour
         // path down with it, so the transition is observed instead of intercepted.
         if (_wasDead && !dead)
         {
-            PleasureRuntime.BeginRunFromSave("revived after a defeat");
+            PleasureRuntime.ReloadCurrentSlot("revived after a defeat");
         }
 
         _wasDead = dead;
@@ -303,15 +302,14 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        // The first sighting is simply this session starting; only a later change is a new save.
-        if (_sawFirstSlot)
-        {
-            PleasureRuntime.BeginRunFromSave($"save slot changed to {selectId}");
-        }
-
-        _sawFirstSlot = true;
         _lastSelectId = selectId;
         _lastSaveFile = file;
+
+        string? key = SlotKey.Compose(selectId, file);
+        if (key is not null)
+        {
+            PleasureRuntime.LoadSlot(key, "the save slot became known");
+        }
         PleasureRuntime.Log?.LogInfo(
             $"[probe] A-9: save slot is SelectID={selectId}, LoadedFileName='{file ?? "(null)"}', "
             + $"IsAutoSave={main.IsAutoSave}, sidecar key='{SlotKey.Compose(selectId, file) ?? "(none)"}'.");

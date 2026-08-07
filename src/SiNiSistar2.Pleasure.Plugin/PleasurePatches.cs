@@ -132,13 +132,18 @@ internal static class SavePointPatches
                 return;
             }
 
-            if (PleasureRuntime.Climaxes.Count == 0)
+            int before = PleasureRuntime.Climaxes.Count;
+            PleasureRuntime.Climaxes.ResetCount();
+
+            // Using a save point is when the game writes its save, so it is when the sidecar has to
+            // match. Writing on every change instead would leave the file ahead of the save and
+            // make loading an earlier one restore the wrong numbers.
+            PleasureRuntime.SaveSlot(isObelisk ? "obelisk" : "save point");
+
+            if (before == 0)
             {
                 return;
             }
-
-            int before = PleasureRuntime.Climaxes.Count;
-            PleasureRuntime.Climaxes.ResetCount();
 
             // Sensitivity is deliberately untouched: it is the one-way track, and the reset point
             // is not a way down (SPEC003 FR-219).

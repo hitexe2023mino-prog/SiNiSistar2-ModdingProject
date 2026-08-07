@@ -36,6 +36,7 @@ public sealed class PleasurePlugin : BasePlugin
     private ConfigEntry<float>? _crossX;
     private ConfigEntry<float>? _crossY;
     private ConfigEntry<float>? _crossSize;
+    private string _gameBuildId = "unknown";
     private Harmony? _harmony;
     private PleasureObserver? _observer;
 
@@ -92,6 +93,9 @@ public sealed class PleasurePlugin : BasePlugin
             profile.Pleasure.DecayPerSecond);
         PleasureRuntime.Sensitivity = new SensitivityTrack(profile.Sensitivity.Cap);
         PleasureRuntime.ContributionKey = new Il2CppSystem.Object();
+        PleasureRuntime.Sidecar = new SidecarStore(
+            Path.Combine(Paths.BepInExRootPath, "data", PluginGuid),
+            _gameBuildId);
         PleasureRuntime.Overlay = profile.Overlay;
         PleasureRuntime.SaveOverlay = layout =>
         {
@@ -327,6 +331,7 @@ public sealed class PleasurePlugin : BasePlugin
             if (string.Equals(gameAssembly, ExpectedGameAssemblySha256, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(metadata, ExpectedMetadataSha256, StringComparison.OrdinalIgnoreCase))
             {
+                _gameBuildId = $"{gameAssembly[..8].ToLowerInvariant()}-{metadata[..8].ToLowerInvariant()}";
                 return true;
             }
 

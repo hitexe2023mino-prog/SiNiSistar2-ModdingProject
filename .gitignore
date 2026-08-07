@@ -19,3 +19,6 @@ BepInEx/diagnostics/
 BepInEx/LogOutput*.log
 BepInEx/ErrorLog.log
 BepInEx/config/*.cfg
+
+# MOD-written save-adjacent data
+BepInEx/data/
