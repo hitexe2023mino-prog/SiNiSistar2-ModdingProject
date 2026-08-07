@@ -20,19 +20,11 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _faultLogged;
     private bool _selfChecked;
     private bool _drawFaultLogged;
-    private bool _texturesReady;
-    private bool _textureFaultLogged;
+    private bool _rotationUnavailable;
     private int _lastSelectId = int.MinValue;
     private string? _lastSaveFile;
     private double _lastFrameTime;
     private float _lastMaxDurability;
-    private Texture2D? _track;
-    private Texture2D? _active;
-    private Texture2D? _idle;
-    private Texture2D? _sensitivity;
-    private Texture2D? _flash;
-    private Texture2D? _chip;
-    private readonly Texture2D?[] _crossSteps = new Texture2D?[5];
 
     // Fixed notch layout: fraction along the shaft, which side, and whether it sits on the arm.
     private static readonly float[] NotchAlong = { 0.62f, 0.28f, 0f, 0.80f, 0.45f, 0f, 0.14f, 0.70f };
@@ -48,7 +40,6 @@ public sealed class PleasureObserver : MonoBehaviour
     {
         try
         {
-            EnsureTextures();
             Poll();
             _faultLogged = false;
         }
@@ -73,7 +64,7 @@ public sealed class PleasureObserver : MonoBehaviour
     /// </summary>
     public void OnGUI()
     {
-        if (!PleasureRuntime.Profile.ShowOverlay || !_texturesReady)
+        if (!PleasureRuntime.Profile.ShowOverlay)
         {
             return;
         }
@@ -326,8 +317,8 @@ public sealed class PleasureObserver : MonoBehaviour
         bool live = PleasureRuntime.CanAccumulate;
 
         // The unfilled track is drawn first and dimly, echoing the dotted ring the dial already has.
-        DrawArc(centreX, centreY, radius, thickness, 1f, TrackTexture());
-        DrawArc(centreX, centreY, radius, thickness, meter.Value, live ? ActiveTexture() : IdleTexture());
+        DrawArc(centreX, centreY, radius, thickness, 1f, TrackColor);
+        DrawArc(centreX, centreY, radius, thickness, meter.Value, live ? ActiveColor : IdleColor);
 
         DrawSensitivityRing(centreX, centreY, radius + (thickness * 1.6f), thickness * 0.45f);
 
@@ -350,7 +341,7 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        DrawArc(centreX, centreY, radius, Math.Max(1f, thickness), track.Value / track.Cap, SensitivityTexture());
+        DrawArc(centreX, centreY, radius, Math.Max(1f, thickness), track.Value / track.Cap, SensitivityColor);
     }
 
     /// <summary>
@@ -377,33 +368,27 @@ public sealed class PleasureObserver : MonoBehaviour
         float armWidth = size * 0.20f;
         float crossWidth = size * 0.66f;
         float barY = centreY - (size * 0.16f);
-        Texture2D body = CrossTexture(damage);
+        Color body = CrossColor(damage);
         Matrix4x4 saved = GUI.matrix;
 
         if (broken)
         {
             // Snapped: the head falls away from the shaft. Nothing else needs to say it is over.
-            GUIUtility.RotateAroundPivot(-24f, new Vector2(centreX, barY));
-            GUI.DrawTexture(
-                new Rect(centreX - (armWidth / 2f) - (size * 0.1f), centreY - (size / 2f), armWidth, size * 0.42f),
-                body);
-            GUI.DrawTexture(
-                new Rect(centreX - (crossWidth / 2f) - (size * 0.1f), barY, crossWidth, armWidth),
-                body);
+            Rotate(-24f, centreX, barY);
+            Fill(new Rect(centreX - (armWidth / 2f) - (size * 0.1f), centreY - (size / 2f), armWidth, size * 0.42f), body);
+            Fill(new Rect(centreX - (crossWidth / 2f) - (size * 0.1f), barY, crossWidth, armWidth), body);
             GUI.matrix = saved;
 
-            GUIUtility.RotateAroundPivot(9f, new Vector2(centreX, centreY + (size * 0.3f)));
-            GUI.DrawTexture(
-                new Rect(centreX - (armWidth / 2f), centreY - (size * 0.04f), armWidth, size * 0.54f),
-                body);
+            Rotate(9f, centreX, centreY + (size * 0.3f));
+            Fill(new Rect(centreX - (armWidth / 2f), centreY - (size * 0.04f), armWidth, size * 0.54f), body);
             GUI.matrix = saved;
             return;
         }
 
         // Intact, but leaning further off true as the count climbs.
-        GUIUtility.RotateAroundPivot(damage * 7f, new Vector2(centreX, centreY + (size * 0.4f)));
-        GUI.DrawTexture(new Rect(centreX - (armWidth / 2f), centreY - (size / 2f), armWidth, size), body);
-        GUI.DrawTexture(new Rect(centreX - (crossWidth / 2f), barY, crossWidth, armWidth), body);
+        Rotate(damage * 7f, centreX, centreY + (size * 0.4f));
+        Fill(new Rect(centreX - (armWidth / 2f), centreY - (size / 2f), armWidth, size), body);
+        Fill(new Rect(centreX - (crossWidth / 2f), barY, crossWidth, armWidth), body);
         DrawCracks(centreX, centreY, size, armWidth, crossWidth, barY, count, limit);
         GUI.matrix = saved;
     }
@@ -423,7 +408,7 @@ public sealed class PleasureObserver : MonoBehaviour
         int count,
         int limit)
     {
-        Texture2D chip = ChipTexture();
+        Color chip = ChipColor;
         int shown = Math.Min(count, NotchAlong.Length);
         for (var index = 0; index < shown; index++)
         {
@@ -432,32 +417,26 @@ public sealed class PleasureObserver : MonoBehaviour
 
             if (NotchOnArm[index])
             {
-                GUI.DrawTexture(
-                    new Rect(
+                Fill(new Rect(
                         centreX + (side * crossWidth * 0.34f) - (chipSize / 2f),
                         barY - (chipSize * 0.15f),
                         chipSize,
-                        chipSize),
-                    chip);
+                        chipSize), chip);
                 continue;
             }
 
-            GUI.DrawTexture(
-                new Rect(
+            Fill(new Rect(
                     centreX + (side * armWidth * 0.5f) - (chipSize / 2f),
                     centreY - (size / 2f) + (size * NotchAlong[index]),
                     chipSize,
-                    chipSize),
-                chip);
+                    chipSize), chip);
         }
 
         // The last climax before the limit leaves a split across the shaft, so the break is
         // telegraphed instead of arriving without warning.
         if (limit - count == 1)
         {
-            GUI.DrawTexture(
-                new Rect(centreX - (armWidth * 0.75f), barY + (size * 0.3f), armWidth * 1.5f, size * 0.035f),
-                chip);
+            Fill(new Rect(centreX - (armWidth * 0.75f), barY + (size * 0.3f), armWidth * 1.5f, size * 0.035f), chip);
         }
     }
 
@@ -473,7 +452,7 @@ public sealed class PleasureObserver : MonoBehaviour
         float radius,
         float thickness,
         float fill,
-        Texture2D texture)
+        Color color)
     {
         float clamped = Math.Clamp(fill, 0f, 1f);
         if (clamped <= 0f || radius <= 0f)
@@ -493,7 +472,7 @@ public sealed class PleasureObserver : MonoBehaviour
             // Starts at twelve o'clock and fills clockwise, the direction the dial's own arcs run.
             float x = centreX + (float)(radius * Math.Sin(radians));
             float y = centreY - (float)(radius * Math.Cos(radians));
-            GUI.DrawTexture(new Rect(x - (size / 2f), y - (size / 2f), size, size), texture);
+            Fill(new Rect(x - (size / 2f), y - (size / 2f), size, size), color);
         }
     }
 
@@ -537,9 +516,6 @@ public sealed class PleasureObserver : MonoBehaviour
         float height = Screen.height;
         const int bands = 14;
         float step = height * 0.28f / bands;
-        Texture2D haze = HazeTexture();
-        Color previous = GUI.color;
-
         for (var index = 0; index < bands; index++)
         {
             float t = 1f - (index / (float)bands);
@@ -549,100 +525,72 @@ public sealed class PleasureObserver : MonoBehaviour
                 continue;
             }
 
-            GUI.color = new Color(1f, 1f, 1f, alpha);
+            var tint = new Color(HazeColor.r, HazeColor.g, HazeColor.b, alpha);
             float offset = index * step;
-            GUI.DrawTexture(new Rect(0f, offset, width, step + 1f), haze);
-            GUI.DrawTexture(new Rect(0f, height - offset - step - 1f, width, step + 1f), haze);
-            GUI.DrawTexture(new Rect(offset, 0f, step + 1f, height), haze);
-            GUI.DrawTexture(new Rect(width - offset - step - 1f, 0f, step + 1f, height), haze);
+            Fill(new Rect(0f, offset, width, step + 1f), tint);
+            Fill(new Rect(0f, height - offset - step - 1f, width, step + 1f), tint);
+            Fill(new Rect(offset, 0f, step + 1f, height), tint);
+            Fill(new Rect(width - offset - step - 1f, 0f, step + 1f, height), tint);
         }
-
-        GUI.color = previous;
     }
 
     /// <summary>
-    /// Builds every texture once, from <c>Update</c> rather than from <c>OnGUI</c>.
+    /// Rotates the GUI matrix, or leaves it alone if this build cannot.
     ///
-    /// Creating Unity objects inside the GUI callback put object construction on the one path whose
-    /// failures the overlay swallows, so a texture that would not build showed up as an overlay
-    /// that simply never appeared. Built here, a failure is reported and the drawing code can
-    /// assume its textures exist.
+    /// The cross leans and snaps by rotation, but a stripped <c>RotateAroundPivot</c> would throw
+    /// and take the whole overlay with it. An upright cross that still chips and still shows the
+    /// break is worth far more than no gauge at all, so the failure is isolated here.
     /// </summary>
     [HideFromIl2Cpp]
-    private void EnsureTextures()
+    private void Rotate(float degrees, float pivotX, float pivotY)
     {
-        if (_texturesReady)
+        if (_rotationUnavailable || Math.Abs(degrees) < 0.01f)
         {
             return;
         }
 
         try
         {
-            _track = SolidTexture(new Color(0.10f, 0.08f, 0.10f, 0.55f));
-            _active = SolidTexture(new Color(0.93f, 0.20f, 0.55f, 0.92f));
-            _idle = SolidTexture(new Color(0.52f, 0.24f, 0.38f, 0.72f));
-            _sensitivity = SolidTexture(new Color(0.72f, 0.62f, 0.78f, 0.60f));
-            _flash = SolidTexture(new Color(1f, 0.42f, 0.70f, 1f));
-            _chip = SolidTexture(new Color(0.06f, 0.05f, 0.06f, 0.92f));
-
-            for (var step = 0; step < _crossSteps.Length; step++)
-            {
-                float t = step / (float)(_crossSteps.Length - 1);
-                _crossSteps[step] = SolidTexture(new Color(
-                    0.90f - (0.20f * t),
-                    0.87f - (0.55f * t),
-                    0.80f - (0.50f * t),
-                    0.90f));
-            }
-
-            _texturesReady = true;
-            PleasureRuntime.Probe("overlay-textures", "The overlay textures were built; the gauge can draw.");
+            GUIUtility.RotateAroundPivot(degrees, new Vector2(pivotX, pivotY));
         }
         catch (Exception exception)
         {
-            if (!_textureFaultLogged)
-            {
-                _textureFaultLogged = true;
-                PleasureRuntime.Log?.LogError(
-                    $"The overlay textures could not be built, so no gauge will be drawn: {exception}");
-            }
+            _rotationUnavailable = true;
+            PleasureRuntime.Log?.LogWarning(
+                $"The cross will be drawn upright: this build cannot rotate the GUI matrix ({exception.Message}).");
         }
     }
 
+    /// <summary>
+    /// Fills a rectangle with a flat colour.
+    ///
+    /// <c>GUI.DrawTexture</c> looks available in the interop assembly but its native implementation
+    /// is stripped from this game build, and Il2CppInterop cannot regenerate it — every call threw
+    /// "Method unstripping failed". <c>GUI.Box</c> is what the game build actually keeps, so the
+    /// whole overlay is built from tinted boxes and needs no textures at all.
+    /// </summary>
     [HideFromIl2Cpp]
-    private Texture2D TrackTexture() => _track!;
+    private static void Fill(Rect area, Color color)
+    {
+        Color previous = GUI.color;
+        GUI.color = color;
+        GUI.Box(area, GUIContent.none);
+        GUI.color = previous;
+    }
 
-    [HideFromIl2Cpp]
-    private Texture2D ActiveTexture() => _active!;
-
-    [HideFromIl2Cpp]
-    private Texture2D IdleTexture() => _idle!;
-
-    [HideFromIl2Cpp]
-    private Texture2D SensitivityTexture() => _sensitivity!;
-
-    [HideFromIl2Cpp]
-    private Texture2D HazeTexture() => _flash!;
-
-    [HideFromIl2Cpp]
-    private Texture2D ChipTexture() => _chip!;
+    private static readonly Color TrackColor = new(0.10f, 0.08f, 0.10f, 0.65f);
+    private static readonly Color ActiveColor = new(0.95f, 0.22f, 0.58f, 1f);
+    private static readonly Color IdleColor = new(0.55f, 0.26f, 0.40f, 0.85f);
+    private static readonly Color SensitivityColor = new(0.74f, 0.64f, 0.80f, 0.75f);
+    private static readonly Color HazeColor = new(1f, 0.42f, 0.70f, 1f);
+    private static readonly Color ChipColor = new(0.05f, 0.04f, 0.05f, 1f);
 
     /// <summary>Bone white, souring toward a bruised red as the cross takes damage.</summary>
     [HideFromIl2Cpp]
-    private Texture2D CrossTexture(float damage) =>
-        _crossSteps[(int)Math.Clamp(damage * (_crossSteps.Length - 1), 0f, _crossSteps.Length - 1)]!;
-
-    [HideFromIl2Cpp]
-    private static Texture2D SolidTexture(Color color)
+    private static Color CrossColor(float damage)
     {
-        var texture = new Texture2D(1, 1);
-        texture.SetPixel(0, 0, color);
-        texture.Apply();
-
-        // Unity destroys textures on scene unload unless they are marked, and a destroyed texture
-        // would throw on every frame the overlay draws.
-        texture.hideFlags = HideFlags.HideAndDontSave;
-        return texture;
+        float t = Math.Clamp(damage, 0f, 1f);
+        return new Color(0.92f - (0.22f * t), 0.89f - (0.58f * t), 0.82f - (0.52f * t), 1f);
     }
 
     [HideFromIl2Cpp]
