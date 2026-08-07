@@ -50,9 +50,10 @@ public sealed record PleasureOverlayLayout(
     float CentreY,
     float Radius,
     float Thickness,
-    float FlashSeconds)
+    float FlashSeconds,
+    bool ShowCross)
 {
-    public static PleasureOverlayLayout Default { get; } = new(0.282f, 0.867f, 0.115f, 0.007f, 1.5f);
+    public static PleasureOverlayLayout Default { get; } = new(0.282f, 0.867f, 0.115f, 0.007f, 1.5f, true);
 }
 
 /// <summary>The validated configuration the plugin acts on (SPEC003 6.2).</summary>
@@ -143,7 +144,8 @@ public static class PleasureProfileFactory
                 options.OverlayCentreY,
                 Math.Max(0.01f, options.OverlayRadius),
                 Math.Max(0.001f, options.OverlayThickness),
-                Math.Max(0.01f, options.ClimaxOverlaySeconds)));
+                Math.Max(0.01f, options.ClimaxOverlaySeconds),
+                options.ShowCross));
 
         if (!pleasure.HasEffect)
         {

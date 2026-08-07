@@ -28,6 +28,13 @@ public sealed class PleasureObserver : MonoBehaviour
     private Texture2D? _idle;
     private Texture2D? _sensitivity;
     private Texture2D? _flash;
+    private Texture2D? _chip;
+    private readonly Texture2D?[] _crossSteps = new Texture2D?[5];
+
+    // Fixed notch layout: fraction along the shaft, which side, and whether it sits on the arm.
+    private static readonly float[] NotchAlong = { 0.62f, 0.28f, 0f, 0.80f, 0.45f, 0f, 0.14f, 0.70f };
+    private static readonly float[] NotchSide = { 1f, -1f, 1f, -1f, 1f, -1f, 1f, -1f };
+    private static readonly bool[] NotchOnArm = { false, false, true, false, false, true, false, false };
 
     public PleasureObserver(IntPtr pointer)
         : base(pointer)
@@ -312,7 +319,11 @@ public sealed class PleasureObserver : MonoBehaviour
         DrawArc(centreX, centreY, radius, thickness, meter.Value, live ? ActiveTexture() : IdleTexture());
 
         DrawSensitivityRing(centreX, centreY, radius + (thickness * 1.6f), thickness * 0.45f);
-        DrawClimaxPips(centreX, centreY, radius + (thickness * 3.2f));
+
+        if (layout.ShowCross)
+        {
+            DrawCross(centreX, centreY - (radius * 1.6f), radius * 0.62f);
+        }
     }
 
     /// <summary>
@@ -332,33 +343,110 @@ public sealed class PleasureObserver : MonoBehaviour
     }
 
     /// <summary>
-    /// The climax count as pips around the top of the dial. A count is discrete, so dots say it
-    /// better than a bar, and the remaining pips show how much headroom the limit still allows.
+    /// How close the run is to ending, shown as a cross that comes apart rather than as a number.
+    ///
+    /// A count beside a limit is two numbers the player has to subtract. A cross that chips, leans
+    /// and finally snaps is read at a glance, and it belongs to the same world the character does.
+    /// The break is the game over (SPEC003 5.5).
     /// </summary>
     [HideFromIl2Cpp]
-    private void DrawClimaxPips(float centreX, float centreY, float radius)
+    private void DrawCross(float centreX, float centreY, float size)
     {
         ClimaxTuning tuning = PleasureRuntime.Profile.Climax;
         int limit = ClimaxLimit.Compute(tuning.LimitBase, tuning.LimitPerDurability, _lastMaxDurability);
-        int count = PleasureRuntime.Climaxes.Count;
-        if (limit <= 0 || limit > 24)
+        if (limit <= 0)
         {
             return;
         }
 
-        float size = Math.Max(3f, Screen.height * 0.0045f);
-        const float spreadDegrees = 90f;
-        float step = limit == 1 ? 0f : spreadDegrees / (limit - 1);
-        float first = -spreadDegrees / 2f;
+        int count = PleasureRuntime.Climaxes.Count;
+        float damage = Math.Clamp(count / (float)limit, 0f, 1f);
+        bool broken = count >= limit;
 
-        for (var index = 0; index < limit; index++)
+        float armWidth = size * 0.20f;
+        float crossWidth = size * 0.66f;
+        float barY = centreY - (size * 0.16f);
+        Texture2D body = CrossTexture(damage);
+        Matrix4x4 saved = GUI.matrix;
+
+        if (broken)
         {
-            double radians = (first + (step * index)) * Math.PI / 180d;
-            float x = centreX + (float)(radius * Math.Sin(radians));
-            float y = centreY - (float)(radius * Math.Cos(radians));
+            // Snapped: the head falls away from the shaft. Nothing else needs to say it is over.
+            GUIUtility.RotateAroundPivot(-24f, new Vector2(centreX, barY));
             GUI.DrawTexture(
-                new Rect(x - (size / 2f), y - (size / 2f), size, size),
-                index < count ? ActiveTexture() : TrackTexture());
+                new Rect(centreX - (armWidth / 2f) - (size * 0.1f), centreY - (size / 2f), armWidth, size * 0.42f),
+                body);
+            GUI.DrawTexture(
+                new Rect(centreX - (crossWidth / 2f) - (size * 0.1f), barY, crossWidth, armWidth),
+                body);
+            GUI.matrix = saved;
+
+            GUIUtility.RotateAroundPivot(9f, new Vector2(centreX, centreY + (size * 0.3f)));
+            GUI.DrawTexture(
+                new Rect(centreX - (armWidth / 2f), centreY - (size * 0.04f), armWidth, size * 0.54f),
+                body);
+            GUI.matrix = saved;
+            return;
+        }
+
+        // Intact, but leaning further off true as the count climbs.
+        GUIUtility.RotateAroundPivot(damage * 7f, new Vector2(centreX, centreY + (size * 0.4f)));
+        GUI.DrawTexture(new Rect(centreX - (armWidth / 2f), centreY - (size / 2f), armWidth, size), body);
+        GUI.DrawTexture(new Rect(centreX - (crossWidth / 2f), barY, crossWidth, armWidth), body);
+        DrawCracks(centreX, centreY, size, armWidth, crossWidth, barY, count, limit);
+        GUI.matrix = saved;
+    }
+
+    /// <summary>
+    /// One notch bitten out of the cross per climax taken. The positions are fixed rather than
+    /// random, so the same damage always looks the same and the state can be learned by sight.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void DrawCracks(
+        float centreX,
+        float centreY,
+        float size,
+        float armWidth,
+        float crossWidth,
+        float barY,
+        int count,
+        int limit)
+    {
+        Texture2D chip = ChipTexture();
+        int shown = Math.Min(count, NotchAlong.Length);
+        for (var index = 0; index < shown; index++)
+        {
+            float chipSize = size * (0.1f + (0.03f * (index % 3)));
+            float side = NotchSide[index];
+
+            if (NotchOnArm[index])
+            {
+                GUI.DrawTexture(
+                    new Rect(
+                        centreX + (side * crossWidth * 0.34f) - (chipSize / 2f),
+                        barY - (chipSize * 0.15f),
+                        chipSize,
+                        chipSize),
+                    chip);
+                continue;
+            }
+
+            GUI.DrawTexture(
+                new Rect(
+                    centreX + (side * armWidth * 0.5f) - (chipSize / 2f),
+                    centreY - (size / 2f) + (size * NotchAlong[index]),
+                    chipSize,
+                    chipSize),
+                chip);
+        }
+
+        // The last climax before the limit leaves a split across the shaft, so the break is
+        // telegraphed instead of arriving without warning.
+        if (limit - count == 1)
+        {
+            GUI.DrawTexture(
+                new Rect(centreX - (armWidth * 0.75f), barY + (size * 0.3f), armWidth * 1.5f, size * 0.035f),
+                chip);
         }
     }
 
@@ -398,6 +486,13 @@ public sealed class PleasureObserver : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// A pink haze that closes in from the edges of the screen when a climax lands.
+    ///
+    /// It reaches the whole frame, which a ring drawn on the dial never could: the moment is
+    /// supposed to take over the screen rather than annotate a corner of it. The game keeps running
+    /// underneath — nothing here touches <c>Time.timeScale</c> (FR-212).
+    /// </summary>
     [HideFromIl2Cpp]
     private void DrawClimaxFlash()
     {
@@ -407,21 +502,51 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        // A ring that blooms outward from the dial, so the moment is announced where the gauge
-        // lives rather than by text across the middle of the screen.
         PleasureOverlayLayout layout = PleasureRuntime.Profile.Overlay;
-        float height = Screen.height;
-        float progress = 1f - (float)Math.Clamp(remaining / Math.Max(0.01f, layout.FlashSeconds), 0d, 1d);
-        float radius = height * layout.Radius * (1f + (progress * 0.6f));
-        float thickness = Math.Max(2f, height * layout.Thickness * (1f - progress));
+        var progress = (float)Math.Clamp(remaining / Math.Max(0.01f, layout.FlashSeconds), 0d, 1d);
 
-        DrawArc(
-            Screen.width * layout.CentreX,
-            height * layout.CentreY,
-            radius,
-            thickness,
-            1f,
-            FlashTexture());
+        // Blooms quickly and fades slowly, which reads as a pulse instead of a light being switched on.
+        float strength = progress > 0.75f ? (1f - progress) / 0.25f : progress / 0.75f;
+        DrawVignette(Math.Clamp(strength, 0f, 1f));
+    }
+
+    /// <summary>
+    /// Builds the falloff from nested bands, because IMGUI has no gradient. Alpha drops toward the
+    /// centre so the frame darkens into pink at the edges and leaves the play area readable.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void DrawVignette(float strength)
+    {
+        if (strength <= 0f)
+        {
+            return;
+        }
+
+        float width = Screen.width;
+        float height = Screen.height;
+        const int bands = 14;
+        float step = height * 0.28f / bands;
+        Texture2D haze = HazeTexture();
+        Color previous = GUI.color;
+
+        for (var index = 0; index < bands; index++)
+        {
+            float t = 1f - (index / (float)bands);
+            float alpha = strength * t * t * 0.16f;
+            if (alpha <= 0.002f)
+            {
+                continue;
+            }
+
+            GUI.color = new Color(1f, 1f, 1f, alpha);
+            float offset = index * step;
+            GUI.DrawTexture(new Rect(0f, offset, width, step + 1f), haze);
+            GUI.DrawTexture(new Rect(0f, height - offset - step - 1f, width, step + 1f), haze);
+            GUI.DrawTexture(new Rect(offset, 0f, step + 1f, height), haze);
+            GUI.DrawTexture(new Rect(width - offset - step - 1f, 0f, step + 1f, height), haze);
+        }
+
+        GUI.color = previous;
     }
 
     [HideFromIl2Cpp]
@@ -437,7 +562,28 @@ public sealed class PleasureObserver : MonoBehaviour
     private Texture2D SensitivityTexture() => _sensitivity ??= SolidTexture(new Color(0.72f, 0.62f, 0.78f, 0.60f));
 
     [HideFromIl2Cpp]
-    private Texture2D FlashTexture() => _flash ??= SolidTexture(new Color(1f, 0.62f, 0.82f, 0.55f));
+    private Texture2D HazeTexture() => _flash ??= SolidTexture(new Color(1f, 0.42f, 0.70f, 1f));
+
+    [HideFromIl2Cpp]
+    private Texture2D ChipTexture() => _chip ??= SolidTexture(new Color(0.06f, 0.05f, 0.06f, 0.92f));
+
+    /// <summary>Bone white, souring toward a bruised red as the cross takes damage.</summary>
+    [HideFromIl2Cpp]
+    private Texture2D CrossTexture(float damage)
+    {
+        var step = (int)Math.Clamp(damage * 4f, 0f, 4f);
+        if (_crossSteps[step] is null)
+        {
+            float t = step / 4f;
+            _crossSteps[step] = SolidTexture(new Color(
+                0.90f - (0.20f * t),
+                0.87f - (0.55f * t),
+                0.80f - (0.50f * t),
+                0.90f));
+        }
+
+        return _crossSteps[step]!;
+    }
 
     [HideFromIl2Cpp]
     private static Texture2D SolidTexture(Color color)

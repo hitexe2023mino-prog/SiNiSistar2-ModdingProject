@@ -81,6 +81,9 @@ public sealed record PleasureOptions
 
     /// <summary>Ring thickness as a fraction of screen height.</summary>
     public float OverlayThickness { get; init; } = PleasureOverlayLayout.Default.Thickness;
+
+    /// <summary>Shows the cross that breaks as the climax limit is approached.</summary>
+    public bool ShowCross { get; init; } = true;
 }
 
 /// <summary>

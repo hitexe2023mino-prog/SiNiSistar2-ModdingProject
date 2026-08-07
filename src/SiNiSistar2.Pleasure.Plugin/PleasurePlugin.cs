@@ -245,6 +245,12 @@ public sealed class PleasurePlugin : BasePlugin
             "Ring radius as a fraction of screen height. Raise it to sit further outside the dial.");
         ConfigEntry<float> ringThickness = Config.Bind(
             "Overlay", "OverlayThickness", PleasureOverlayLayout.Default.Thickness, "Ring thickness.");
+        ConfigEntry<bool> showCross = Config.Bind(
+            "Overlay",
+            "ShowCross",
+            true,
+            "Show the cross above the dial. It chips with every climax and snaps at the limit, "
+            + "which is the game over.");
 
         return new PleasureOptions
         {
@@ -276,6 +282,7 @@ public sealed class PleasurePlugin : BasePlugin
             OverlayCentreY = centreY.Value,
             OverlayRadius = ringRadius.Value,
             OverlayThickness = ringThickness.Value,
+            ShowCross = showCross.Value,
         };
     }
 

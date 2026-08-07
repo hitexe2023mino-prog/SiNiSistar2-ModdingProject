@@ -64,10 +64,21 @@ internal static class DamageProbePatches
                 return;
             }
 
+            float before = meter.Value;
             sensitivity?.Add(PleasureRuntime.Profile.Sensitivity.PerSexualHit);
             if (meter.AddSexualHit(sensitivity?.Value ?? 0f))
             {
                 PleasureRuntime.PendingClimax = true;
+            }
+
+            // Without this there is no way to tell "the gauge never rises" from "the gauge rose
+            // and decayed again before it was looked at".
+            if (meter.Value > before)
+            {
+                PleasureRuntime.Probe(
+                    "pleasure-rose",
+                    $"The pleasure gauge rose for the first time: {before:F2} -> {meter.Value:F2} "
+                    + $"on a hit from '{sender ?? "(unknown)"}'.");
             }
 
             PleasureRuntime.LogTransition(
