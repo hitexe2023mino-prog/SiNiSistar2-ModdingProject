@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <AssemblyName>SiNiSistar2.Pleasure.Core</AssemblyName>
+    <RootNamespace>SiNiSistar2.Pleasure.Core</RootNamespace>
+  </PropertyGroup>
+</Project>
