@@ -73,8 +73,8 @@ public sealed record PleasureOptions
     /// <summary>Ring centre as a fraction of screen width. Defaults to the game's HP/MP dial.</summary>
     public float OverlayCentreX { get; init; } = PleasureOverlayLayout.Default.CentreX;
 
-    /// <summary>Ring centre as a fraction of screen height.</summary>
-    public float OverlayCentreY { get; init; } = PleasureOverlayLayout.Default.CentreY;
+    /// <summary>Gauge centre measured up from the bottom edge, as a fraction of screen height.</summary>
+    public float OverlayBottomOffset { get; init; } = PleasureOverlayLayout.Default.BottomOffset;
 
     /// <summary>Ring radius as a fraction of screen height, just outside the dial.</summary>
     public float OverlayRadius { get; init; } = PleasureOverlayLayout.Default.Radius;

@@ -20,16 +20,20 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _faultLogged;
     private bool _selfChecked;
     private bool _drawFaultLogged;
-    private bool _rotationUnavailable;
+    private bool _labelUnavailable;
+    private Texture2D? _liquid;
+    private Texture2D? _cross;
+    private Texture2D? _haze;
+    private float _liquidFill = -1f;
+    private float _liquidPhase;
+    private double _liquidBuiltAt;
+    private int _crossNotches = -1;
+    private bool _crossBroken;
     private int _lastSelectId = int.MinValue;
     private string? _lastSaveFile;
     private double _lastFrameTime;
     private float _lastMaxDurability;
 
-    // Fixed notch layout: fraction along the shaft, which side, and whether it sits on the arm.
-    private static readonly float[] NotchAlong = { 0.62f, 0.28f, 0f, 0.80f, 0.45f, 0f, 0.14f, 0.70f };
-    private static readonly float[] NotchSide = { 1f, -1f, 1f, -1f, 1f, -1f, 1f, -1f };
-    private static readonly bool[] NotchOnArm = { false, false, true, false, false, true, false, false };
 
     public PleasureObserver(IntPtr pointer)
         : base(pointer)
@@ -295,8 +299,13 @@ public sealed class PleasureObserver : MonoBehaviour
     ///
     /// The dial already spends its left half on HP and its right half on MP, so a fourth reading
     /// cannot go inside it. Sitting just outside as a full ring keeps the shape language of the
-    /// HUD — same centre, same arc idiom — instead of parking a floating box in a corner, which is
-    /// what made the first attempt read as debug output rather than part of the game.
+    /// <summary>
+    /// Draws the gauge and the cross.
+    ///
+    /// Everything is a generated texture drawn through <c>GUI.Label(Rect, Texture)</c>.
+    /// <c>GUI.DrawTexture</c> is stripped from this build, and flat rectangles through
+    /// <c>GUI.Box</c> picked up the default skin's rounded border, which is what made the earlier
+    /// attempt look like debug output rather than part of the game.
     /// </summary>
     [HideFromIl2Cpp]
     private void DrawGauge()
@@ -310,178 +319,116 @@ public sealed class PleasureObserver : MonoBehaviour
         PleasureOverlayLayout layout = PleasureRuntime.Profile.Overlay;
         float height = Screen.height;
         float centreX = Screen.width * layout.CentreX;
-        float centreY = height * layout.CentreY;
+
+        // Anchored to the bottom, because the game's HUD is. Measuring down from the top let the
+        // gauge drift off the dial as soon as the window was not the height it was measured on.
+        float centreY = height - (height * layout.BottomOffset);
         float radius = height * layout.Radius;
-        float thickness = Math.Max(2f, height * layout.Thickness);
 
-        bool live = PleasureRuntime.CanAccumulate;
-
-        // The unfilled track is drawn first and dimly, echoing the dotted ring the dial already has.
-        DrawArc(centreX, centreY, radius, thickness, 1f, TrackColor);
-        DrawArc(centreX, centreY, radius, thickness, meter.Value, live ? ActiveColor : IdleColor);
-
-        DrawSensitivityRing(centreX, centreY, radius + (thickness * 1.6f), thickness * 0.45f);
+        RefreshLiquid(meter.Value);
+        if (_liquid is not null)
+        {
+            float diameter = radius * 2f;
+            Draw(new Rect(centreX - radius, centreY - radius, diameter, diameter), _liquid, Color.white);
+        }
 
         if (layout.ShowCross)
         {
-            DrawCross(centreX, centreY - (radius * 1.6f), radius * 0.62f);
+            RefreshCross();
+            if (_cross is not null)
+            {
+                float crossHeight = radius * 1.5f;
+                Draw(
+                    new Rect(
+                        centreX - (crossHeight * 0.33f),
+                        centreY - radius - crossHeight - (height * 0.01f),
+                        crossHeight * 0.66f,
+                        crossHeight),
+                    _cross,
+                    Color.white);
+            }
         }
     }
 
     /// <summary>
-    /// Sensitivity as a thinner outer ring. It only ever grows, so it reads as a rim that fills in
-    /// permanently while the pleasure ring inside it rises and falls.
+    /// Rebuilds the liquid only when it would look different. Regenerating a disc every frame is
+    /// pure waste, and a step of one percent with a slow wave is already past what the eye picks up.
     /// </summary>
     [HideFromIl2Cpp]
-    private void DrawSensitivityRing(float centreX, float centreY, float radius, float thickness)
+    private void RefreshLiquid(float fill)
     {
-        SensitivityTrack? track = PleasureRuntime.Sensitivity;
-        if (track is null || track.Cap <= 0f)
+        double now = Time.unscaledTimeAsDouble;
+        bool moved = Math.Abs(fill - _liquidFill) > 0.01f;
+        if (_liquid is not null && !moved && now - _liquidBuiltAt < 0.08d)
         {
             return;
         }
 
-        DrawArc(centreX, centreY, radius, Math.Max(1f, thickness), track.Value / track.Cap, SensitivityColor);
+        _liquidFill = fill;
+        _liquidBuiltAt = now;
+        _liquidPhase += 0.35f;
+        _liquid = PleasureArt.LiquidDisc(96, fill, _liquidPhase);
     }
 
-    /// <summary>
-    /// How close the run is to ending, shown as a cross that comes apart rather than as a number.
-    ///
-    /// A count beside a limit is two numbers the player has to subtract. A cross that chips, leans
-    /// and finally snaps is read at a glance, and it belongs to the same world the character does.
-    /// The break is the game over (SPEC003 5.5).
-    /// </summary>
+    /// <summary>Rebuilt only when the damage changes, which is once per climax.</summary>
     [HideFromIl2Cpp]
-    private void DrawCross(float centreX, float centreY, float size)
+    private void RefreshCross()
     {
         ClimaxTuning tuning = PleasureRuntime.Profile.Climax;
         int limit = ClimaxLimit.Compute(tuning.LimitBase, tuning.LimitPerDurability, _lastMaxDurability);
-        if (limit <= 0)
-        {
-            return;
-        }
-
         int count = PleasureRuntime.Climaxes.Count;
-        float damage = Math.Clamp(count / (float)limit, 0f, 1f);
-        bool broken = count >= limit;
 
-        float armWidth = size * 0.20f;
-        float crossWidth = size * 0.66f;
-        float barY = centreY - (size * 0.16f);
-        Color body = CrossColor(damage);
-        Matrix4x4 saved = GUI.matrix;
+        // Only severed when the break would actually end the run. A cross that snaps while the game
+        // over is switched off would be telling the player something untrue.
+        bool broken = tuning.GameOverEnabled && limit > 0 && count >= limit;
 
-        if (broken)
+        if (_cross is not null && count == _crossNotches && broken == _crossBroken)
         {
-            // Snapped: the head falls away from the shaft. Nothing else needs to say it is over.
-            Rotate(-24f, centreX, barY);
-            Fill(new Rect(centreX - (armWidth / 2f) - (size * 0.1f), centreY - (size / 2f), armWidth, size * 0.42f), body);
-            Fill(new Rect(centreX - (crossWidth / 2f) - (size * 0.1f), barY, crossWidth, armWidth), body);
-            GUI.matrix = saved;
-
-            Rotate(9f, centreX, centreY + (size * 0.3f));
-            Fill(new Rect(centreX - (armWidth / 2f), centreY - (size * 0.04f), armWidth, size * 0.54f), body);
-            GUI.matrix = saved;
             return;
         }
 
-        // Intact, but leaning further off true as the count climbs.
-        Rotate(damage * 7f, centreX, centreY + (size * 0.4f));
-        Fill(new Rect(centreX - (armWidth / 2f), centreY - (size / 2f), armWidth, size), body);
-        Fill(new Rect(centreX - (crossWidth / 2f), barY, crossWidth, armWidth), body);
-        DrawCracks(centreX, centreY, size, armWidth, crossWidth, barY, count, limit);
-        GUI.matrix = saved;
+        _crossNotches = count;
+        _crossBroken = broken;
+        _cross = PleasureArt.Cross(96, 144, count, broken);
     }
 
     /// <summary>
-    /// One notch bitten out of the cross per climax taken. The positions are fixed rather than
-    /// random, so the same damage always looks the same and the state can be learned by sight.
+    /// Puts a texture on screen, tinted. Falls back to a tinted box if this build cannot draw a
+    /// texture through a label either, so the gauge degrades instead of disappearing.
     /// </summary>
     [HideFromIl2Cpp]
-    private void DrawCracks(
-        float centreX,
-        float centreY,
-        float size,
-        float armWidth,
-        float crossWidth,
-        float barY,
-        int count,
-        int limit)
+    private void Draw(Rect area, Texture2D texture, Color tint)
     {
-        Color chip = ChipColor;
-        int shown = Math.Min(count, NotchAlong.Length);
-        for (var index = 0; index < shown; index++)
-        {
-            float chipSize = size * (0.1f + (0.03f * (index % 3)));
-            float side = NotchSide[index];
+        Color previous = GUI.color;
+        GUI.color = tint;
 
-            if (NotchOnArm[index])
+        if (!_labelUnavailable)
+        {
+            try
             {
-                Fill(new Rect(
-                        centreX + (side * crossWidth * 0.34f) - (chipSize / 2f),
-                        barY - (chipSize * 0.15f),
-                        chipSize,
-                        chipSize), chip);
-                continue;
+                GUI.Label(area, texture);
+                GUI.color = previous;
+                return;
             }
-
-            Fill(new Rect(
-                    centreX + (side * armWidth * 0.5f) - (chipSize / 2f),
-                    centreY - (size / 2f) + (size * NotchAlong[index]),
-                    chipSize,
-                    chipSize), chip);
+            catch (Exception exception)
+            {
+                _labelUnavailable = true;
+                PleasureRuntime.Log?.LogWarning(
+                    "Textures cannot be drawn on this build; the gauge falls back to plain blocks "
+                    + $"({exception.Message}).");
+            }
         }
 
-        // The last climax before the limit leaves a split across the shaft, so the break is
-        // telegraphed instead of arriving without warning.
-        if (limit - count == 1)
-        {
-            Fill(new Rect(centreX - (armWidth * 0.75f), barY + (size * 0.3f), armWidth * 1.5f, size * 0.035f), chip);
-        }
+        GUI.Box(area, GUIContent.none);
+        GUI.color = previous;
     }
 
     /// <summary>
-    /// Draws a ring by stepping small quads along it. IMGUI has no arc primitive, and a texture
-    /// cannot be clipped to an angle, so the arc is walked instead. The quads overlap slightly so
-    /// the ring reads as continuous rather than as beads.
-    /// </summary>
-    [HideFromIl2Cpp]
-    private static void DrawArc(
-        float centreX,
-        float centreY,
-        float radius,
-        float thickness,
-        float fill,
-        Color color)
-    {
-        float clamped = Math.Clamp(fill, 0f, 1f);
-        if (clamped <= 0f || radius <= 0f)
-        {
-            return;
-        }
-
-        var segments = (int)Math.Ceiling(clamped * 180f);
-        float sweep = clamped * 360f;
-        float size = thickness * 1.5f;
-
-        for (var index = 0; index <= segments; index++)
-        {
-            double degrees = sweep * index / Math.Max(1, segments);
-            double radians = degrees * Math.PI / 180d;
-
-            // Starts at twelve o'clock and fills clockwise, the direction the dial's own arcs run.
-            float x = centreX + (float)(radius * Math.Sin(radians));
-            float y = centreY - (float)(radius * Math.Cos(radians));
-            Fill(new Rect(x - (size / 2f), y - (size / 2f), size, size), color);
-        }
-    }
-
-    /// <summary>
-    /// A pink haze that closes in from the edges of the screen when a climax lands.
+    /// A pink haze closing in from the edges when a climax lands.
     ///
-    /// It reaches the whole frame, which a ring drawn on the dial never could: the moment is
-    /// supposed to take over the screen rather than annotate a corner of it. The game keeps running
-    /// underneath — nothing here touches <c>Time.timeScale</c> (FR-212).
+    /// IMGUI has no gradient, so the falloff is nested bands whose alpha drops toward the centre.
+    /// It covers the whole frame, which is the point: the moment should take the screen rather than
+    /// annotate a corner of it. Nothing here touches <c>Time.timeScale</c> (FR-212).
     /// </summary>
     [HideFromIl2Cpp]
     private void DrawClimaxFlash()
@@ -495,15 +442,11 @@ public sealed class PleasureObserver : MonoBehaviour
         PleasureOverlayLayout layout = PleasureRuntime.Profile.Overlay;
         var progress = (float)Math.Clamp(remaining / Math.Max(0.01f, layout.FlashSeconds), 0d, 1d);
 
-        // Blooms quickly and fades slowly, which reads as a pulse instead of a light being switched on.
+        // Blooms quickly and fades slowly, which reads as a pulse instead of a light switching on.
         float strength = progress > 0.75f ? (1f - progress) / 0.25f : progress / 0.75f;
         DrawVignette(Math.Clamp(strength, 0f, 1f));
     }
 
-    /// <summary>
-    /// Builds the falloff from nested bands, because IMGUI has no gradient. Alpha drops toward the
-    /// centre so the frame darkens into pink at the edges and leaves the play area readable.
-    /// </summary>
     [HideFromIl2Cpp]
     private void DrawVignette(float strength)
     {
@@ -512,86 +455,30 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
+        _haze ??= PleasureArt.Solid(Color.white);
         float width = Screen.width;
         float height = Screen.height;
-        const int bands = 14;
-        float step = height * 0.28f / bands;
+        const int bands = 12;
+        float step = height * 0.30f / bands;
+
         for (var index = 0; index < bands; index++)
         {
             float t = 1f - (index / (float)bands);
-            float alpha = strength * t * t * 0.16f;
+            float alpha = strength * t * t * 0.18f;
             if (alpha <= 0.002f)
             {
                 continue;
             }
 
-            var tint = new Color(HazeColor.r, HazeColor.g, HazeColor.b, alpha);
+            var tint = new Color(1f, 0.42f, 0.70f, alpha);
             float offset = index * step;
-            Fill(new Rect(0f, offset, width, step + 1f), tint);
-            Fill(new Rect(0f, height - offset - step - 1f, width, step + 1f), tint);
-            Fill(new Rect(offset, 0f, step + 1f, height), tint);
-            Fill(new Rect(width - offset - step - 1f, 0f, step + 1f, height), tint);
+            Draw(new Rect(0f, offset, width, step + 1f), _haze, tint);
+            Draw(new Rect(0f, height - offset - step - 1f, width, step + 1f), _haze, tint);
+            Draw(new Rect(offset, 0f, step + 1f, height), _haze, tint);
+            Draw(new Rect(width - offset - step - 1f, 0f, step + 1f, height), _haze, tint);
         }
     }
 
-    /// <summary>
-    /// Rotates the GUI matrix, or leaves it alone if this build cannot.
-    ///
-    /// The cross leans and snaps by rotation, but a stripped <c>RotateAroundPivot</c> would throw
-    /// and take the whole overlay with it. An upright cross that still chips and still shows the
-    /// break is worth far more than no gauge at all, so the failure is isolated here.
-    /// </summary>
-    [HideFromIl2Cpp]
-    private void Rotate(float degrees, float pivotX, float pivotY)
-    {
-        if (_rotationUnavailable || Math.Abs(degrees) < 0.01f)
-        {
-            return;
-        }
-
-        try
-        {
-            GUIUtility.RotateAroundPivot(degrees, new Vector2(pivotX, pivotY));
-        }
-        catch (Exception exception)
-        {
-            _rotationUnavailable = true;
-            PleasureRuntime.Log?.LogWarning(
-                $"The cross will be drawn upright: this build cannot rotate the GUI matrix ({exception.Message}).");
-        }
-    }
-
-    /// <summary>
-    /// Fills a rectangle with a flat colour.
-    ///
-    /// <c>GUI.DrawTexture</c> looks available in the interop assembly but its native implementation
-    /// is stripped from this game build, and Il2CppInterop cannot regenerate it — every call threw
-    /// "Method unstripping failed". <c>GUI.Box</c> is what the game build actually keeps, so the
-    /// whole overlay is built from tinted boxes and needs no textures at all.
-    /// </summary>
-    [HideFromIl2Cpp]
-    private static void Fill(Rect area, Color color)
-    {
-        Color previous = GUI.color;
-        GUI.color = color;
-        GUI.Box(area, GUIContent.none);
-        GUI.color = previous;
-    }
-
-    private static readonly Color TrackColor = new(0.10f, 0.08f, 0.10f, 0.65f);
-    private static readonly Color ActiveColor = new(0.95f, 0.22f, 0.58f, 1f);
-    private static readonly Color IdleColor = new(0.55f, 0.26f, 0.40f, 0.85f);
-    private static readonly Color SensitivityColor = new(0.74f, 0.64f, 0.80f, 0.75f);
-    private static readonly Color HazeColor = new(1f, 0.42f, 0.70f, 1f);
-    private static readonly Color ChipColor = new(0.05f, 0.04f, 0.05f, 1f);
-
-    /// <summary>Bone white, souring toward a bruised red as the cross takes damage.</summary>
-    [HideFromIl2Cpp]
-    private static Color CrossColor(float damage)
-    {
-        float t = Math.Clamp(damage, 0f, 1f);
-        return new Color(0.92f - (0.22f * t), 0.89f - (0.58f * t), 0.82f - (0.52f * t), 1f);
-    }
 
     [HideFromIl2Cpp]
     private static string? ResolveBinderId(Lelia lelia)

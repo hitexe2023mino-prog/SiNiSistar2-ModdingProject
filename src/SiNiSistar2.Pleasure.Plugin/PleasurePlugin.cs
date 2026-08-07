@@ -236,8 +236,8 @@ public sealed class PleasurePlugin : BasePlugin
             "OverlayCentreX",
             PleasureOverlayLayout.Default.CentreX,
             "Ring centre as a fraction of screen width. The default sits on the game's HP/MP dial.");
-        ConfigEntry<float> centreY = Config.Bind(
-            "Overlay", "OverlayCentreY", PleasureOverlayLayout.Default.CentreY, "Ring centre, fraction of screen height.");
+        ConfigEntry<float> bottomOffset = Config.Bind(
+            "Overlay", "OverlayBottomOffset", PleasureOverlayLayout.Default.BottomOffset, "Gauge centre measured up from the bottom edge.");
         ConfigEntry<float> ringRadius = Config.Bind(
             "Overlay",
             "OverlayRadius",
@@ -279,7 +279,7 @@ public sealed class PleasurePlugin : BasePlugin
             ProbeMeasurements = probe.Value,
             ShowOverlay = showOverlay.Value,
             OverlayCentreX = centreX.Value,
-            OverlayCentreY = centreY.Value,
+            OverlayBottomOffset = bottomOffset.Value,
             OverlayRadius = ringRadius.Value,
             OverlayThickness = ringThickness.Value,
             ShowCross = showCross.Value,

@@ -47,13 +47,13 @@ public sealed record BreastSuperTuning(bool Enabled, float Chance, float Sensiti
 /// </summary>
 public sealed record PleasureOverlayLayout(
     float CentreX,
-    float CentreY,
+    float BottomOffset,
     float Radius,
     float Thickness,
     float FlashSeconds,
     bool ShowCross)
 {
-    public static PleasureOverlayLayout Default { get; } = new(0.282f, 0.867f, 0.115f, 0.007f, 1.5f, true);
+    public static PleasureOverlayLayout Default { get; } = new(0.283f, 0.115f, 0.105f, 0.007f, 1.5f, true);
 }
 
 /// <summary>The validated configuration the plugin acts on (SPEC003 6.2).</summary>
@@ -141,7 +141,7 @@ public static class PleasureProfileFactory
             options.ShowOverlay,
             new PleasureOverlayLayout(
                 options.OverlayCentreX,
-                options.OverlayCentreY,
+                options.OverlayBottomOffset,
                 Math.Max(0.01f, options.OverlayRadius),
                 Math.Max(0.001f, options.OverlayThickness),
                 Math.Max(0.01f, options.ClimaxOverlaySeconds),
