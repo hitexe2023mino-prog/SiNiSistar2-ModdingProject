@@ -80,8 +80,9 @@ public sealed class DifficultyObserver : MonoBehaviour
         DifficultyRuntime.PlayerAbnormals = abnormals;
         DifficultyRuntime.PlayerGacha = lelia.GachaBind?.GachaSystem;
 
-        EnsureHardReported();
+        // The self-check reads before the override on its one frame, so it has to run first.
         ReportSelfCheck(status);
+        EnsureHardReported();
 
         // Gameplay time, so a paused game does not burn through a nullification window.
         double now = Time.timeAsDouble;
@@ -141,13 +142,31 @@ public sealed class DifficultyObserver : MonoBehaviour
         }
 
         _selfChecked = true;
+
+        GameDifficulty checkBefore = PlayerStatusManager.s_GameDifficultyForCheck;
+        GameDifficulty savedBefore = status.GameDifficulty;
+
+        EnsureHardReported();
+
+        GameDifficulty checkAfter = PlayerStatusManager.s_GameDifficultyForCheck;
+        GameDifficulty savedAfter = status.GameDifficulty;
+
         DifficultyRuntime.Log?.LogInfo(
-            "Self-check: the game reports "
-            + $"IsHardMode={PlayerStatusManager.IsHardMode}, "
-            + $"checkValue={PlayerStatusManager.s_GameDifficultyForCheck}; "
-            + $"the save still holds {status.GameDifficulty}. "
-            + "Hard reporting is working when the first two say True and Hard, and the MOD has "
-            + "left the save alone when the third is the difficulty you chose.");
+            $"Self-check: before the override, checkValue={checkBefore}, saved={savedBefore}. "
+            + $"After it, checkValue={checkAfter}, saved={savedAfter}, "
+            + $"IsHardMode={PlayerStatusManager.IsHardMode}.");
+
+        if (savedBefore != savedAfter)
+        {
+            // The saved difficulty is meant to be a different member from the check mirror. If
+            // overriding one moves the other, the MOD is on the save path and FR-104 does not
+            // hold, which is the one failure that outlives the MOD being uninstalled.
+            DifficultyRuntime.Log?.LogError(
+                $"The saved difficulty moved from {savedBefore} to {savedAfter} when the check "
+                + "value was overridden, so it is not independent of it on this build. Set "
+                + "ForceHardData=false and restore the save from a backup before playing further "
+                + "(SPEC002 FR-104, FR-105, 付録A A-1).");
+        }
     }
 
     /// <summary>

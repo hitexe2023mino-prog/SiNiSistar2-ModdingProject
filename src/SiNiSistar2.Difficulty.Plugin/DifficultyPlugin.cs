@@ -70,6 +70,7 @@ public sealed class DifficultyPlugin : BasePlugin
 
         DifficultyProfile profile = validation.Profile;
         DifficultyRuntime.Profile = profile;
+        ReportInactiveMechanisms(profile);
 
         if (!profile.AnyMechanismActive)
         {
@@ -305,6 +306,38 @@ public sealed class DifficultyPlugin : BasePlugin
         {
             Log.LogError($"Disabled: could not fingerprint the game build: {exception.Message}");
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Says which mechanisms are doing nothing and which key turns each one on.
+    ///
+    /// The shipped tuning values are all no-change (FR-128), so a fresh install reports
+    /// "pleasure=off" and is easy to read as the MOD being broken rather than as the MOD waiting
+    /// to be configured. Naming the key removes that ambiguity.
+    /// </summary>
+    private void ReportInactiveMechanisms(DifficultyProfile profile)
+    {
+        if (!profile.Abnormal.HasEffect)
+        {
+            Log.LogWarning(
+                "Status ailments are unchanged: set Abnormal.AbnormalRateMultiplier above 1.0 "
+                + "and/or Abnormal.LevelBonus above 0.");
+        }
+
+        if (!profile.Pleasure.HasEffect)
+        {
+            Log.LogWarning(
+                "Resistance nullification is off, so no window opens and the gauge is never "
+                + "tinted: set Pleasure.NullificationDurationSeconds above 0 (and normally "
+                + "Pleasure.NullificationIntervalSeconds too).");
+        }
+
+        if (!profile.Burden.HasEffect)
+        {
+            Log.LogWarning(
+                "Post-escape recovery is off: set Burden.RecoveryPenaltySeconds above 0 and "
+                + "Burden.RecoveryMoveSlowRate to the slow you want.");
         }
     }
 
