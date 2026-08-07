@@ -63,8 +63,10 @@ Self-check: the game reports IsHardMode=..., checkValue=...; the save still hold
 |---|---|
 | `IsHardMode=True` かつ `checkValue=Hard` | 報告値の差し替えが両方効いている |
 | `IsHardMode=False` または `checkValue` が `Hard` でない | その経路は効いていない。9章のパッチ欠落として扱う |
-| 3つ目が選択した難易度と一致 | MOD が保存値へ触れていない（A-1 の一次証拠） |
-| 3つ目が `Hard` になっている | **保存値が汚染されている。** 直ちに `ForceHardData=false` にし、バックアップから復旧する |
+| `saved=` が上書きの前後で同じ | MOD が保存値へ触れていない（A-1 の一次証拠） |
+| `saved=` が上書きの前後で変わった | **保存値が検査ミラーに追随している。** 直ちに `ForceHardData=false` にし、バックアップから復旧する |
+
+**`Hard` のセーブでは A-1 を判定できない。** 上書き前から `Hard` なので、上書きの前後で値が動かないのは当然であり、独立性の証拠にならない。判定には `Normal` または `Casual` のセーブが要る。ゲーム内の難易度切替でそのセーブを作る場合は、**MOD を無効化した状態で**切り替えて保存すること。`ForceHardData=true` のままでは検査値が `Hard` に固定され、切替の結果を確認できない。
 
 **確定した実測（2026-08-08、ログ観測）** — `PlayerStatusManager.get_s_GameDifficultyForCheck` は**フィールドアクセサであり Harmony でパッチできない**。BepInEx ログに `is a field accessor, it can't be patched` が出る。実装は getter のパッチをやめ、静的フィールドの値を直接上書きする方式へ変更済み。`IsHardMode` は通常のメソッドでパッチが成立する。
 
