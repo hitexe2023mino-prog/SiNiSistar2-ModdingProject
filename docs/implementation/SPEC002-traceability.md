@@ -13,7 +13,7 @@ In-game verification steps live in [`docs/testing/SPEC002-test-scenarios.md`](..
 
 ## Automated coverage
 
-`dotnet test SiNiSistar2.Edi.sln -c Release` → 59 tests for this MOD, 143 for the EDI MOD, 0 failures.
+`dotnet test SiNiSistar2.Edi.sln -c Release` → 60 tests for this MOD, 143 for the EDI MOD, 0 failures.
 
 `ForbiddenSurfaceTests` scans `src/SiNiSistar2.Difficulty.Plugin/**/*.cs` with comments stripped and fails the build if a forbidden member is named. That is what keeps the "must not touch" requirements from decaying silently.
 
@@ -23,7 +23,7 @@ In-game verification steps live in [`docs/testing/SPEC002-test-scenarios.md`](..
 |---|---|---|---|---|
 | FR-101 | BepInEx IL2CPP プラグイン、GUID `community.sinisistar2.difficulty` | `DifficultyPlugin` | ビルドと `BepInEx/plugins/community.sinisistar2.difficulty` への配置 | Tested |
 | FR-102 | ゲームバイナリ・アセット・セーブを書き換えない | 全体（実行時パッチのみ） | `ForbiddenSurfaceTests`、AC-101 実機 | Implemented / unverified |
-| FR-103 | `Hard` として報告 | `HardModeReportPatches`、`DifficultyPlugin.ApplyHardModePatches` | AC-102 実機 | Implemented / unverified |
+| FR-103 | `Hard` として報告 | `HardModeReportPatches`（`IsHardMode` の postfix）、`DifficultyObserver.EnsureHardReported`（`s_GameDifficultyForCheck` の値上書き） | 起動ログの self-check 行、AC-102 実機 | Implemented / unverified |
 | FR-104 | 保存値へ書き込まない | 検査側 static アクセサのみをパッチ | `ForbiddenSurfaceTests.TheSavedDifficultyIsNeverWritten`、AC-104 実機 | Design-time / unverified |
 | FR-105 | 波及が確認されたら差し替えを行わない縮退 | 対応済み設計（保存経路を一切書かない） | A-1 実測 | Gated |
 | FR-106 | 強化はプレイヤー受けのみ | `DifficultyRuntime.IsPlayerReceiving`、`AbnormalRatePatches`、`AbnormalLevelPatches` | AC-106 実機 | Implemented / unverified |
@@ -65,6 +65,22 @@ In-game verification steps live in [`docs/testing/SPEC002-test-scenarios.md`](..
 | 根拠 | interop の実シグネチャ上、両者は **static** アクセサであり、セーブへ載る `m_GameDifficultyRP`（`UniRx.ReactiveProperty<GameDifficulty>`）とは別経路である。`s_GameDifficultyForCheck` は名前自体が検査用の複製であることを示す |
 | 影響 | 保存値は書かれない。A-1 の実測が波及を示した場合でも、パッチ対象を狭める余地が残る |
 | 代替案 | インスタンス側の `get_GameDifficulty` もパッチする案。保存経路が同じプロパティを読む可能性を排除できないため不採用 |
+
+| 項目 | 内容 |
+|---|---|
+| 論点 | `s_GameDifficultyForCheck` の getter が Harmony でパッチできない |
+| 選択 | getter のパッチをやめ、静的フィールドの値そのものを `Hard` へ上書きし、初回に観測した値を台帳へ登録して `Unload` で戻す |
+| 根拠 | 実機ログが `Method ... get_s_GameDifficultyForCheck() is a field accessor, it can't be patched` を出した。Harmony は例外を投げないため、旧実装は当たっていないパッチを `patches=2` として成功報告していた。フィールドであれば値として書ける |
+| 影響 | SPEC002 4.4 の「読み取りの差し替え」から「一時上書き」へ形が変わる。いずれも 4.4 が許す形であり、要件（FR-103）と可逆性（FR-124）は変わらない。静的フィールドはセーブ読込で書き戻されるため、毎フレーム再表明する |
+| 代替案 | `s_GameDifficultyForCheck` を諦めて `IsHardMode` だけに頼る案。ゲーム側の分岐がどちらを読むか未測（A-2）のため、片方だけでは Hard データが部分的にしか有効にならない |
+
+| 項目 | 内容 |
+|---|---|
+| 論点 | パッチが当たったかどうかを起動時に判定できない |
+| 選択 | マネージャ初期化後の最初のフレームで、`IsHardMode`、`s_GameDifficultyForCheck`、および未パッチの `GameDifficulty`（保存値）を1行のログへ出す |
+| 根拠 | Harmony が受理したが Il2CppInterop が適用できなかったパッチは、起動ログ上では成功と区別できない。ゲームが実際に何を報告しているかを読み取るしかない |
+| 影響 | 付録A の A-1（保存値の不変）と A-2（どのアクセサが効いているか）の一次証拠が、実機プレイなしで得られる |
+| 代替案 | パッチ適用数だけを報告する旧案。当たっていないパッチを数えるため誤報になる |
 
 | 項目 | 内容 |
 |---|---|

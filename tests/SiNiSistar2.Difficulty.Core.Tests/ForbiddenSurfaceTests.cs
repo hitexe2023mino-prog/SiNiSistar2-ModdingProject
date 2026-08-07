@@ -96,14 +96,31 @@ public sealed class ForbiddenSurfaceTests
     }
 
     /// <summary>
-    /// FR-104: the saved difficulty is never written. Only the static check-side accessors are
-    /// patched (SPEC002 DEC-101).
+    /// FR-104: the saved difficulty is never written. <c>GameDifficultyRP</c> is the reactive
+    /// property the save is built from, and the instance setter writes it (SPEC002 DEC-101).
     /// </summary>
     [Fact]
     public void TheSavedDifficultyIsNeverWritten()
     {
         AssertAbsent("GameDifficultyRP");
         AssertAbsent("set_GameDifficulty");
+    }
+
+    /// <summary>
+    /// The line FR-104 actually draws. <c>s_GameDifficultyForCheck</c> is the check-side mirror and
+    /// the MOD does write it, because its getter is a field accessor that Harmony cannot patch on
+    /// this build. That write is a transient override with a restore registered in the ledger, and
+    /// it is a different member from the one the save is built from.
+    ///
+    /// This test exists so the distinction is stated rather than inferred from the absence of a
+    /// rule: a future change that starts writing the saved value would otherwise look like more of
+    /// the same.
+    /// </summary>
+    [Fact]
+    public void TheCheckSideMirrorIsTheOnlyDifficultyValueTheModWrites()
+    {
+        Assert.Contains(PluginSources, x => x.Contains("s_GameDifficultyForCheck =", StringComparison.Ordinal));
+        Assert.Contains(PluginSources, x => x.Contains("HardCheckKey", StringComparison.Ordinal));
     }
 
     private static void AssertAbsent(string needle)

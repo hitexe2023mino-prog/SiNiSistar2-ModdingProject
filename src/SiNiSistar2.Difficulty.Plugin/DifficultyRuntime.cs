@@ -25,6 +25,8 @@ internal static class DifficultyRuntime
 
     internal const string MoveSlowKey = "burden-recovery-move-slow";
 
+    internal const string HardCheckKey = "hard-difficulty-check-value";
+
     internal static DifficultyProfile Profile { get; set; } = DifficultyProfile.Inactive;
 
     internal static ManualLogSource? Log { get; set; }
@@ -42,6 +44,12 @@ internal static class DifficultyRuntime
     /// are patched; the saved value is never written (SPEC002 FR-104, DEC-101).
     /// </summary>
     internal static bool ReportHard { get; set; }
+
+    /// <summary>
+    /// True when the check-side difficulty mirror has to be written rather than patched. Its getter
+    /// is a field accessor on this build and Harmony accepts the patch without it taking effect.
+    /// </summary>
+    internal static bool OverrideCheckValue { get; set; }
 
     /// <summary>The player's own status list. Used to tell player-received from enemy-received.</summary>
     internal static AbnormalList? PlayerAbnormals { get; set; }

@@ -7,9 +7,13 @@ namespace SiNiSistar2.Difficulty.Plugin;
 
 /// <summary>
 /// Reports <c>Hard</c> to the checks that branch on difficulty, without writing the value the save
-/// carries. <c>IsHardMode</c> and <c>s_GameDifficultyForCheck</c> are static accessors that sit
-/// beside the save-backed <c>GameDifficultyRP</c> rather than on top of it, which is what lets the
-/// MOD be removed and leave the player on the difficulty they chose (SPEC002 DEC-101, FR-104).
+/// carries. <c>IsHardMode</c> is a static accessor beside the save-backed difficulty rather than on
+/// top of it, which is what lets the MOD be removed and leave the player on the difficulty they
+/// chose (SPEC002 DEC-101, FR-104).
+///
+/// The other check-side reader, <c>s_GameDifficultyForCheck</c>, is a plain static field on this
+/// build; Harmony accepts a patch on its getter but Il2CppInterop cannot apply one. It is written
+/// as a value by <see cref="DifficultyObserver"/> instead.
 /// </summary>
 internal static class HardModeReportPatches
 {
@@ -18,14 +22,6 @@ internal static class HardModeReportPatches
         if (DifficultyRuntime.ReportHard)
         {
             __result = true;
-        }
-    }
-
-    internal static void ForCheckPostfix(ref GameDifficulty __result)
-    {
-        if (DifficultyRuntime.ReportHard)
-        {
-            __result = GameDifficulty.Hard;
         }
     }
 }

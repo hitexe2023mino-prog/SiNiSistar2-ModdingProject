@@ -51,6 +51,23 @@ dotnet build SiNiSistar2.Edi.sln -c Release
 
 調整値を確定する前に行う。各項目は SPEC002 付録A に対応する。結果はこの文書へ追記する。
 
+### 3.0 起動 self-check（実測結果あり）
+
+マネージャ初期化後の最初のフレームで、プラグインが1行出す。
+
+```
+Self-check: the game reports IsHardMode=..., checkValue=...; the save still holds ...
+```
+
+| 読み方 | 意味 |
+|---|---|
+| `IsHardMode=True` かつ `checkValue=Hard` | 報告値の差し替えが両方効いている |
+| `IsHardMode=False` または `checkValue` が `Hard` でない | その経路は効いていない。9章のパッチ欠落として扱う |
+| 3つ目が選択した難易度と一致 | MOD が保存値へ触れていない（A-1 の一次証拠） |
+| 3つ目が `Hard` になっている | **保存値が汚染されている。** 直ちに `ForceHardData=false` にし、バックアップから復旧する |
+
+**確定した実測（2026-08-08、ログ観測）** — `PlayerStatusManager.get_s_GameDifficultyForCheck` は**フィールドアクセサであり Harmony でパッチできない**。BepInEx ログに `is a field accessor, it can't be patched` が出る。実装は getter のパッチをやめ、静的フィールドの値を直接上書きする方式へ変更済み。`IsHardMode` は通常のメソッドでパッチが成立する。
+
 ### 3.1 難易度の報告と保存値（A-1、A-2）— 最優先
 
 セーブ汚染は不可逆であり、他のどの測定よりも先に否定する必要がある。

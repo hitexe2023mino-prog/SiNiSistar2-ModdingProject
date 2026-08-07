@@ -120,7 +120,10 @@ public sealed class DifficultyPlugin : BasePlugin
     public override bool Unload()
     {
         _observer?.Shutdown();
+
+        // Cleared before the ledger runs, so nothing re-asserts the value being restored.
         DifficultyRuntime.ReportHard = false;
+        DifficultyRuntime.OverrideCheckValue = false;
 
         // The ledger is emptied before the patches come off: a release that needs a patched
         // accessor has to still have one (SPEC002 FR-124).
@@ -299,28 +302,26 @@ public sealed class DifficultyPlugin : BasePlugin
             return 0;
         }
 
-        var applied = 0;
-        applied += Patch(
+        int applied = Patch(
             "hard-report",
             AccessTools.PropertyGetter(typeof(PlayerStatusManager), nameof(PlayerStatusManager.IsHardMode)),
             postfix: nameof(HardModeReportPatches.IsHardModePostfix),
             owner: typeof(HardModeReportPatches));
-        applied += Patch(
-            "hard-report",
-            AccessTools.PropertyGetter(
-                typeof(PlayerStatusManager),
-                nameof(PlayerStatusManager.s_GameDifficultyForCheck)),
-            postfix: nameof(HardModeReportPatches.ForCheckPostfix),
-            owner: typeof(HardModeReportPatches));
 
-        // Neither accessor is on the save path, so reporting only starts once at least one of them
-        // is actually patched (SPEC002 FR-103, FR-105).
-        DifficultyRuntime.ReportHard = applied > 0;
+        // s_GameDifficultyForCheck is a plain static field on this build, so its getter cannot be
+        // patched: Il2CppInterop reports "is a field accessor, it can't be patched" and the patch
+        // is accepted but inert. It is overridden as a value by DifficultyObserver instead, which
+        // is the transient-override form SPEC002 4.4 already allows. It is the check-side mirror,
+        // not the save-backed GameDifficultyRP, so FR-104 still holds.
+        DifficultyRuntime.ReportHard = true;
+        DifficultyRuntime.OverrideCheckValue = true;
+
         if (applied == 0)
         {
-            Log.LogError(
-                "ForceHardData is on but neither IsHardMode nor s_GameDifficultyForCheck could be "
-                + "patched, so Hard data stays inactive. The other mechanisms are unaffected.");
+            Log.LogWarning(
+                "IsHardMode could not be patched, so Hard reporting rests entirely on the "
+                + "s_GameDifficultyForCheck override. Check the self-check line below to see what "
+                + "the game actually reports.");
         }
 
         return applied;

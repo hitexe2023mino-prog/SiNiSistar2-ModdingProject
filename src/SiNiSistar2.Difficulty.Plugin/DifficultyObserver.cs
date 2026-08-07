@@ -17,6 +17,7 @@ public sealed class DifficultyObserver : MonoBehaviour
 {
     private bool _wasBound;
     private bool _faultLogged;
+    private bool _selfChecked;
 
     public DifficultyObserver(IntPtr pointer)
         : base(pointer)
@@ -78,6 +79,9 @@ public sealed class DifficultyObserver : MonoBehaviour
         DifficultyRuntime.PlayerAbnormals = abnormals;
         DifficultyRuntime.PlayerGacha = lelia.GachaBind?.GachaSystem;
 
+        EnsureHardReported();
+        ReportSelfCheck(status);
+
         // Gameplay time, so a paused game does not burn through a nullification window.
         double now = Time.timeAsDouble;
         bool bound = lelia.IsHold;
@@ -85,6 +89,64 @@ public sealed class DifficultyObserver : MonoBehaviour
         UpdateHold(bound, now, abnormals);
         UpdateRecovery(bound, now, status, abnormals);
         _wasBound = bound;
+    }
+
+    /// <summary>
+    /// Holds the check-side difficulty mirror at <c>Hard</c>. It is a static field, so loading a
+    /// save puts the saved difficulty back into it and it has to be re-asserted rather than set
+    /// once. The value seen the first time is what <see cref="DifficultyPlugin.Unload"/> restores,
+    /// so removing the MOD leaves the mirror exactly as the game had it (SPEC002 4.4, FR-124).
+    /// </summary>
+    [HideFromIl2Cpp]
+    private static void EnsureHardReported()
+    {
+        if (!DifficultyRuntime.OverrideCheckValue)
+        {
+            return;
+        }
+
+        GameDifficulty current = PlayerStatusManager.s_GameDifficultyForCheck;
+        if (current == GameDifficulty.Hard)
+        {
+            return;
+        }
+
+        if (!DifficultyRuntime.Ledger.IsOpen(DifficultyRuntime.HardCheckKey))
+        {
+            GameDifficulty original = current;
+            DifficultyRuntime.Ledger.Register(
+                DifficultyRuntime.HardCheckKey,
+                () => PlayerStatusManager.s_GameDifficultyForCheck = original);
+        }
+
+        PlayerStatusManager.s_GameDifficultyForCheck = GameDifficulty.Hard;
+    }
+
+    /// <summary>
+    /// Logs once, on the first frame the managers are up, what the game actually reports against
+    /// what the save actually holds.
+    ///
+    /// Without it there is no way to tell a working MOD from an inert one: a patch that Harmony
+    /// accepted but Il2CppInterop could not apply looks identical at startup to one that took.
+    /// The saved value is read through the unpatched instance property, so the same line is also
+    /// the evidence that FR-104 holds (SPEC002 10.4, 付録A A-1/A-2).
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void ReportSelfCheck(PlayerStatusManager status)
+    {
+        if (_selfChecked)
+        {
+            return;
+        }
+
+        _selfChecked = true;
+        DifficultyRuntime.Log?.LogInfo(
+            "Self-check: the game reports "
+            + $"IsHardMode={PlayerStatusManager.IsHardMode}, "
+            + $"checkValue={PlayerStatusManager.s_GameDifficultyForCheck}; "
+            + $"the save still holds {status.GameDifficulty}. "
+            + "Hard reporting is working when the first two say True and Hard, and the MOD has "
+            + "left the save alone when the third is the difficulty you chose.");
     }
 
     /// <summary>
