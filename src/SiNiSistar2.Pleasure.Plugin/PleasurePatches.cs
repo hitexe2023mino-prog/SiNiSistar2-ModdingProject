@@ -108,27 +108,6 @@ internal static class DamageProbePatches
 }
 
 /// <summary>
-/// Clears the run when a save is loaded.
-///
-/// The climax count is per-save state, so carrying it across a load meant a retry after a game
-/// over began already at the limit and died again on the first hold (SPEC003 5.9).
-/// </summary>
-internal static class SaveLoadPatches
-{
-    internal static void OnAfterLoadMainSaveDataPostfix()
-    {
-        try
-        {
-            PleasureRuntime.BeginRunFromSave("OnAfterLoadMainSaveData");
-        }
-        catch (Exception exception)
-        {
-            PleasureRuntime.Log?.LogWarning($"The run could not be restarted after a load: {exception.Message}");
-        }
-    }
-}
-
-/// <summary>
 /// Detects a save point or obelisk being used, which is what clears the climax count
 /// (SPEC003 5.6, FR-217).
 ///

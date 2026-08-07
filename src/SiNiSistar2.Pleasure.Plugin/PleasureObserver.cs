@@ -22,6 +22,8 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _drawFaultLogged;
     private bool _labelUnavailable;
     private bool _gameplayActive;
+    private bool _wasDead;
+    private bool _sawFirstSlot;
     private Texture2D? _liquid;
     private Texture2D? _cross;
     private Texture2D? _haze;
@@ -131,7 +133,19 @@ public sealed class PleasureObserver : MonoBehaviour
 
         // Sexual attacks otherwise only happen while bound, but some defeat performances keep
         // delivering them, and the player is in HP0 rather than a hold for those (SPEC003 5.2).
-        PleasureRuntime.IsDefeatPerformance = lelia.IsHP0;
+        bool dead = lelia.IsHP0;
+        PleasureRuntime.IsDefeatPerformance = dead;
+
+        // Coming back from a defeat is a new run. Patching the game's own load hook looked like the
+        // direct way to detect this, but Harmony's wrapper for
+        // PlayerStatusManager.OnAfterLoadMainSaveData threw on every call and took the game's load
+        // path down with it, so the transition is observed instead of intercepted.
+        if (_wasDead && !dead)
+        {
+            PleasureRuntime.BeginRunFromSave("revived after a defeat");
+        }
+
+        _wasDead = dead;
         _lastMaxDurability = status.m_MaxDurability;
         PleasureRuntime.BinderEnemyId = ResolveBinderId(lelia);
 
@@ -276,6 +290,13 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
+        // The first sighting is simply this session starting; only a later change is a new save.
+        if (_sawFirstSlot)
+        {
+            PleasureRuntime.BeginRunFromSave($"save slot changed to {selectId}");
+        }
+
+        _sawFirstSlot = true;
         _lastSelectId = selectId;
         _lastSaveFile = file;
         PleasureRuntime.Log?.LogInfo(
