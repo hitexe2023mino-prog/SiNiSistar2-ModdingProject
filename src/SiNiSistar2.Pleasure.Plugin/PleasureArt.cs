@@ -35,9 +35,9 @@ internal static class PleasureArt
         float radius = size / 2f;
         float clamped = Math.Clamp(fill, 0f, 1f);
 
-        // The surface sits where the liquid has reached, with a shallow wave so it reads as fluid
-        // rather than as a bar that happens to be round.
-        float surface = clamped * size;
+        // GUI.Label draws row 0 at the top of the rectangle, so the liquid has to rise toward
+        // row 0 rather than away from it. Getting this backwards put the pool on the ceiling.
+        float surface = size * (1f - clamped);
 
         for (var y = 0; y < size; y++)
         {
@@ -54,25 +54,27 @@ internal static class PleasureArt
                     continue;
                 }
 
-                float wave = (float)Math.Sin((x / (double)size * 6.28318) + phase) * size * 0.012f;
+                float wave = (float)Math.Sin((x / (double)size * 6.28318) + phase) * size * 0.014f;
                 float localSurface = surface + wave;
 
-                if (y > localSurface)
+                if (y < localSurface)
                 {
                     pixels[index] = new Color32(0, 0, 0, 0);
                     continue;
                 }
 
-                // Deeper liquid is denser; the top centimetre is brighter, which gives the surface
-                // a meniscus without needing a second pass.
-                float depth = Math.Clamp((localSurface - y) / Math.Max(1f, size * 0.35f), 0f, 1f);
-                var near = (byte)(255 - (depth * 40f));
-                var alpha = (byte)(150 + (depth * 70f));
+                // Deeper liquid is denser, which gives the pool a body instead of a flat wash.
+                float depth = Math.Clamp((y - localSurface) / Math.Max(1f, size * 0.55f), 0f, 1f);
+                var alpha = (byte)(165 + (depth * 70f));
 
-                bool meniscus = localSurface - y < size * 0.02f;
+                bool meniscus = y - localSurface < size * 0.022f;
                 pixels[index] = meniscus
-                    ? new Color32(255, 210, 235, 235)
-                    : new Color32(near, (byte)(70 + (depth * 30f)), (byte)(150 + (depth * 20f)), alpha);
+                    ? new Color32(255, 214, 238, 240)
+                    : new Color32(
+                        (byte)(255 - (depth * 40f)),
+                        (byte)(78 + (depth * 26f)),
+                        (byte)(158 + (depth * 18f)),
+                        alpha);
             }
         }
 
@@ -84,20 +86,22 @@ internal static class PleasureArt
     /// <summary>
     /// The cross that measures how many climaxes are left.
     ///
-    /// Flared ends and a bevelled face rather than three plain bars: it has to look like the
-    /// character's own cross for its breaking to mean anything. Damage is carved out of the
-    /// silhouette so the shape itself is what degrades.
+    /// It crumbles from the top down: the head goes first, then the arms, and the shaft last, so
+    /// the silhouette is visibly losing ground long before it fails. At the limit it comes apart
+    /// into fragments. Flared ends and a bevelled face keep it reading as the character's own
+    /// cross rather than as a progress bar in the shape of one.
     /// </summary>
-    internal static Texture2D Cross(int width, int height, int notches, bool broken)
+    internal static Texture2D Cross(int width, int height, float progress, bool shattered)
     {
         var texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
         var pixels = new Color32[width * height];
 
         float shaft = width * 0.17f;
         float armHalf = width * 0.42f;
-        float barCentre = height * 0.70f;
+        float barCentre = height * 0.30f;
         float barHalf = height * 0.085f;
         float centreX = width / 2f;
+        float eaten = Math.Clamp(progress, 0f, 1f);
 
         for (var y = 0; y < height; y++)
         {
@@ -107,14 +111,12 @@ internal static class PleasureArt
                 float dy = y - barCentre;
                 var inside = false;
 
-                // Shaft, widening slightly toward each tip so the ends read as flared.
                 float verticalEdge = shaft * (1f + (Flare(y / (float)height) * 0.85f));
                 if (dx <= verticalEdge)
                 {
                     inside = true;
                 }
 
-                // Arms, with the same flare toward their tips.
                 if (Math.Abs(dy) <= barHalf * (1f + (Flare(dx / armHalf) * 0.9f)) && dx <= armHalf)
                 {
                     inside = true;
@@ -127,7 +129,23 @@ internal static class PleasureArt
                     continue;
                 }
 
-                // Bevel: lit from the upper left, so the face has depth instead of being flat.
+                // The erosion front walks down from the top, with a ragged edge so it reads as
+                // stone breaking away rather than as a rectangle being cropped.
+                float front = eaten * height * 1.02f;
+                float ragged = front + (Noise(x * 0.21f) * height * 0.05f);
+                if (y < ragged)
+                {
+                    pixels[index] = new Color32(0, 0, 0, 0);
+                    continue;
+                }
+
+                // Crumbling stone loses grip just behind the front, so the last few rows go patchy.
+                if (y < ragged + (height * 0.05f) && Noise((x * 0.7f) + (y * 1.3f)) > 0.45f)
+                {
+                    pixels[index] = new Color32(0, 0, 0, 0);
+                    continue;
+                }
+
                 float bevel = Math.Clamp(1f - (dx / Math.Max(1f, verticalEdge)), 0f, 1f);
                 var lift = (byte)(28f * bevel);
                 pixels[index] = new Color32(
@@ -139,11 +157,66 @@ internal static class PleasureArt
         }
 
         CarveRosette(pixels, width, height, centreX, barCentre, width * 0.13f);
-        CarveDamage(pixels, width, height, centreX, notches, broken);
+
+        if (shattered)
+        {
+            Shatter(pixels, width, height);
+        }
 
         texture.SetPixels32(pixels);
         Finish(texture);
         return texture;
+    }
+
+    /// <summary>
+    /// Breaks whatever is left into fragments: the image is diced into cells and most of them are
+    /// thrown away, leaving scattered shards where the cross was.
+    /// </summary>
+    private static void Shatter(Color32[] pixels, int width, int height)
+    {
+        var cell = Math.Max(3, width / 12);
+        for (var cy = 0; cy < height; cy += cell)
+        {
+            for (var cx = 0; cx < width; cx += cell)
+            {
+                // Two thirds of the cells go entirely; the survivors are nudged apart so the
+                // remains read as pieces rather than as a cross with holes in it.
+                bool keep = Noise((cx * 0.37f) + (cy * 0.11f)) > 0.66f;
+                int shift = keep ? (int)((Noise(cx * 0.5f) - 0.5f) * cell * 1.6f) : 0;
+
+                for (int y = cy; y < Math.Min(height, cy + cell); y++)
+                {
+                    for (int x = cx; x < Math.Min(width, cx + cell); x++)
+                    {
+                        int source = (y * width) + x;
+                        Color32 value = pixels[source];
+                        pixels[source] = new Color32(0, 0, 0, 0);
+
+                        if (!keep || value.a == 0)
+                        {
+                            continue;
+                        }
+
+                        int tx = x + shift;
+                        int ty = y + (shift / 2);
+                        if (tx >= 0 && tx < width && ty >= 0 && ty < height)
+                        {
+                            pixels[(ty * width) + tx] = value;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Repeatable pseudo-noise in 0..1. Deterministic on purpose: the same damage has to look the
+    /// same every frame, or the cross would boil.
+    /// </summary>
+    private static float Noise(float t)
+    {
+        double v = Math.Sin(t * 12.9898) * 43758.5453;
+        return (float)(v - Math.Floor(v));
     }
 
     /// <summary>Widens near 0 and 1 and vanishes in the middle, which is what makes the tips flare.</summary>
@@ -174,75 +247,11 @@ internal static class PleasureArt
                     continue;
                 }
 
-                // A ring and a dot: enough to read as an ornament at the size this is drawn.
                 bool ring = distance > radius * 0.62f && distance < radius * 0.82f;
                 bool dot = distance < radius * 0.24f;
                 if (ring || dot)
                 {
                     pixels[index] = new Color32(176, 156, 120, 255);
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// Bites one notch out of the silhouette per climax, at fixed places so the same damage always
-    /// looks the same. When it breaks, the shaft is severed outright.
-    /// </summary>
-    private static void CarveDamage(Color32[] pixels, int width, int height, float cx, int notches, bool broken)
-    {
-        (float X, float Y, float R)[] sites =
-        {
-            (0.62f, 0.30f, 0.10f),
-            (0.38f, 0.52f, 0.09f),
-            (0.72f, 0.72f, 0.08f),
-            (0.30f, 0.86f, 0.09f),
-            (0.60f, 0.12f, 0.10f),
-            (0.42f, 0.66f, 0.07f),
-            (0.68f, 0.44f, 0.08f),
-            (0.34f, 0.22f, 0.09f),
-        };
-
-        int shown = Math.Min(notches, sites.Length);
-        for (var index = 0; index < shown; index++)
-        {
-            (float sx, float sy, float sr) = sites[index];
-            Bite(pixels, width, height, sx * width, sy * height, sr * width);
-        }
-
-        if (!broken)
-        {
-            return;
-        }
-
-        // Severed: a clean gap across the shaft below the arms.
-        var breakY = (int)(height * 0.52f);
-        var gap = (int)Math.Max(2f, height * 0.035f);
-        for (int y = breakY; y < Math.Min(height, breakY + gap); y++)
-        {
-            for (var x = 0; x < width; x++)
-            {
-                pixels[(y * width) + x] = new Color32(0, 0, 0, 0);
-            }
-        }
-    }
-
-    private static void Bite(Color32[] pixels, int width, int height, float cx, float cy, float radius)
-    {
-        var minX = (int)Math.Max(0, cx - radius);
-        var maxX = (int)Math.Min(width - 1, cx + radius);
-        var minY = (int)Math.Max(0, cy - radius);
-        var maxY = (int)Math.Min(height - 1, cy + radius);
-
-        for (int y = minY; y <= maxY; y++)
-        {
-            for (int x = minX; x <= maxX; x++)
-            {
-                float dx = x - cx;
-                float dy = y - cy;
-                if ((dx * dx) + (dy * dy) <= radius * radius)
-                {
-                    pixels[(y * width) + x] = new Color32(0, 0, 0, 0);
                 }
             }
         }

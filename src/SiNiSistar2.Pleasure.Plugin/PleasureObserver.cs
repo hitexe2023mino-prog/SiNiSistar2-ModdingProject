@@ -21,6 +21,7 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _selfChecked;
     private bool _drawFaultLogged;
     private bool _labelUnavailable;
+    private bool _gameplayActive;
     private Texture2D? _liquid;
     private Texture2D? _cross;
     private Texture2D? _haze;
@@ -68,7 +69,9 @@ public sealed class PleasureObserver : MonoBehaviour
     /// </summary>
     public void OnGUI()
     {
-        if (!PleasureRuntime.Profile.ShowOverlay)
+        // Only while gameplay is actually running. The title screen, the loading screens and the
+        // menus have no player to report on, and a gauge floating over them is plainly wrong.
+        if (!PleasureRuntime.Profile.ShowOverlay || !_gameplayActive)
         {
             return;
         }
@@ -132,6 +135,7 @@ public sealed class PleasureObserver : MonoBehaviour
         _lastMaxDurability = status.m_MaxDurability;
         PleasureRuntime.BinderEnemyId = ResolveBinderId(lelia);
 
+        _gameplayActive = true;
         ReportSelfCheck(status);
         UpdateHp0Suppression(lelia, bound);
         ConsumeClimax(status);
@@ -389,7 +393,11 @@ public sealed class PleasureObserver : MonoBehaviour
 
         _crossNotches = count;
         _crossBroken = broken;
-        _cross = PleasureArt.Cross(96, 144, count, broken);
+
+        // Erosion runs a step behind the count so the cross is never whole once a climax has
+        // landed, and never fully gone until the break.
+        float progress = limit > 0 ? Math.Clamp(count / (float)limit, 0f, 1f) * 0.85f : 0f;
+        _cross = PleasureArt.Cross(96, 144, progress, broken);
     }
 
     /// <summary>
@@ -502,6 +510,7 @@ public sealed class PleasureObserver : MonoBehaviour
             PleasureRuntime.Log?.LogWarning($"Could not release the HP0 suppression: {failure}");
         }
 
+        _gameplayActive = false;
         PleasureRuntime.IsBound = false;
         PleasureRuntime.BinderEnemyId = null;
         _wasBound = false;

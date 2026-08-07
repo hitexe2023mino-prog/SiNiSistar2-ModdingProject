@@ -53,7 +53,7 @@ public sealed record PleasureOverlayLayout(
     float FlashSeconds,
     bool ShowCross)
 {
-    public static PleasureOverlayLayout Default { get; } = new(0.283f, 0.115f, 0.105f, 0.007f, 1.5f, true);
+    public static PleasureOverlayLayout Default { get; } = new(0.283f, 0.115f, 0.086f, 0.007f, 1.5f, true);
 }
 
 /// <summary>The validated configuration the plugin acts on (SPEC003 6.2).</summary>
