@@ -19,6 +19,9 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _wasBound;
     private bool _faultLogged;
     private bool _selfChecked;
+    private bool _drawFaultLogged;
+    private bool _texturesReady;
+    private bool _textureFaultLogged;
     private int _lastSelectId = int.MinValue;
     private string? _lastSaveFile;
     private double _lastFrameTime;
@@ -45,6 +48,7 @@ public sealed class PleasureObserver : MonoBehaviour
     {
         try
         {
+            EnsureTextures();
             Poll();
             _faultLogged = false;
         }
@@ -69,7 +73,7 @@ public sealed class PleasureObserver : MonoBehaviour
     /// </summary>
     public void OnGUI()
     {
-        if (!PleasureRuntime.Profile.ShowOverlay)
+        if (!PleasureRuntime.Profile.ShowOverlay || !_texturesReady)
         {
             return;
         }
@@ -78,11 +82,18 @@ public sealed class PleasureObserver : MonoBehaviour
         {
             DrawGauge();
             DrawClimaxFlash();
+            _drawFaultLogged = false;
         }
-        catch (Exception)
+        catch (Exception exception)
         {
-            // A drawing failure must never take the run down; the mechanism keeps working
-            // without its display (SPEC003 FR-213).
+            // Never takes the run down (FR-213), but it is reported. Swallowing this silently is
+            // what made "the overlay does not appear" impossible to diagnose: the mechanism was
+            // running correctly and only the drawing was failing, with nothing to say so.
+            if (!_drawFaultLogged)
+            {
+                _drawFaultLogged = true;
+                PleasureRuntime.Log?.LogError($"The overlay could not be drawn: {exception}");
+            }
         }
     }
 
@@ -549,41 +560,77 @@ public sealed class PleasureObserver : MonoBehaviour
         GUI.color = previous;
     }
 
+    /// <summary>
+    /// Builds every texture once, from <c>Update</c> rather than from <c>OnGUI</c>.
+    ///
+    /// Creating Unity objects inside the GUI callback put object construction on the one path whose
+    /// failures the overlay swallows, so a texture that would not build showed up as an overlay
+    /// that simply never appeared. Built here, a failure is reported and the drawing code can
+    /// assume its textures exist.
+    /// </summary>
     [HideFromIl2Cpp]
-    private Texture2D TrackTexture() => _track ??= SolidTexture(new Color(0.10f, 0.08f, 0.10f, 0.55f));
+    private void EnsureTextures()
+    {
+        if (_texturesReady)
+        {
+            return;
+        }
+
+        try
+        {
+            _track = SolidTexture(new Color(0.10f, 0.08f, 0.10f, 0.55f));
+            _active = SolidTexture(new Color(0.93f, 0.20f, 0.55f, 0.92f));
+            _idle = SolidTexture(new Color(0.52f, 0.24f, 0.38f, 0.72f));
+            _sensitivity = SolidTexture(new Color(0.72f, 0.62f, 0.78f, 0.60f));
+            _flash = SolidTexture(new Color(1f, 0.42f, 0.70f, 1f));
+            _chip = SolidTexture(new Color(0.06f, 0.05f, 0.06f, 0.92f));
+
+            for (var step = 0; step < _crossSteps.Length; step++)
+            {
+                float t = step / (float)(_crossSteps.Length - 1);
+                _crossSteps[step] = SolidTexture(new Color(
+                    0.90f - (0.20f * t),
+                    0.87f - (0.55f * t),
+                    0.80f - (0.50f * t),
+                    0.90f));
+            }
+
+            _texturesReady = true;
+            PleasureRuntime.Probe("overlay-textures", "The overlay textures were built; the gauge can draw.");
+        }
+        catch (Exception exception)
+        {
+            if (!_textureFaultLogged)
+            {
+                _textureFaultLogged = true;
+                PleasureRuntime.Log?.LogError(
+                    $"The overlay textures could not be built, so no gauge will be drawn: {exception}");
+            }
+        }
+    }
 
     [HideFromIl2Cpp]
-    private Texture2D ActiveTexture() => _active ??= SolidTexture(new Color(0.93f, 0.20f, 0.55f, 0.92f));
+    private Texture2D TrackTexture() => _track!;
 
     [HideFromIl2Cpp]
-    private Texture2D IdleTexture() => _idle ??= SolidTexture(new Color(0.52f, 0.24f, 0.38f, 0.72f));
+    private Texture2D ActiveTexture() => _active!;
 
     [HideFromIl2Cpp]
-    private Texture2D SensitivityTexture() => _sensitivity ??= SolidTexture(new Color(0.72f, 0.62f, 0.78f, 0.60f));
+    private Texture2D IdleTexture() => _idle!;
 
     [HideFromIl2Cpp]
-    private Texture2D HazeTexture() => _flash ??= SolidTexture(new Color(1f, 0.42f, 0.70f, 1f));
+    private Texture2D SensitivityTexture() => _sensitivity!;
 
     [HideFromIl2Cpp]
-    private Texture2D ChipTexture() => _chip ??= SolidTexture(new Color(0.06f, 0.05f, 0.06f, 0.92f));
+    private Texture2D HazeTexture() => _flash!;
+
+    [HideFromIl2Cpp]
+    private Texture2D ChipTexture() => _chip!;
 
     /// <summary>Bone white, souring toward a bruised red as the cross takes damage.</summary>
     [HideFromIl2Cpp]
-    private Texture2D CrossTexture(float damage)
-    {
-        var step = (int)Math.Clamp(damage * 4f, 0f, 4f);
-        if (_crossSteps[step] is null)
-        {
-            float t = step / 4f;
-            _crossSteps[step] = SolidTexture(new Color(
-                0.90f - (0.20f * t),
-                0.87f - (0.55f * t),
-                0.80f - (0.50f * t),
-                0.90f));
-        }
-
-        return _crossSteps[step]!;
-    }
+    private Texture2D CrossTexture(float damage) =>
+        _crossSteps[(int)Math.Clamp(damage * (_crossSteps.Length - 1), 0f, _crossSteps.Length - 1)]!;
 
     [HideFromIl2Cpp]
     private static Texture2D SolidTexture(Color color)
