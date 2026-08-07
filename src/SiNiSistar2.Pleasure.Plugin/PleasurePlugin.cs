@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Security.Cryptography;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Unity.IL2CPP;
@@ -37,6 +36,12 @@ public sealed class PleasurePlugin : BasePlugin
     public override void Load()
     {
         PleasureRuntime.Log = Log;
+
+        if (StartupGuard.IsAnotherInstanceRunning())
+        {
+            Log.LogWarning(StartupGuard.DuplicateInstanceMessage);
+        }
+
         PleasureOptions options = BindOptions();
 
         if (!options.Enabled)
@@ -321,10 +326,5 @@ public sealed class PleasurePlugin : BasePlugin
         }
     }
 
-    private static string Sha256(string path)
-    {
-        using FileStream stream = File.OpenRead(path);
-        using var algorithm = SHA256.Create();
-        return Convert.ToHexString(algorithm.ComputeHash(stream));
-    }
+    private static string Sha256(string path) => StartupGuard.Sha256(path);
 }
