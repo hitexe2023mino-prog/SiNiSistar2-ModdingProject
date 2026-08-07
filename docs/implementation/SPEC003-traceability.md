@@ -6,7 +6,9 @@ In-game steps live in [`docs/testing/SPEC003-test-scenarios.md`](../testing/SPEC
 
 ## Stage
 
-This is the **probe stage**. The only behaviour change is removing the HP0 defeat inside a hold; every tuning value ships at no-change (SPEC003 FR-233) and the plugin records what 付録A still needs. The gauge, the climax overlay, the sidecar and `BreastSuper` are specified and partly built but not yet wired to anything the player sees.
+The HP0 removal, the pleasure gauge, climaxes, the cross, the climax haze and the sidecar are implemented and running in game.  (FR-221) is the one requirement still untouched.
+
+Every tuning value still ships at no-change (FR-233), so a fresh install only removes the HP0 defeat until the values in  are set. The probe log remains on to settle the 付録A items that need play to answer.
 
 ## Status meanings
 
@@ -34,7 +36,7 @@ This is the **probe stage**. The only behaviour change is removing the HP0 defea
 | FR-209 | 感度が快楽の上昇量を増やす | `PleasureMeter.AddSexualHit` | `PleasureMeterTests.SensitivityIncreasesTheGainPerHit` | Tested |
 | FR-210 | 拘束外で減衰、拘束中は減衰しない | `PleasureObserver.DecayWhenFree`、`PleasureMeter.Decay` | `PleasureMeterTests`（2件）、AC-208 実機 | Tested / unverified |
 | FR-211 | 上限到達で1回だけ絶頂処理 | `PleasureMeter.ConsumeClimax`、`PleasureObserver.ConsumeClimax` | `PleasureMeterTests.AFullGaugeYieldsExactlyOneClimax` | Tested |
-| FR-212 | 絶頂演出はMOD描画、`timeScale` を変えない | — | AC-210 | Not started |
+| FR-212 | 絶頂演出はMOD描画、`timeScale` を変えない | `PleasureObserver.DrawClimaxFlash` / `DrawVignette`、`PleasureArt` | AC-210 実機 | Implemented / unverified |
 | FR-213 | 演出が出なくても状態変化と判定は行う | `PleasureObserver.ConsumeClimax`（演出に依存しない） | AC-211 | Implemented / unverified |
 | FR-214 | 限界は基礎値＋耐久から算出、読めなければ基礎値 | `ClimaxLimit.Compute`、`PleasureObserver.IsAtClimaxLimit` | `SensitivityAndClimaxTests`（4件）、3.3 の A-6 | Tested / unverified |
 | FR-215 | 限界到達でHP0抑止を解除し既存経路へ委ねる | `PleasureObserver.UpdateHp0Suppression` | AC-213 実機 | Implemented / unverified |
@@ -54,7 +56,7 @@ This is the **probe stage**. The only behaviour change is removing the HP0 defea
 | FR-229 | SPEC002の管理面へ介入しない | 参照なし | AC-223 実機 | Implemented / unverified |
 | FR-230 | メインスレッドで完結、待機しない | `PleasureObserver`（同期処理のみ） | AC-224 実機 | Implemented / unverified |
 | FR-231 | 起動ログに構成を記録 | `PleasurePlugin.Load` | AC-225 実機 | Implemented / unverified |
-| FR-232 | 判定と直列化をゲーム非依存層へ | `SiNiSistar2.Pleasure.Core`（ゲーム参照ゼロ） | 42件がゲーム起動なしで実行 | Tested |
+| FR-232 | 判定と直列化をゲーム非依存層へ | `SiNiSistar2.Pleasure.Core`（ゲーム参照ゼロ） | 54件がゲーム起動なしで実行 | Tested |
 | FR-233 | 未実測の既定は無変更相当、HP0抑止のみ例外 | `PleasureOptions` の既定値 | `PleasureProfileTests.ShippedDefaults...` | Tested |
 | FR-234 | `Enabled=false` でパッチも随伴ファイルもなし | `PleasurePlugin.Load` の早期 return | `PleasureProfileTests.DisablingTheMod...` | Tested |
 
@@ -94,6 +96,7 @@ This is the **probe stage**. The only behaviour change is removing the HP0 defea
 
 ## 完了監査
 
-- 未着手の要件（FR-212、FR-221、FR-223、および FR-222 の同期部分）は、状態欄に **Not started** と明記した。仕様が満たされたと誤読される箇所はない。
+- 未着手は **FR-221（`BreastSuper` の通常付与）のみ**。状態欄に **Not started** と明記した。仕様が満たされたと誤読される箇所はない。
+- 実機で確認済み: HP0 抑止（A-1）、拘束中の被弾の観測（A-2）、状態異常の同伴（A-3）、耐久値（A-6）、セーブポイント検出（A-7）、スロット識別（A-9）。
 - SPEC001 と SPEC002 のファイルは未変更。`SiNiSistar2.Edi.sln` へは3プロジェクトの追加のみ。
 - 未検証項目は実機テストシナリオ3章へ引き継ぎ済み。
