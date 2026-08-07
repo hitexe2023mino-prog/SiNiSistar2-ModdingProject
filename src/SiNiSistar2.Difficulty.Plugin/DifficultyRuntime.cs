@@ -17,6 +17,19 @@ internal static class DifficultyRuntime
 {
     internal static readonly InterventionLedger Ledger = new();
 
+    /// <summary>
+    /// Holds the struggle gauge down during a window. Suppressing the input method alone did not
+    /// stop resistance registering on this build, so the value is held as well (付録A A-7).
+    /// </summary>
+    internal static readonly GaugeHold Gauge = new();
+
+    /// <summary>
+    /// How many times the <c>Execution</c> prefix has actually dropped a call. Zero across a whole
+    /// window is the evidence that the method is not the path input takes, or that IL2CPP inlined
+    /// it and the patch never runs.
+    /// </summary>
+    internal static int SuppressedExecutions;
+
     /// <summary>Guards the transient rate override against re-entrant damage resolution (FR-108).</summary>
     internal static readonly ReentrantScope RateScope = new();
 

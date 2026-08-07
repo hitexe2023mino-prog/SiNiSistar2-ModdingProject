@@ -30,6 +30,7 @@ public sealed class DifficultyObserver : MonoBehaviour
         try
         {
             Poll();
+            ClampGauge();
             _faultLogged = false;
         }
         catch (Exception exception)
@@ -44,6 +45,13 @@ public sealed class DifficultyObserver : MonoBehaviour
             }
         }
     }
+
+    /// <summary>
+    /// Second chance at the gauge, after every component's <c>Update</c> has run. Unity gives no
+    /// ordering guarantee between components, so the clamp has to happen on both sides of the
+    /// frame to be sure a raise is undone before it is drawn or acted on.
+    /// </summary>
+    public void LateUpdate() => ClampGauge();
 
     public void OnApplicationQuit() => Shutdown();
 
@@ -189,7 +197,7 @@ public sealed class DifficultyObserver : MonoBehaviour
                 scheduler.EndHold();
             }
 
-            ApplyGaugeTint(false);
+            SetNullified(false);
             return;
         }
 
@@ -200,7 +208,7 @@ public sealed class DifficultyObserver : MonoBehaviour
         if (!DifficultyRuntime.HasAny(abnormals, types))
         {
             scheduler.EndHold();
-            ApplyGaugeTint(false);
+            SetNullified(false);
             return;
         }
 
@@ -208,7 +216,7 @@ public sealed class DifficultyObserver : MonoBehaviour
         if (!_wasBound || !scheduler.IsNullifying && scheduler.ChangeAt <= 0d)
         {
             scheduler.BeginHold(now, levelSum);
-            ApplyGaugeTint(false);
+            SetNullified(false);
             return;
         }
 
@@ -217,10 +225,77 @@ public sealed class DifficultyObserver : MonoBehaviour
         if (before != after)
         {
             DifficultyRuntime.LogIntervention(
-                after ? "Nullification window opened." : "Nullification window closed.");
+                after
+                    ? "Nullification window opened."
+                    : "Nullification window closed; the Execution prefix dropped "
+                      + $"{DifficultyRuntime.SuppressedExecutions} call(s) during it. Zero means "
+                      + "resistance input does not go through that method on this build, and the "
+                      + "gauge hold is what is doing the work (付録A A-7).");
         }
 
-        ApplyGaugeTint(after);
+        SetNullified(after);
+    }
+
+    /// <summary>
+    /// Turns the two window effects on and off together: the gauge is held from rising, and it is
+    /// tinted so the stall reads as deliberate.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private static void SetNullified(bool nullifying)
+    {
+        GaugeHold hold = DifficultyRuntime.Gauge;
+        if (nullifying && !hold.IsHolding)
+        {
+            GachaGachaSystem? gacha = DifficultyRuntime.PlayerGacha;
+            if (gacha is not null && !gacha.WasCollected)
+            {
+                DifficultyRuntime.SuppressedExecutions = 0;
+                hold.Begin(gacha.CurrentValue);
+            }
+        }
+        else if (!nullifying && hold.IsHolding)
+        {
+            hold.End();
+        }
+
+        ApplyGaugeTint(nullifying);
+    }
+
+    /// <summary>
+    /// Writes the gauge back down if something raised it during a window.
+    ///
+    /// Run from both <c>Update</c> and <c>LateUpdate</c> because Unity does not order components
+    /// among themselves: whichever side moves first, the value is corrected before the frame is
+    /// drawn, and the escape check has the smallest possible chance of seeing a raised value.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private static void ClampGauge()
+    {
+        GaugeHold hold = DifficultyRuntime.Gauge;
+        if (!hold.IsHolding)
+        {
+            return;
+        }
+
+        try
+        {
+            GachaGachaSystem? gacha = DifficultyRuntime.PlayerGacha;
+            if (gacha is null || gacha.WasCollected)
+            {
+                return;
+            }
+
+            if (hold.TryHold(gacha.CurrentValue, out float held))
+            {
+                gacha.CurrentValue = held;
+            }
+        }
+        catch (Exception)
+        {
+            // The hold UI can be torn down between frames; letting the player struggle is the
+            // safe failure here.
+            hold.End();
+        }
     }
 
     /// <summary>
@@ -386,6 +461,7 @@ public sealed class DifficultyObserver : MonoBehaviour
     {
         DifficultyRuntime.Nullification?.EndHold();
         DifficultyRuntime.Recovery?.Cancel();
+        DifficultyRuntime.Gauge.End();
         DifficultyRuntime.Ledger.Release(DifficultyRuntime.GaugeTintKey);
 
         // Driven off the ledger rather than off Cancel's answer: this runs every frame the managers

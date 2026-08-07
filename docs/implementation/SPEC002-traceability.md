@@ -13,7 +13,7 @@ In-game verification steps live in [`docs/testing/SPEC002-test-scenarios.md`](..
 
 ## Automated coverage
 
-`dotnet test SiNiSistar2.Edi.sln -c Release` → 73 tests for this MOD, 143 for the EDI MOD, 0 failures.
+`dotnet test SiNiSistar2.Edi.sln -c Release` → 79 tests for this MOD, 143 for the EDI MOD, 0 failures.
 
 `ForbiddenSurfaceTests` scans `src/SiNiSistar2.Difficulty.Plugin/**/*.cs` with comments stripped and fails the build if a forbidden member is named. That is what keeps the "must not touch" requirements from decaying silently.
 
@@ -31,7 +31,7 @@ In-game verification steps live in [`docs/testing/SPEC002-test-scenarios.md`](..
 | FR-108 | 再入時は最外の1回だけ | `ReentrantScope`、`DifficultyRuntime.RateScope` | `ReentrantScopeTests` | Tested |
 | FR-109 | `MaxLevel` を超えず通知経路を通る | `AbnormalLevelPatches`（`_IncrementLevel`、`MaxLevel` 判定） | AC-109 実機 | Implemented / unverified |
 | FR-110 | 1回の付与に対する追加進行は1回 | `DifficultyRuntime.LevelScope` | `ReentrantScopeTests` | Tested |
-| FR-111 | 快楽系が有効な拘束中だけ無力化窓 | `NullificationScheduler`、`DifficultyObserver.UpdateHold`、`NullificationPatches` | `NullificationSchedulerTests`（8件）、AC-111 実機 | Tested / unverified |
+| FR-111 | 快楽系が有効な拘束中だけ無力化窓 | `NullificationScheduler`、`DifficultyObserver.UpdateHold` / `SetNullified` / `ClampGauge`、`GaugeHold`、`NullificationPatches`（補助） | `NullificationSchedulerTests`（8件）、`GaugeHoldTests`（6件）、AC-111 実機 | Tested / unverified |
 | FR-112 | 穢れ軸を読み書きしない | 参照なし | `ForbiddenSurfaceTests.TheDefilementEscapeAxisIsNeverReferenced` | Design-time |
 | FR-113 | 拘束ゲージの数値を書き換えない | 参照なし | `ForbiddenSurfaceTests.TheStruggleMeterNumbersAreNeverWritten` | Design-time |
 | FR-114 | `Defilement` を快楽系として拒否 | `DifficultyProfileFactory.BuildPleasure`、`AbnormalTypeSet.Parse` | `ProfileValidationTests.DefilementIsRefused...` | Tested |
@@ -82,6 +82,14 @@ In-game verification steps live in [`docs/testing/SPEC002-test-scenarios.md`](..
 | 根拠 | Harmony が受理したが Il2CppInterop が適用できなかったパッチは、起動ログ上では成功と区別できない。ゲームが実際に何を報告しているかを読み取るしかない |
 | 影響 | 付録A の A-1（保存値の不変）と A-2（どのアクセサが効いているか）の一次証拠が、実機プレイなしで得られる |
 | 代替案 | パッチ適用数だけを報告する旧案。当たっていないパッチを数えるため誤報になる |
+
+| 項目 | 内容 |
+|---|---|
+| 論点 | `GachaGachaSystem.Execution` を抑止しても抵抗入力が通り、脱出できてしまう（付録A A-7） |
+| 選択 | 入力メソッドの抑止をやめ、窓の間はゲージの値そのものを上昇させない方式（`GaugeHold`）へ変更する。`Update` と `LateUpdate` の両方で書き戻す |
+| 根拠 | 実機で、パッチは適用され（`patches=2`、interop 警告なし）、窓も開き（着色された）、着色対象は入力を受けているのと同一インスタンスだった。それでも入力が通る以上、`Execution` は反映経路でないか IL2CPP にインライン展開されている。値を保持する方式は経路に依存しない |
+| 影響 | FR-111（入力を反映しない）と FR-115（減衰を変更しない）は維持される。下降は新しい上限として採用するので減衰は素のまま働く。Unity はコンポーネント間の実行順を保証しないため、フレームの両端で書き戻す |
+| 代替案 | `GachaBind.Execution` や `GachaGachaSystem.Update` を代わりにパッチする案。どれが経路かを当てる作業が続き、インラインなら同じ結果になる。当てずに済む方式を採った |
 
 | 項目 | 内容 |
 |---|---|

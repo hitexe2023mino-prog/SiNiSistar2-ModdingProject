@@ -194,7 +194,13 @@ internal static class NullificationPatches
     {
         try
         {
-            return !DifficultyRuntime.ShouldNullify(__instance);
+            if (!DifficultyRuntime.ShouldNullify(__instance))
+            {
+                return true;
+            }
+
+            DifficultyRuntime.SuppressedExecutions++;
+            return false;
         }
         catch (Exception)
         {
