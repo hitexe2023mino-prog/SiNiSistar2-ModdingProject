@@ -34,6 +34,7 @@ public sealed class PleasureObserver : MonoBehaviour
     private float _liquidPhase;
     private double _liquidBuiltAt;
     private int _crossNotches = -1;
+    private int _liquidResolution = 96;
     private bool _crossBroken;
     private int _lastSelectId = int.MinValue;
     private string? _lastSaveFile;
@@ -361,6 +362,10 @@ public sealed class PleasureObserver : MonoBehaviour
         float gaugeY = height - (height * gauge.BottomOffset);
         float radius = height * gauge.Size;
 
+        // Generated to match the size it is drawn at, in coarse steps so a nudge of the wheel does
+        // not rebuild the texture on every frame. A fixed 96 px looked soft once the gauge was
+        // enlarged.
+        _liquidResolution = Resolution(radius * 2f);
         RefreshLiquid(meter.Value);
         if (_liquid is not null)
         {
@@ -389,6 +394,14 @@ public sealed class PleasureObserver : MonoBehaviour
         {
             DrawSelectionMarker(radius, gaugeX, gaugeY, height, layout);
         }
+    }
+
+    /// <summary>Texture size for a given on-screen size, rounded so it changes rarely.</summary>
+    [HideFromIl2Cpp]
+    private static int Resolution(float drawnPixels)
+    {
+        var stepped = (int)(Math.Ceiling(drawnPixels / 64f) * 64f);
+        return Math.Clamp(stepped, 64, 512);
     }
 
     /// <summary>Rings whichever element the editor is currently moving, so the target is never in doubt.</summary>
@@ -480,7 +493,14 @@ public sealed class PleasureObserver : MonoBehaviour
             case EventType.ScrollWheel:
                 Adjust(placement => placement with
                 {
-                    Size = Math.Clamp(placement.Size - (current.delta.y * 0.002f), 0.01f, 0.5f),
+                    // Proportional rather than a fixed step: one notch is the same visual change
+                    // whatever the current size, so growing stays responsive instead of crawling
+                    // once the element is already large. The ceiling is generous because a gauge
+                    // wider than the screen is a legitimate thing to want on a large display.
+                    Size = Math.Clamp(
+                        placement.Size * (float)Math.Pow(1.06d, -current.delta.y),
+                        0.01f,
+                        1.5f),
                 });
                 current.Use();
                 break;
@@ -569,7 +589,8 @@ public sealed class PleasureObserver : MonoBehaviour
     {
         double now = Time.unscaledTimeAsDouble;
         bool moved = Math.Abs(fill - _liquidFill) > 0.01f;
-        if (_liquid is not null && !moved && now - _liquidBuiltAt < 0.08d)
+        bool resized = _liquid is not null && _liquid.width != _liquidResolution;
+        if (_liquid is not null && !moved && !resized && now - _liquidBuiltAt < 0.08d)
         {
             return;
         }
@@ -577,7 +598,7 @@ public sealed class PleasureObserver : MonoBehaviour
         _liquidFill = fill;
         _liquidBuiltAt = now;
         _liquidPhase += 0.35f;
-        _liquid = PleasureArt.LiquidDisc(96, fill, _liquidPhase);
+        _liquid = PleasureArt.LiquidDisc(_liquidResolution, fill, _liquidPhase);
     }
 
     /// <summary>Rebuilt only when the damage changes, which is once per climax.</summary>

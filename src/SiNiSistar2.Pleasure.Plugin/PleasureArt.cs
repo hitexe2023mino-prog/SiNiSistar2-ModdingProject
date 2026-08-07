@@ -57,15 +57,15 @@ internal static class PleasureArt
                 float wave = (float)Math.Sin((x / (double)size * 6.28318) + phase) * size * 0.014f;
                 float localSurface = surface + wave;
 
-                // The empty part of the vessel is still drawn. A gauge that vanishes when it is
-                // empty cannot be told apart from a gauge that is broken, which is exactly how the
-                // overlay looked when the tuning values were reset to zero.
-                bool rim = distance > radius - Math.Max(1.5f, size * 0.035f);
+                // Above the liquid only the rim is drawn. Filling the empty part washed out the
+                // dial's own art underneath, but leaving nothing at all made an empty gauge
+                // indistinguishable from a broken one, so the rim stays as the marker.
+                bool rim = distance > radius - Math.Max(1.5f, size * 0.03f);
                 if (y < localSurface)
                 {
                     pixels[index] = rim
-                        ? new Color32(196, 120, 168, 130)
-                        : new Color32(40, 18, 34, 70);
+                        ? new Color32(214, 138, 186, 90)
+                        : new Color32(0, 0, 0, 0);
                     continue;
                 }
 
