@@ -24,6 +24,8 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _gameplayActive;
     private bool _wasDead;
     private bool _sawFirstSlot;
+    private bool _editing;
+    private PleasureOverlayLayout? _layoutBeforeEdit;
     private Texture2D? _liquid;
     private Texture2D? _cross;
     private Texture2D? _haze;
@@ -71,9 +73,17 @@ public sealed class PleasureObserver : MonoBehaviour
     /// </summary>
     public void OnGUI()
     {
+        if (!PleasureRuntime.Profile.ShowOverlay)
+        {
+            return;
+        }
+
+        HandleLayoutEditor();
+
         // Only while gameplay is actually running. The title screen, the loading screens and the
         // menus have no player to report on, and a gauge floating over them is plainly wrong.
-        if (!PleasureRuntime.Profile.ShowOverlay || !_gameplayActive)
+        // While the layout is being edited it is drawn regardless, so there is something to aim.
+        if (!_gameplayActive && !_editing)
         {
             return;
         }
@@ -82,6 +92,7 @@ public sealed class PleasureObserver : MonoBehaviour
         {
             DrawGauge();
             DrawClimaxFlash();
+            DrawEditorChrome();
             _drawFaultLogged = false;
         }
         catch (Exception exception)
@@ -341,7 +352,7 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        PleasureOverlayLayout layout = PleasureRuntime.Profile.Overlay;
+        PleasureOverlayLayout layout = PleasureRuntime.Overlay;
         float height = Screen.height;
         float centreX = Screen.width * layout.CentreX;
 
@@ -357,7 +368,7 @@ public sealed class PleasureObserver : MonoBehaviour
             Draw(new Rect(centreX - radius, centreY - radius, diameter, diameter), _liquid, Color.white);
         }
 
-        if (layout.ShowCross)
+        if (PleasureRuntime.Overlay.ShowCross)
         {
             RefreshCross();
             if (_cross is not null)
@@ -373,6 +384,130 @@ public sealed class PleasureObserver : MonoBehaviour
                     Color.white);
             }
         }
+    }
+
+    /// <summary>
+    /// Lets the gauge be placed with the mouse.
+    ///
+    /// Reading the dial's position off a screenshot kept being wrong — window borders, taskbars and
+    /// aspect ratios all move it — and every miss cost a round trip. Dragging it into place takes
+    /// the guesswork out entirely, and what the player sets is what gets written to the config.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void HandleLayoutEditor()
+    {
+        UnityEngine.Event current = UnityEngine.Event.current;
+        if (current is null)
+        {
+            return;
+        }
+
+        if (current.type == EventType.KeyDown && current.keyCode == KeyCode.F9)
+        {
+            ToggleEditing();
+            current.Use();
+            return;
+        }
+
+        if (!_editing)
+        {
+            return;
+        }
+
+        switch (current.type)
+        {
+            case EventType.KeyDown when current.keyCode is KeyCode.Return or KeyCode.KeypadEnter:
+                CommitEditing();
+                current.Use();
+                break;
+
+            case EventType.KeyDown when current.keyCode == KeyCode.Escape:
+                CancelEditing();
+                current.Use();
+                break;
+
+            case EventType.MouseDrag:
+            {
+                PleasureOverlayLayout layout = PleasureRuntime.Overlay;
+                PleasureRuntime.Overlay = layout with
+                {
+                    CentreX = Math.Clamp(layout.CentreX + (current.delta.x / Screen.width), 0f, 1f),
+
+                    // The offset is measured up from the bottom, so dragging down shrinks it.
+                    BottomOffset = Math.Clamp(layout.BottomOffset - (current.delta.y / Screen.height), 0f, 1f),
+                };
+                current.Use();
+                break;
+            }
+
+            case EventType.ScrollWheel:
+            {
+                PleasureOverlayLayout layout = PleasureRuntime.Overlay;
+                PleasureRuntime.Overlay = layout with
+                {
+                    Radius = Math.Clamp(layout.Radius - (current.delta.y * 0.002f), 0.01f, 0.5f),
+                };
+                current.Use();
+                break;
+            }
+        }
+    }
+
+    [HideFromIl2Cpp]
+    private void ToggleEditing()
+    {
+        if (_editing)
+        {
+            CommitEditing();
+            return;
+        }
+
+        _editing = true;
+        _layoutBeforeEdit = PleasureRuntime.Overlay;
+        PleasureRuntime.Log?.LogInfo("Layout editing started. Drag to move, wheel to resize, Enter to save, Escape to cancel.");
+    }
+
+    [HideFromIl2Cpp]
+    private void CommitEditing()
+    {
+        _editing = false;
+        _layoutBeforeEdit = null;
+        PleasureOverlayLayout layout = PleasureRuntime.Overlay;
+        PleasureRuntime.SaveOverlay?.Invoke(layout);
+        PleasureRuntime.Log?.LogInfo(
+            $"Layout saved: OverlayCentreX={layout.CentreX:F3}, OverlayBottomOffset={layout.BottomOffset:F3}, "
+            + $"OverlayRadius={layout.Radius:F3}.");
+    }
+
+    [HideFromIl2Cpp]
+    private void CancelEditing()
+    {
+        if (_layoutBeforeEdit is not null)
+        {
+            PleasureRuntime.Overlay = _layoutBeforeEdit;
+        }
+
+        _editing = false;
+        _layoutBeforeEdit = null;
+        PleasureRuntime.Log?.LogInfo("Layout editing cancelled; the previous position is restored.");
+    }
+
+    /// <summary>Shows the numbers being edited, so the result can also be typed into the config by hand.</summary>
+    [HideFromIl2Cpp]
+    private void DrawEditorChrome()
+    {
+        if (!_editing)
+        {
+            return;
+        }
+
+        PleasureOverlayLayout layout = PleasureRuntime.Overlay;
+        GUI.Box(new Rect(12f, 12f, 470f, 96f), GUIContent.none);
+        GUI.Label(new Rect(24f, 20f, 450f, 22f), "Pleasure gauge layout — drag to move, wheel to resize");
+        GUI.Label(new Rect(24f, 44f, 450f, 22f), "Enter: save to config    Escape: cancel    F9: save and close");
+        GUI.Label(
+            new Rect(24f, 68f, 450f, 22f),
+            $"OverlayCentreX={layout.CentreX:F3}  OverlayBottomOffset={layout.BottomOffset:F3}  OverlayRadius={layout.Radius:F3}");
     }
 
     /// <summary>
@@ -468,7 +603,7 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        PleasureOverlayLayout layout = PleasureRuntime.Profile.Overlay;
+        PleasureOverlayLayout layout = PleasureRuntime.Overlay;
         var progress = (float)Math.Clamp(remaining / Math.Max(0.01f, layout.FlashSeconds), 0d, 1d);
 
         // Blooms quickly and fades slowly, which reads as a pulse instead of a light switching on.

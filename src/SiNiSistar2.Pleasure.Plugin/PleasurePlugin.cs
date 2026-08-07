@@ -30,6 +30,9 @@ public sealed class PleasurePlugin : BasePlugin
     private const string ExpectedMetadataSha256 =
         "A56278D0162B6C148312B56FBE208B54BA9AF2D3BAD609EBF9349B7AE7DDC84B";
 
+    private ConfigEntry<float>? _centreX;
+    private ConfigEntry<float>? _bottomOffset;
+    private ConfigEntry<float>? _ringRadius;
     private Harmony? _harmony;
     private PleasureObserver? _observer;
 
@@ -86,6 +89,14 @@ public sealed class PleasurePlugin : BasePlugin
             profile.Pleasure.DecayPerSecond);
         PleasureRuntime.Sensitivity = new SensitivityTrack(profile.Sensitivity.Cap);
         PleasureRuntime.ContributionKey = new Il2CppSystem.Object();
+        PleasureRuntime.Overlay = profile.Overlay;
+        PleasureRuntime.SaveOverlay = layout =>
+        {
+            _centreX!.Value = layout.CentreX;
+            _bottomOffset!.Value = layout.BottomOffset;
+            _ringRadius!.Value = layout.Radius;
+            Config.Save();
+        };
 
         _harmony = new Harmony(PluginGuid);
         var applied = 0;
@@ -109,6 +120,13 @@ public sealed class PleasurePlugin : BasePlugin
             + $"climaxGameOver={profile.Climax.GameOverEnabled}, "
             + $"breastSuper={(profile.BreastSuper.HasEffect ? "on" : "off")}, "
             + $"probe={profile.ProbeMeasurements}, patches={applied}.");
+
+        if (profile.ShowOverlay)
+        {
+            Log.LogInfo(
+                "Press F9 in game to move and resize the gauge with the mouse: drag to move, wheel "
+                + "to resize, Enter to save, Escape to cancel.");
+        }
 
         if (profile.ProbeMeasurements)
         {
@@ -231,14 +249,14 @@ public sealed class PleasurePlugin : BasePlugin
             "ShowOverlay",
             true,
             "Draw the pleasure gauge, sensitivity and climax count on screen.");
-        ConfigEntry<float> centreX = Config.Bind(
+        _centreX = Config.Bind(
             "Overlay",
             "OverlayCentreX",
             PleasureOverlayLayout.Default.CentreX,
             "Ring centre as a fraction of screen width. The default sits on the game's HP/MP dial.");
-        ConfigEntry<float> bottomOffset = Config.Bind(
+        _bottomOffset = Config.Bind(
             "Overlay", "OverlayBottomOffset", PleasureOverlayLayout.Default.BottomOffset, "Gauge centre measured up from the bottom edge.");
-        ConfigEntry<float> ringRadius = Config.Bind(
+        _ringRadius = Config.Bind(
             "Overlay",
             "OverlayRadius",
             PleasureOverlayLayout.Default.Radius,
@@ -278,9 +296,9 @@ public sealed class PleasurePlugin : BasePlugin
             LogTransitions = logTransitions.Value,
             ProbeMeasurements = probe.Value,
             ShowOverlay = showOverlay.Value,
-            OverlayCentreX = centreX.Value,
-            OverlayBottomOffset = bottomOffset.Value,
-            OverlayRadius = ringRadius.Value,
+            OverlayCentreX = _centreX.Value,
+            OverlayBottomOffset = _bottomOffset.Value,
+            OverlayRadius = _ringRadius.Value,
             OverlayThickness = ringThickness.Value,
             ShowCross = showCross.Value,
         };

@@ -22,6 +22,15 @@ internal static class PleasureRuntime
 
     internal static PleasureProfile Profile { get; set; } = PleasureProfile.Inactive;
 
+    /// <summary>
+    /// Where the gauge sits, live. Separate from the profile because the layout editor changes it
+    /// while the game runs and the profile is meant to be the settled configuration.
+    /// </summary>
+    internal static PleasureOverlayLayout Overlay { get; set; } = PleasureOverlayLayout.Default;
+
+    /// <summary>Writes the layout back to the config file. Supplied by the plugin at load.</summary>
+    internal static Action<PleasureOverlayLayout>? SaveOverlay { get; set; }
+
     internal static ManualLogSource? Log { get; set; }
 
     internal static PleasureMeter? Meter { get; set; }
