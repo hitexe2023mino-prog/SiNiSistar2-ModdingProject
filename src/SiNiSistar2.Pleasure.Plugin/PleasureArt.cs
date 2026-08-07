@@ -78,8 +78,7 @@ internal static class PleasureArt
             }
         }
 
-        texture.SetPixels32(pixels);
-        Finish(texture);
+        Upload(texture, pixels, size, size);
         return texture;
     }
 
@@ -163,8 +162,7 @@ internal static class PleasureArt
             Shatter(pixels, width, height);
         }
 
-        texture.SetPixels32(pixels);
-        Finish(texture);
+        Upload(texture, pixels, width, height);
         return texture;
     }
 
@@ -255,6 +253,28 @@ internal static class PleasureArt
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Uploads the pixels, flipping them on the way.
+    ///
+    /// Unity stores a texture with row 0 at the bottom, but every generator here is written the way
+    /// the shapes are described — top row first. Flipping once at the boundary keeps that single
+    /// awkward fact in one place instead of inverting the arithmetic in each generator, which is
+    /// how the gauge ended up filling from the ceiling.
+    /// </summary>
+    private static void Upload(Texture2D texture, Color32[] pixels, int width, int height)
+    {
+        var flipped = new Color32[pixels.Length];
+        for (var y = 0; y < height; y++)
+        {
+            int source = y * width;
+            int target = (height - 1 - y) * width;
+            Array.Copy(pixels, source, flipped, target, width);
+        }
+
+        texture.SetPixels32(flipped);
+        Finish(texture);
     }
 
     private static void Finish(Texture2D texture)

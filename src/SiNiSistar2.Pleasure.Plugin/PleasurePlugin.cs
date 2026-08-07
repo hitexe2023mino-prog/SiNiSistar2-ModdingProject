@@ -100,6 +100,14 @@ public sealed class PleasurePlugin : BasePlugin
             typeof(SavePointPatches),
             postfix: nameof(SavePointPatches.ExecutionOneAsyncPostfix));
 
+        applied += Patch(
+            "save-load",
+            AccessTools.Method(
+                typeof(PlayerStatusManager),
+                nameof(PlayerStatusManager.OnAfterLoadMainSaveData)),
+            typeof(SaveLoadPatches),
+            postfix: nameof(SaveLoadPatches.OnAfterLoadMainSaveDataPostfix));
+
         _observer = AddComponent<PleasureObserver>();
 
         Log.LogInfo(

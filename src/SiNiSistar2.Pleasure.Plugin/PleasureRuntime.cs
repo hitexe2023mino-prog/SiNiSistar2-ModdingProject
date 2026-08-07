@@ -146,6 +146,37 @@ internal static class PleasureRuntime
         }
     }
 
+    /// <summary>
+    /// Starts a fresh run for a newly loaded save.
+    ///
+    /// The climax count belongs to a save, not to the process. Without it, a retry after a game
+    /// over came back with the count still at the limit and the next hold killed the player
+    /// immediately. Sensitivity goes with it: it is one-way within a run, but loading moves to a
+    /// different point in the story and cannot inherit a later run's total.
+    ///
+    /// This is the interim behaviour until the sidecar file lands (SPEC003 FR-222); at that point
+    /// the values are restored from the save rather than cleared.
+    /// </summary>
+    internal static void BeginRunFromSave(string reason)
+    {
+        int hadClimaxes = Climaxes.Count;
+        float hadSensitivity = Sensitivity?.Value ?? 0f;
+
+        Climaxes.ResetCount();
+        Sensitivity?.LoadFrom(0f);
+        Meter?.Reset();
+        PendingClimax = false;
+        ClimaxFlashUntil = 0d;
+
+        if (hadClimaxes > 0 || hadSensitivity > 0f)
+        {
+            Log?.LogInfo(
+                $"A save was loaded ({reason}); the run restarts. Climaxes {hadClimaxes} -> 0, "
+                + $"sensitivity {hadSensitivity:F2} -> 0.00. Persisting these across saves is not "
+                + "implemented yet (SPEC003 FR-222).");
+        }
+    }
+
     internal static void Reset()
     {
         PlayerAbnormals = null;
