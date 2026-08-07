@@ -57,9 +57,15 @@ internal static class PleasureArt
                 float wave = (float)Math.Sin((x / (double)size * 6.28318) + phase) * size * 0.014f;
                 float localSurface = surface + wave;
 
+                // The empty part of the vessel is still drawn. A gauge that vanishes when it is
+                // empty cannot be told apart from a gauge that is broken, which is exactly how the
+                // overlay looked when the tuning values were reset to zero.
+                bool rim = distance > radius - Math.Max(1.5f, size * 0.035f);
                 if (y < localSurface)
                 {
-                    pixels[index] = new Color32(0, 0, 0, 0);
+                    pixels[index] = rim
+                        ? new Color32(196, 120, 168, 130)
+                        : new Color32(40, 18, 34, 70);
                     continue;
                 }
 
@@ -68,6 +74,12 @@ internal static class PleasureArt
                 var alpha = (byte)(165 + (depth * 70f));
 
                 bool meniscus = y - localSurface < size * 0.022f;
+                if (rim)
+                {
+                    pixels[index] = new Color32(230, 150, 200, 200);
+                    continue;
+                }
+
                 pixels[index] = meniscus
                     ? new Color32(255, 214, 238, 240)
                     : new Color32(
