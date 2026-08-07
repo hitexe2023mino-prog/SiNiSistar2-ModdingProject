@@ -17,7 +17,8 @@ public sealed record PleasureTuning(
     float IntervalJitter,
     float DurationSeconds,
     float DurationJitter,
-    float LevelScaling)
+    float LevelScaling,
+    Rgba? GaugeHighlight = null)
 {
     public static PleasureTuning Disabled { get; } =
         new(false, AbnormalTypeSet.Empty, 0f, 0f, 0f, 0f, 0f);
@@ -216,6 +217,24 @@ public static class DifficultyProfileFactory
             return PleasureTuning.Disabled;
         }
 
+        Rgba? highlight = null;
+        if (options.HighlightGauge)
+        {
+            if (HexColor.TryParse(options.NullificationGaugeColor, out Rgba parsed))
+            {
+                highlight = parsed;
+            }
+            else
+            {
+                // Only the tint is dropped. The window itself is the difficulty change; losing the
+                // colour makes it harder to read, not absent.
+                errors.Add(
+                    $"Pleasure.NullificationGaugeColor '{options.NullificationGaugeColor}' is not "
+                    + "RRGGBB or RRGGBBAA. The gauge will not be tinted; the nullification window "
+                    + "still applies.");
+            }
+        }
+
         var tuning = new PleasureTuning(
             true,
             parse.Set,
@@ -223,7 +242,8 @@ public static class DifficultyProfileFactory
             options.NullificationIntervalJitter,
             options.NullificationDurationSeconds,
             options.NullificationDurationJitter,
-            options.PleasureLevelScaling);
+            options.PleasureLevelScaling,
+            highlight);
 
         if (tuning.HasEffect && tuning.ExpectedDutyCycle > options.NullificationDutyWarnThreshold)
         {

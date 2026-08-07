@@ -3,6 +3,7 @@ using SiNiSistar2.Difficulty.Core;
 using SiNiSistar2.Manager;
 using SiNiSistar2.Obj;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace SiNiSistar2.Difficulty.Plugin;
 
@@ -169,6 +170,7 @@ public sealed class DifficultyObserver : MonoBehaviour
                 scheduler.EndHold();
             }
 
+            ApplyGaugeTint(false);
             return;
         }
 
@@ -179,6 +181,7 @@ public sealed class DifficultyObserver : MonoBehaviour
         if (!DifficultyRuntime.HasAny(abnormals, types))
         {
             scheduler.EndHold();
+            ApplyGaugeTint(false);
             return;
         }
 
@@ -186,6 +189,7 @@ public sealed class DifficultyObserver : MonoBehaviour
         if (!_wasBound || !scheduler.IsNullifying && scheduler.ChangeAt <= 0d)
         {
             scheduler.BeginHold(now, levelSum);
+            ApplyGaugeTint(false);
             return;
         }
 
@@ -196,6 +200,81 @@ public sealed class DifficultyObserver : MonoBehaviour
             DifficultyRuntime.LogIntervention(
                 after ? "Nullification window opened." : "Nullification window closed.");
         }
+
+        ApplyGaugeTint(after);
+    }
+
+    /// <summary>
+    /// Tints the struggle gauge's fill while input is being ignored (SPEC002 DEC-103).
+    ///
+    /// DEC-103 requires the gauge to stay on screen so the player can see that input is not
+    /// registering, but a gauge that simply stops moving reads as the game having locked up. The
+    /// tint says the stall is deliberate. Only the fill colour changes; the gauge, its value and
+    /// its decay are untouched, so nothing about the escape maths moves (FR-113, FR-115).
+    /// </summary>
+    [HideFromIl2Cpp]
+    private static void ApplyGaugeTint(bool nullifying)
+    {
+        Rgba? highlight = DifficultyRuntime.Profile.Pleasure.GaugeHighlight;
+        if (highlight is null)
+        {
+            return;
+        }
+
+        if (!nullifying)
+        {
+            if (DifficultyRuntime.Ledger.IsOpen(DifficultyRuntime.GaugeTintKey))
+            {
+                DifficultyRuntime.Ledger.Release(DifficultyRuntime.GaugeTintKey);
+            }
+
+            return;
+        }
+
+        Image? fill = ResolveGaugeFill();
+        if (fill is null)
+        {
+            return;
+        }
+
+        if (!DifficultyRuntime.Ledger.IsOpen(DifficultyRuntime.GaugeTintKey))
+        {
+            Color original = fill.color;
+            Image captured = fill;
+            DifficultyRuntime.Ledger.Register(
+                DifficultyRuntime.GaugeTintKey,
+                () =>
+                {
+                    // The hold UI is torn down with the scene, so the restore has to tolerate the
+                    // image already being gone rather than reporting a failure every scene change.
+                    if (!captured.WasCollected)
+                    {
+                        captured.color = original;
+                    }
+                });
+        }
+
+        // Re-asserted every frame: the game drives this UI itself and may repaint the fill.
+        Rgba tint = highlight.Value;
+        fill.color = new Color(tint.R, tint.G, tint.B, tint.A);
+    }
+
+    /// <summary>
+    /// The image the struggle gauge fills. Unity puts it on the slider's fill rect, but a skinned
+    /// slider can carry it on a child, so both are tried before giving up.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private static Image? ResolveGaugeFill()
+    {
+        GachaGachaSystem? gacha = DifficultyRuntime.PlayerGacha;
+        Slider? slider = gacha?.m_Slider;
+        RectTransform? fill = slider?.fillRect;
+        if (fill is null || fill.WasCollected)
+        {
+            return null;
+        }
+
+        return fill.GetComponent<Image>() ?? fill.GetComponentInChildren<Image>(true);
     }
 
     /// <summary>
@@ -288,6 +367,7 @@ public sealed class DifficultyObserver : MonoBehaviour
     {
         DifficultyRuntime.Nullification?.EndHold();
         DifficultyRuntime.Recovery?.Cancel();
+        DifficultyRuntime.Ledger.Release(DifficultyRuntime.GaugeTintKey);
 
         // Driven off the ledger rather than off Cancel's answer: this runs every frame the managers
         // are unavailable, and a release that had nothing to release would log on all of them.

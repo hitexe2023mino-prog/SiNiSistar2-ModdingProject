@@ -54,6 +54,15 @@ public sealed record DifficultyOptions
 
     public float NullificationDutyWarnThreshold { get; init; } = 0.6f;
 
+    /// <summary>
+    /// Tints the struggle gauge while input is being ignored. On by default: the window is
+    /// otherwise indistinguishable from the game having stopped responding (SPEC002 DEC-103).
+    /// </summary>
+    public bool HighlightGauge { get; init; } = true;
+
+    /// <summary>Gauge tint as <c>RRGGBB</c> or <c>RRGGBBAA</c>.</summary>
+    public string NullificationGaugeColor { get; init; } = HexColor.DefaultNullificationHex;
+
     public bool BurdenEnabled { get; init; } = true;
 
     public string BurdenAbnormalTypes { get; init; } = string.Join(",", AbnormalTypeDefaults.Burden);

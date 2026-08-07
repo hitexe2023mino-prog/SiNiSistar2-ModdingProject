@@ -27,6 +27,8 @@ internal static class DifficultyRuntime
 
     internal const string HardCheckKey = "hard-difficulty-check-value";
 
+    internal const string GaugeTintKey = "nullification-gauge-tint";
+
     internal static DifficultyProfile Profile { get; set; } = DifficultyProfile.Inactive;
 
     internal static ManualLogSource? Log { get; set; }

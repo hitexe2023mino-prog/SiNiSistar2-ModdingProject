@@ -25,6 +25,7 @@
     <Reference Include="SiNiSistar2" HintPath="$(BepInExRoot)\interop\SiNiSistar2.dll" Private="false" />
     <Reference Include="UniRx" HintPath="$(BepInExRoot)\interop\UniRx.dll" Private="false" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(BepInExRoot)\interop\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.UI" HintPath="$(BepInExRoot)\interop\UnityEngine.UI.dll" Private="false" />
   </ItemGroup>
 
   <Target Name="DeployToRepositoryRuntime" AfterTargets="Build">
