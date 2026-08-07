@@ -18,7 +18,8 @@ public sealed record PleasureTuning(
     float DurationSeconds,
     float DurationJitter,
     float LevelScaling,
-    Rgba? GaugeHighlight = null)
+    Rgba? GaugeHighlight = null,
+    float ResistPenalty = 0f)
 {
     public static PleasureTuning Disabled { get; } =
         new(false, AbnormalTypeSet.Empty, 0f, 0f, 0f, 0f, 0f);
@@ -180,6 +181,7 @@ public static class DifficultyProfileFactory
                      ("NullificationDurationSeconds", options.NullificationDurationSeconds),
                      ("NullificationDurationJitter", options.NullificationDurationJitter),
                      ("PleasureLevelScaling", options.PleasureLevelScaling),
+                     ("NullificationResistPenalty", options.NullificationResistPenalty),
                  })
         {
             if (value < 0f)
@@ -217,12 +219,27 @@ public static class DifficultyProfileFactory
             return PleasureTuning.Disabled;
         }
 
+        // Once resisting costs ground, the colour stops being optional feedback and becomes the
+        // only cue to stop mashing, so the setting no longer gets to switch it off (FR-137).
+        bool penalised = options.NullificationResistPenalty > 0f;
         Rgba? highlight = null;
-        if (options.HighlightGauge)
+        if (options.HighlightGauge || penalised)
         {
             if (HexColor.TryParse(options.NullificationGaugeColor, out Rgba parsed))
             {
                 highlight = parsed;
+            }
+            else if (penalised)
+            {
+                // A punished window has to be signalled, so the shipped colour stands in rather
+                // than the cue being lost along with the setting.
+                HexColor.TryParse(HexColor.DefaultNullificationHex, out parsed);
+                highlight = parsed;
+                errors.Add(
+                    $"Pleasure.NullificationGaugeColor '{options.NullificationGaugeColor}' is not "
+                    + $"RRGGBB or RRGGBBAA. Falling back to {HexColor.DefaultNullificationHex}: "
+                    + "resisting inside the window costs progress, so the window has to stay "
+                    + "visible (FR-137).");
             }
             else
             {
@@ -243,7 +260,8 @@ public static class DifficultyProfileFactory
             options.NullificationDurationSeconds,
             options.NullificationDurationJitter,
             options.PleasureLevelScaling,
-            highlight);
+            highlight,
+            options.NullificationResistPenalty);
 
         if (tuning.HasEffect && tuning.ExpectedDutyCycle > options.NullificationDutyWarnThreshold)
         {

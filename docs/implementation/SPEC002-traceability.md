@@ -13,7 +13,7 @@ In-game verification steps live in [`docs/testing/SPEC002-test-scenarios.md`](..
 
 ## Automated coverage
 
-`dotnet test SiNiSistar2.Edi.sln -c Release` → 79 tests for this MOD, 143 for the EDI MOD, 0 failures.
+`dotnet test SiNiSistar2.Edi.sln -c Release` → 89 tests for this MOD, 143 for the EDI MOD, 0 failures.
 
 `ForbiddenSurfaceTests` scans `src/SiNiSistar2.Difficulty.Plugin/**/*.cs` with comments stripped and fails the build if a forbidden member is named. That is what keeps the "must not touch" requirements from decaying silently.
 
@@ -38,6 +38,8 @@ In-game verification steps live in [`docs/testing/SPEC002-test-scenarios.md`](..
 | FR-115 | 減衰を変えず表示を隠さない | `NullificationPatches` は `Execution` を飛ばすだけ | AC-115 実機 | Implemented / unverified |
 | FR-116 | 強制成功を妨げない | `IsForceSuccessRequest` を参照しない | AC-116 実機 | Design-time / unverified |
 | FR-135 | 無力化窓の間だけゲージを着色し、4契機で必ず戻す | `DifficultyObserver.ApplyGaugeTint` / `ResolveGaugeFill`、`HexColor`、`InterventionLedger` | `GaugeTintTests`（10件）、AC-132〜134 実機 | Tested / unverified |
+| FR-136 | 上昇しようとした量 × 係数だけ減少、下限0、新しい上限 | `GaugeHold.TryHold`、`DifficultyObserver.ClampGauge` | `GaugeHoldTests`（13件）、AC-135〜138 実機 | Tested / unverified |
+| FR-137 | 罰が有効な間は着色を強制 | `DifficultyProfileFactory.BuildPleasure` | `GaugeTintTests.ThePenaltyForcesTheTintOn...` | Tested |
 | FR-117 | 占有率の期待値を警告 | `PleasureTuning.ExpectedDutyCycle`、`BuildPleasure` | `ProfileValidationTests.AHighDutyCycleWarns...` | Tested |
 | FR-118 | 身重系が有効な離脱直後だけ復帰遅延窓 | `RecoveryPenaltyScheduler`、`DifficultyObserver.UpdateRecovery` | `RecoveryPenaltySchedulerTests`（7件）、AC-118 実機 | Tested / unverified |
 | FR-119 | 寄与キーで登録し3契機で必ず解除 | `DifficultyObserver.RegisterMoveSlow` / `ReleaseMoveSlow`、`InterventionLedger` | `RecoveryPenaltySchedulerTests`、`InterventionLedgerTests`、AC-119 実機 | Tested / unverified |

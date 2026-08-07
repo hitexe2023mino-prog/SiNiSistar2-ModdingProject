@@ -16,17 +16,23 @@ namespace SiNiSistar2.Difficulty.Core;
 public sealed class GaugeHold
 {
     private float _ceiling;
+    private float _penalty;
 
     public bool IsHolding { get; private set; }
 
     /// <summary>The value the gauge is currently not allowed to exceed.</summary>
     public float Ceiling => _ceiling;
 
-    /// <summary>Starts holding from wherever the gauge is now.</summary>
-    public void Begin(float current)
+    /// <summary>
+    /// Starts holding from wherever the gauge is now. <paramref name="penalty"/> is how much of an
+    /// attempted rise is turned into a fall: 1.0 loses exactly what the input would have gained,
+    /// and 0 only stops the rise (SPEC002 FR-136).
+    /// </summary>
+    public void Begin(float current, float penalty)
     {
         IsHolding = true;
         _ceiling = current;
+        _penalty = Math.Max(0f, penalty);
     }
 
     public void End()
@@ -50,7 +56,13 @@ public sealed class GaugeHold
 
         if (current > _ceiling)
         {
-            held = _ceiling;
+            // The rise is the only evidence the MOD has that the player resisted, because the path
+            // input takes could not be identified (SPEC002 DEC-114). Turning that evidence into a
+            // fall is what makes resisting inside the window cost ground instead of merely
+            // achieving nothing.
+            float rise = current - _ceiling;
+            held = Math.Max(0f, _ceiling - (rise * _penalty));
+            _ceiling = held;
             return true;
         }
 

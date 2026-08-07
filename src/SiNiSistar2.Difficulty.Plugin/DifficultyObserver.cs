@@ -250,7 +250,7 @@ public sealed class DifficultyObserver : MonoBehaviour
             if (gacha is not null && !gacha.WasCollected)
             {
                 DifficultyRuntime.SuppressedExecutions = 0;
-                hold.Begin(gacha.CurrentValue);
+                hold.Begin(gacha.CurrentValue, DifficultyRuntime.Profile.Pleasure.ResistPenalty);
             }
         }
         else if (!nullifying && hold.IsHolding)

@@ -40,16 +40,18 @@ public sealed class GaugeTintTests
     }
 
     /// <summary>
-    /// A bad colour costs the tint, not the difficulty change. The window is the mechanism; the
-    /// colour only makes it readable.
+    /// With no penalty the colour is only feedback, so a bad value costs the tint and nothing
+    /// else. The window is the mechanism; the colour merely makes it readable. (With a penalty the
+    /// cue is mandatory and a bad value falls back instead — see the test below.)
     /// </summary>
     [Fact]
-    public void ABadColourDropsOnlyTheTint()
+    public void ABadColourDropsOnlyTheTintWhenResistingIsNotPunished()
     {
         ProfileValidation result = TestSupport.Validate(new DifficultyOptions
         {
             NullificationDurationSeconds = 2f,
             NullificationIntervalSeconds = 4f,
+            NullificationResistPenalty = 0f,
             NullificationGaugeColor = "not-a-colour",
         });
 
@@ -79,9 +81,62 @@ public sealed class GaugeTintTests
             NullificationDurationSeconds = 2f,
             NullificationIntervalSeconds = 4f,
             HighlightGauge = false,
+            NullificationResistPenalty = 0f,
         });
 
         Assert.Null(result.Profile.Pleasure.GaugeHighlight);
         Assert.True(result.Profile.Pleasure.HasEffect);
+    }
+
+    /// <summary>
+    /// AC-139: once resisting costs progress the colour stops being optional. A punished window
+    /// with no cue would be unexplained loss, so the setting no longer switches it off
+    /// (FR-137, DEC-115).
+    /// </summary>
+    [Fact]
+    public void ThePenaltyForcesTheTintOnEvenWhenTheSettingTurnsItOff()
+    {
+        ProfileValidation result = TestSupport.Validate(new DifficultyOptions
+        {
+            NullificationDurationSeconds = 2f,
+            NullificationIntervalSeconds = 4f,
+            HighlightGauge = false,
+            NullificationResistPenalty = 1f,
+        });
+
+        Assert.NotNull(result.Profile.Pleasure.GaugeHighlight);
+    }
+
+    /// <summary>
+    /// A punished window still has to be signalled, so an unusable colour falls back to the
+    /// shipped one instead of the cue disappearing with the setting.
+    /// </summary>
+    [Fact]
+    public void ABadColourFallsBackToTheDefaultWhileThePenaltyIsOn()
+    {
+        ProfileValidation result = TestSupport.Validate(new DifficultyOptions
+        {
+            NullificationDurationSeconds = 2f,
+            NullificationIntervalSeconds = 4f,
+            NullificationResistPenalty = 1f,
+            NullificationGaugeColor = "nonsense",
+        });
+
+        Assert.Contains(result.Errors, x => x.Contains("Falling back", StringComparison.Ordinal));
+        Assert.NotNull(result.Profile.Pleasure.GaugeHighlight);
+    }
+
+    /// <summary>A negative penalty would reward resisting, so it disables the mechanism (FR-127).</summary>
+    [Fact]
+    public void ANegativePenaltyDisablesTheMechanism()
+    {
+        ProfileValidation result = TestSupport.Validate(new DifficultyOptions
+        {
+            NullificationDurationSeconds = 2f,
+            NullificationResistPenalty = -1f,
+        });
+
+        Assert.Contains(result.Errors, x => x.Contains("NullificationResistPenalty", StringComparison.Ordinal));
+        Assert.False(result.Profile.Pleasure.Enabled);
     }
 }

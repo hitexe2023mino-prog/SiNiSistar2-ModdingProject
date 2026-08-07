@@ -55,8 +55,16 @@ public sealed record DifficultyOptions
     public float NullificationDutyWarnThreshold { get; init; } = 0.6f;
 
     /// <summary>
-    /// Tints the struggle gauge while input is being ignored. On by default: the window is
-    /// otherwise indistinguishable from the game having stopped responding (SPEC002 DEC-103).
+    /// How much of an attempted rise is turned into a fall inside the window. 1.0 loses exactly
+    /// what the input would have gained; 0 only stops the rise (SPEC002 FR-136).
+    /// </summary>
+    public float NullificationResistPenalty { get; init; } = 1f;
+
+    /// <summary>
+    /// Tints the struggle gauge during a window. Ignored while
+    /// <see cref="NullificationResistPenalty"/> is above zero: once resisting costs ground, the
+    /// colour is the only cue to stop, and a punishment with no cue is just unexplained loss
+    /// (SPEC002 FR-137, DEC-115).
     /// </summary>
     public bool HighlightGauge { get; init; } = true;
 

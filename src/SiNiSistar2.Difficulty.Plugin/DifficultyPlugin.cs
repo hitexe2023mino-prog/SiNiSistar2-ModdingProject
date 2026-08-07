@@ -206,12 +206,18 @@ public sealed class DifficultyPlugin : BasePlugin
             "NullificationDutyWarnThreshold",
             0.6f,
             "Warn at startup when windows would be open more than this fraction of the time.");
+        ConfigEntry<float> resistPenalty = Config.Bind(
+            "Pleasure",
+            "NullificationResistPenalty",
+            1f,
+            "How much of an attempted gauge rise is turned into a fall inside the window. 1.0 "
+            + "loses exactly what the input would have gained; 0 only stops the rise.");
         ConfigEntry<bool> highlightGauge = Config.Bind(
             "Pleasure",
             "HighlightGauge",
             true,
-            "Tint the struggle gauge while resistance input is being ignored, so a deliberate "
-            + "stall is not mistaken for the game locking up.");
+            "Tint the struggle gauge during a window. Ignored while NullificationResistPenalty is "
+            + "above 0: once resisting costs progress, the colour is the only cue to stop.");
         ConfigEntry<string> gaugeColor = Config.Bind(
             "Pleasure",
             "NullificationGaugeColor",
@@ -262,6 +268,7 @@ public sealed class DifficultyPlugin : BasePlugin
             NullificationDurationJitter = durationJitter.Value,
             PleasureLevelScaling = pleasureScaling.Value,
             NullificationDutyWarnThreshold = dutyWarn.Value,
+            NullificationResistPenalty = resistPenalty.Value,
             HighlightGauge = highlightGauge.Value,
             NullificationGaugeColor = gaugeColor.Value,
             BurdenEnabled = burdenEnabled.Value,
