@@ -9,25 +9,29 @@ public sealed class SexualAttackClassifierTests
 {
     private static SexualAttackClassifier Classifier(
         string[]? sexualEnemies = null,
-        string[]? nonSexualEnemies = null) =>
+        string[]? nonSexualEnemies = null,
+        string[]? sexualSenders = null,
+        string[]? nonSexualSenders = null) =>
         new(
             new[] { "Lustfull", "Semen", "Pregnant" },
             sexualEnemies ?? Array.Empty<string>(),
-            nonSexualEnemies ?? Array.Empty<string>());
+            nonSexualEnemies ?? Array.Empty<string>(),
+            sexualSenders,
+            nonSexualSenders);
 
     /// <summary>AC-205: an attack that inflicts a sexual status is a sexual attack.</summary>
     [Fact]
     public void AnAttackApplyingASexualStatusIsSexual()
     {
-        Assert.Equal(AttackKind.Sexual, Classifier().Classify("42", new[] { "Lustfull" }));
+        Assert.Equal(AttackKind.Sexual, Classifier().Classify("42", null, new[] { "Lustfull" }));
     }
 
     /// <summary>AC-205: a predator that inflicts nothing sexual does not raise pleasure.</summary>
     [Fact]
     public void AnAttackApplyingNothingSexualIsNotSexual()
     {
-        Assert.Equal(AttackKind.NonSexual, Classifier().Classify("42", new[] { "Poison", "Blinded" }));
-        Assert.Equal(AttackKind.NonSexual, Classifier().Classify("42", Array.Empty<string>()));
+        Assert.Equal(AttackKind.NonSexual, Classifier().Classify("42", null, new[] { "Poison", "Blinded" }));
+        Assert.Equal(AttackKind.NonSexual, Classifier().Classify("42", null, Array.Empty<string>()));
     }
 
     /// <summary>AC-206: the non-sexual override beats the status test.</summary>
@@ -36,7 +40,7 @@ public sealed class SexualAttackClassifierTests
     {
         SexualAttackClassifier classifier = Classifier(nonSexualEnemies: new[] { "42" });
 
-        Assert.Equal(AttackKind.NonSexual, classifier.Classify("42", new[] { "Lustfull" }));
+        Assert.Equal(AttackKind.NonSexual, classifier.Classify("42", null, new[] { "Lustfull" }));
     }
 
     /// <summary>The non-sexual override also beats the sexual override; it is the safe answer.</summary>
@@ -47,7 +51,7 @@ public sealed class SexualAttackClassifierTests
             sexualEnemies: new[] { "42" },
             nonSexualEnemies: new[] { "42" });
 
-        Assert.Equal(AttackKind.NonSexual, classifier.Classify("42", null));
+        Assert.Equal(AttackKind.NonSexual, classifier.Classify("42", null, null));
     }
 
     [Fact]
@@ -55,7 +59,7 @@ public sealed class SexualAttackClassifierTests
     {
         SexualAttackClassifier classifier = Classifier(sexualEnemies: new[] { "7" });
 
-        Assert.Equal(AttackKind.Sexual, classifier.Classify("7", Array.Empty<string>()));
+        Assert.Equal(AttackKind.Sexual, classifier.Classify("7", null, Array.Empty<string>()));
     }
 
     /// <summary>
@@ -67,9 +71,49 @@ public sealed class SexualAttackClassifierTests
     {
         SexualAttackClassifier classifier = Classifier(nonSexualEnemies: new[] { "42" });
 
-        Assert.Equal(AttackKind.Sexual, classifier.Classify(null, new[] { "Semen" }));
-        Assert.Equal(AttackKind.NonSexual, classifier.Classify(null, new[] { "Poison" }));
-        Assert.Equal(AttackKind.NonSexual, classifier.Classify(string.Empty, null));
+        Assert.Equal(AttackKind.Sexual, classifier.Classify(null, null, new[] { "Semen" }));
+        Assert.Equal(AttackKind.NonSexual, classifier.Classify(null, null, new[] { "Poison" }));
+        Assert.Equal(AttackKind.NonSexual, classifier.Classify(string.Empty, null, null));
+    }
+
+    /// <summary>
+    /// The art gallery picture frame never binds the player, so no captor-based rule can reach it.
+    /// Naming the sender is the only way such an attacker can be classified at all (SPEC003 5.3).
+    /// </summary>
+    [Fact]
+    public void ASenderNameReachesAnAttackerThatNeverBinds()
+    {
+        SexualAttackClassifier classifier = Classifier(sexualSenders: new[] { "PictureFrame" });
+
+        Assert.Equal(AttackKind.Sexual, classifier.Classify(null, "PictureFrame", Array.Empty<string>()));
+    }
+
+    /// <summary>Unity names carry suffixes, so an exact match would miss the same enemy.</summary>
+    [Fact]
+    public void SenderMatchingIsSubstringAndCaseInsensitive()
+    {
+        SexualAttackClassifier classifier = Classifier(sexualSenders: new[] { "pictureframe" });
+
+        Assert.Equal(AttackKind.Sexual, classifier.Classify(null, "ArtGallery_PictureFrame(Clone)", null));
+        Assert.Equal(AttackKind.NonSexual, classifier.Classify(null, "StoneEye", null));
+    }
+
+    /// <summary>Every non-sexual rule outranks every sexual one; refusing is the safe mistake.</summary>
+    [Fact]
+    public void ANonSexualSenderBeatsASexualCaptor()
+    {
+        SexualAttackClassifier classifier = Classifier(
+            sexualEnemies: new[] { "42" },
+            nonSexualSenders: new[] { "Teeth" });
+
+        Assert.Equal(AttackKind.NonSexual, classifier.Classify("42", "GiantTeeth", new[] { "Lustfull" }));
+    }
+
+    /// <summary>The picture frame ships in the defaults, because it is the case that motivated this.</summary>
+    [Fact]
+    public void ThePictureFrameIsNamedInTheShippedDefaults()
+    {
+        Assert.Contains("PictureFrame", SexualAbnormalDefaults.SenderNames);
     }
 }
 

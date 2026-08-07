@@ -36,6 +36,19 @@ internal static class PleasureRuntime
     /// <summary>True while the player is held. Set by the observer each frame.</summary>
     internal static bool IsBound { get; set; }
 
+    /// <summary>True while the player is in a defeat performance (HP0, not yet a game over).</summary>
+    internal static bool IsDefeatPerformance { get; set; }
+
+    /// <summary>
+    /// Whether pleasure may rise right now. Sexual attacks only happen while bound, except for the
+    /// defeat performances that go on delivering them (SPEC003 5.2).
+    /// </summary>
+    internal static bool CanAccumulate =>
+        IsBound || (IsDefeatPerformance && Profile.RaiseDuringDefeatPerformance);
+
+    /// <summary>Game time at which the climax flash stops being drawn.</summary>
+    internal static double ClimaxFlashUntil { get; set; }
+
     /// <summary>The captor's gallery id, or null when it cannot be resolved.</summary>
     internal static string? BinderEnemyId { get; set; }
 
@@ -137,6 +150,7 @@ internal static class PleasureRuntime
     {
         PlayerAbnormals = null;
         IsBound = false;
+        IsDefeatPerformance = false;
         BinderEnemyId = null;
         Meter?.Reset();
     }

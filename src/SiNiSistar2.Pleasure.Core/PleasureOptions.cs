@@ -19,9 +19,23 @@ public sealed record PleasureOptions
 
     public string SexualAbnormalTypes { get; init; } = string.Join(",", SexualAbnormalDefaults.Types);
 
-    public string SexualEnemyIds { get; init; } = string.Empty;
+    public string SexualEnemyIds { get; init; } = string.Join(",", SexualAbnormalDefaults.SexualEnemyIds);
 
     public string NonSexualEnemyIds { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Damage-sender names always treated as sexual, matched as case-insensitive substrings. This
+    /// is how an attacker that never binds the player is reached at all (SPEC003 5.3).
+    /// </summary>
+    public string SexualSenderNames { get; init; } = string.Join(",", SexualAbnormalDefaults.SenderNames);
+
+    public string NonSexualSenderNames { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Whether pleasure keeps rising during a defeat performance. Sexual attacks otherwise only
+    /// happen while bound, but some defeat performances go on delivering them (SPEC003 5.2).
+    /// </summary>
+    public bool RaiseDuringDefeatPerformance { get; init; } = true;
 
     public float ClimaxOverlaySeconds { get; init; } = 1.5f;
 
@@ -52,6 +66,9 @@ public sealed record PleasureOptions
     /// the MOD ships in a state where measuring is the only thing it can usefully do.
     /// </summary>
     public bool ProbeMeasurements { get; init; } = true;
+
+    /// <summary>Draws the pleasure gauge, sensitivity and climax count on screen.</summary>
+    public bool ShowOverlay { get; init; } = true;
 }
 
 /// <summary>
@@ -82,5 +99,24 @@ public static class SexualAbnormalDefaults
         "MindIntegration",
         "Infertility",
         "InfertilityBlessing",
+    };
+
+    /// <summary>
+    /// Attackers named as sexual regardless of what they inflict. The art gallery picture frame is
+    /// here because it never binds the player, so no captor-based rule can ever see it.
+    /// </summary>
+    public static readonly IReadOnlyList<string> SenderNames = new[]
+    {
+        "PictureFrame",
+    };
+
+    /// <summary>
+    /// Captors whose every attack counts as sexual, whatever it inflicts. Measured on the target
+    /// build: the picture frame lands both a Defilement-bearing attack and one carrying no statuses
+    /// at all, so the status test alone classifies the same enemy inconsistently.
+    /// </summary>
+    public static readonly IReadOnlyList<string> SexualEnemyIds = new[]
+    {
+        "GaID_PictureFrameBig",
     };
 }

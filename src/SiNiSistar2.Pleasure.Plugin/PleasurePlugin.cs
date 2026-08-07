@@ -161,12 +161,28 @@ public sealed class PleasurePlugin : BasePlugin
             string.Join(",", SexualAbnormalDefaults.Types),
             "Statuses that mark an attack as sexual, comma separated.");
         ConfigEntry<string> sexualEnemies = Config.Bind(
-            "Pleasure", "SexualEnemyIds", string.Empty, "GalleryEnemyIDs always treated as sexual.");
+            "Pleasure",
+            "SexualEnemyIds",
+            string.Join(",", SexualAbnormalDefaults.SexualEnemyIds),
+            "GalleryEnemyIDs whose every attack is sexual, whatever it inflicts.");
         ConfigEntry<string> nonSexualEnemies = Config.Bind(
             "Pleasure",
             "NonSexualEnemyIds",
             string.Empty,
             "GalleryEnemyIDs never treated as sexual. Takes priority over everything else.");
+        ConfigEntry<string> sexualSenders = Config.Bind(
+            "Pleasure",
+            "SexualSenderNames",
+            string.Join(",", SexualAbnormalDefaults.SenderNames),
+            "Attacker names always treated as sexual, matched as case-insensitive substrings.");
+        ConfigEntry<string> nonSexualSenders = Config.Bind(
+            "Pleasure", "NonSexualSenderNames", string.Empty, "Attacker names never treated as sexual.");
+        ConfigEntry<bool> duringDefeat = Config.Bind(
+            "Pleasure",
+            "RaiseDuringDefeatPerformance",
+            true,
+            "Keep raising pleasure during a defeat performance. Sexual attacks otherwise only "
+            + "happen while bound, but some defeat performances go on delivering them.");
 
         ConfigEntry<float> overlay = Config.Bind("Climax", "ClimaxOverlaySeconds", 1.5f, "");
         ConfigEntry<int> limitBase = Config.Bind("Climax", "ClimaxLimitBase", 0, "Base climax limit.");
@@ -205,6 +221,11 @@ public sealed class PleasurePlugin : BasePlugin
             "ProbeMeasurements",
             true,
             "Record each SPEC003 付録A finding once. Leave on until the measurements are settled.");
+        ConfigEntry<bool> showOverlay = Config.Bind(
+            "Diagnostics",
+            "ShowOverlay",
+            true,
+            "Draw the pleasure gauge, sensitivity and climax count on screen.");
 
         return new PleasureOptions
         {
@@ -215,6 +236,9 @@ public sealed class PleasurePlugin : BasePlugin
             SexualAbnormalTypes = sexualTypes.Value,
             SexualEnemyIds = sexualEnemies.Value,
             NonSexualEnemyIds = nonSexualEnemies.Value,
+            SexualSenderNames = sexualSenders.Value,
+            NonSexualSenderNames = nonSexualSenders.Value,
+            RaiseDuringDefeatPerformance = duringDefeat.Value,
             ClimaxOverlaySeconds = overlay.Value,
             ClimaxLimitBase = limitBase.Value,
             ClimaxLimitPerDurability = limitPerDurability.Value,
@@ -228,6 +252,7 @@ public sealed class PleasurePlugin : BasePlugin
             BreastSuperSensitivityThreshold = breastThreshold.Value,
             LogTransitions = logTransitions.Value,
             ProbeMeasurements = probe.Value,
+            ShowOverlay = showOverlay.Value,
         };
     }
 

@@ -46,8 +46,10 @@ public sealed record PleasureProfile(
     SensitivityTuning Sensitivity,
     BreastSuperTuning BreastSuper,
     SexualAttackClassifier Classifier,
+    bool RaiseDuringDefeatPerformance,
     bool LogTransitions,
-    bool ProbeMeasurements)
+    bool ProbeMeasurements,
+    bool ShowOverlay)
 {
     public static PleasureProfile Inactive { get; } = new(
         false,
@@ -57,6 +59,8 @@ public sealed record PleasureProfile(
         SensitivityTuning.Disabled,
         BreastSuperTuning.Disabled,
         new SexualAttackClassifier(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>()),
+        false,
+        false,
         false,
         false);
 
@@ -110,8 +114,10 @@ public static class PleasureProfileFactory
             sensitivity,
             breastSuper,
             classifier,
+            options.RaiseDuringDefeatPerformance,
             options.LogTransitions,
-            options.ProbeMeasurements);
+            options.ProbeMeasurements,
+            options.ShowOverlay);
 
         if (!pleasure.HasEffect)
         {
@@ -290,7 +296,9 @@ public static class PleasureProfileFactory
         return new SexualAttackClassifier(
             accepted,
             Split(options.SexualEnemyIds),
-            Split(options.NonSexualEnemyIds));
+            Split(options.NonSexualEnemyIds),
+            Split(options.SexualSenderNames),
+            Split(options.NonSexualSenderNames));
     }
 
     private static string[] Split(string? raw) =>

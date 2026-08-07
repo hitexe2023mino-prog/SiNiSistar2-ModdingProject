@@ -99,6 +99,23 @@ climaxGameOver=False, breastSuper=off, probe=True, patches=2.
 
 安定しない場合、随伴ファイルの紐付けを `SelectID` のみへ縮退する。
 
+### 3.5.1 実測済みの所見（2026-08-08）
+
+```
+[probe] A-2 answered: a hit taken while bound is visible to the MOD as a damage stack.
+[probe] A-3 answered: a hit taken while bound carries m_AbnormalTypes [Defilement].
+[probe] Captor 'GaID_PictureFrameBig' classified as Sexual   from [Defilement].
+[probe] A-3 caution: a hit taken while bound carried no m_AbnormalTypes ...
+[probe] Captor 'GaID_PictureFrameBig' classified as NonSexual from [].
+```
+
+- **A-2 は肯定**。拘束中の被弾はダメージスタックとして観測できる。快楽の上昇契機が成立する。
+- **A-3 は部分的**。状態異常を伴う攻撃と、伴わない攻撃が同じ敵に共存する。したがって**状態異常だけでは同一の敵が Sexual と NonSexual に割れる**。敵ID による固定が必須である。
+- **絵画は拘束する。** `hold/GaID_PictureFrameBig/...` が EDI 側にも出ている。仕様調査時の「絵画は拘束しない」という推定（`Enemy.Character.Cathedral.CathedralArtGallery.PictureFrame` に hold タスクがない）は、実際に拘束する `PictureFrameBig` と別の型を見ていたための誤りだった。
+- `GaID_PictureFrameBig` を `SexualEnemyIds` の既定へ追加済み。以後この敵の全攻撃が性的攻撃になる。
+
+**残る作業** — 捕食・暴力を行う敵に拘束され、`NonSexual` と判定されることを確認する。`Sexual` と出た敵があれば `NonSexualEnemyIds` へ追加する。
+
 ### 3.6 A-10／A-11 — 未着手
 
 `BreastSuper` の挙動と絶頂演出の競合は、それぞれの機構を実装してから確認する。現段階では対象外。
@@ -109,9 +126,9 @@ climaxGameOver=False, breastSuper=off, probe=True, patches=2.
 
 | 項目 | 測定値 | 決定した設定値 |
 |---|---|---|
-| A-2 拘束中の被弾の観測 | 未測定 | — |
-| A-3 状態異常を伴う攻撃の割合 | 未測定 | — |
-| 性的な敵の ID | 未測定 | `SexualEnemyIds` |
+| A-2 拘束中の被弾の観測 | **観測できる（2026-08-08 実測）** | — |
+| A-3 状態異常を伴う攻撃の割合 | **一部のみ。**同一の敵が `[Defilement]` を伴う攻撃と、`m_AbnormalTypes` が空の攻撃の両方を持つ（2026-08-08 実測） | 状態異常だけでは同一の敵が Sexual/NonSexual に割れる。敵ID の固定が必要 |
+| 性的な敵の ID | `GaID_PictureFrameBig`（絵画）を確認 | `SexualEnemyIds` の既定へ追加済み |
 | 捕食・暴力の敵の ID | 未測定 | `NonSexualEnemyIds` |
 | A-6 耐久の最大値の値域 | 未測定 | `ClimaxLimitPerDurability` |
 | 1回の拘束あたりの被弾数 | 未測定 | `PleasureGainPerHit` |

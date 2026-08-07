@@ -129,7 +129,7 @@ public sealed class PleasureProfileTests
         });
 
         Assert.Contains(result.Notices, x => x.Contains("NoSuchStatus", StringComparison.Ordinal));
-        Assert.Equal(AttackKind.Sexual, result.Profile.Classifier.Classify(null, new[] { "Semen" }));
+        Assert.Equal(AttackKind.Sexual, result.Profile.Classifier.Classify(null, null, new[] { "Semen" }));
     }
 
     /// <summary>DEC-210: the sexual set is not SPEC002's pleasure set; Defilement belongs here.</summary>
@@ -139,6 +139,6 @@ public sealed class PleasureProfileTests
         Assert.Contains("Defilement", SexualAbnormalDefaults.Types);
 
         PleasureValidation result = Validate(new PleasureOptions { PleasureGainPerHit = 0.5f });
-        Assert.Equal(AttackKind.Sexual, result.Profile.Classifier.Classify(null, new[] { "Defilement" }));
+        Assert.Equal(AttackKind.Sexual, result.Profile.Classifier.Classify(null, null, new[] { "Defilement" }));
     }
 }

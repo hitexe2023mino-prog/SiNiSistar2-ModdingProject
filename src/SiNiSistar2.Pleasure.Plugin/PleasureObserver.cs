@@ -22,6 +22,10 @@ public sealed class PleasureObserver : MonoBehaviour
     private int _lastSelectId = int.MinValue;
     private string? _lastSaveFile;
     private double _lastFrameTime;
+    private float _lastMaxDurability;
+    private Texture2D? _backdrop;
+    private Texture2D? _active;
+    private Texture2D? _idle;
 
     public PleasureObserver(IntPtr pointer)
         : base(pointer)
@@ -44,6 +48,32 @@ public sealed class PleasureObserver : MonoBehaviour
                 PleasureRuntime.Log?.LogWarning(
                     $"Pleasure observation failed and backed out; it will retry: {exception}");
             }
+        }
+    }
+
+    /// <summary>
+    /// Draws the gauge, sensitivity and climax count.
+    ///
+    /// Immediate-mode GUI rather than a Canvas: it needs no prefab, no game asset and no scene
+    /// object, which is what FR-212 asks for, and it cannot disturb the game's own UI hierarchy or
+    /// the hold UI that SPEC002 tints. Nothing here touches <c>Time.timeScale</c>.
+    /// </summary>
+    public void OnGUI()
+    {
+        if (!PleasureRuntime.Profile.ShowOverlay)
+        {
+            return;
+        }
+
+        try
+        {
+            DrawGauge();
+            DrawClimaxFlash();
+        }
+        catch (Exception)
+        {
+            // A drawing failure must never take the run down; the mechanism keeps working
+            // without its display (SPEC003 FR-213).
         }
     }
 
@@ -80,6 +110,11 @@ public sealed class PleasureObserver : MonoBehaviour
 
         bool bound = lelia.IsHold;
         PleasureRuntime.IsBound = bound;
+
+        // Sexual attacks otherwise only happen while bound, but some defeat performances keep
+        // delivering them, and the player is in HP0 rather than a hold for those (SPEC003 5.2).
+        PleasureRuntime.IsDefeatPerformance = lelia.IsHP0;
+        _lastMaxDurability = status.m_MaxDurability;
         PleasureRuntime.BinderEnemyId = ResolveBinderId(lelia);
 
         ReportSelfCheck(status);
@@ -180,6 +215,9 @@ public sealed class PleasureObserver : MonoBehaviour
         PleasureRuntime.Climaxes.Record();
         PleasureRuntime.Sensitivity?.Add(PleasureRuntime.Profile.Sensitivity.PerClimax);
 
+        PleasureRuntime.ClimaxFlashUntil =
+            Time.timeAsDouble + PleasureRuntime.Profile.Climax.OverlaySeconds;
+
         PleasureRuntime.Log?.LogInfo(
             $"Climax {PleasureRuntime.Climaxes.Count}; sensitivity "
             + $"{PleasureRuntime.Sensitivity?.Value ?? 0f:F2}.");
@@ -239,6 +277,89 @@ public sealed class PleasureObserver : MonoBehaviour
             $"[probe] A-6: durability is {status.Durability} of {status.m_MaxDurability}; "
             + $"HP {status.HP} of {status.m_MaxHP}. Climax limit would be "
             + $"{ClimaxLimit.Compute(PleasureRuntime.Profile.Climax.LimitBase, PleasureRuntime.Profile.Climax.LimitPerDurability, status.m_MaxDurability)}.");
+    }
+
+    [HideFromIl2Cpp]
+    private void DrawGauge()
+    {
+        PleasureMeter? meter = PleasureRuntime.Meter;
+        if (meter is null)
+        {
+            return;
+        }
+
+        float sensitivity = PleasureRuntime.Sensitivity?.Value ?? 0f;
+        int count = PleasureRuntime.Climaxes.Count;
+        ClimaxTuning climax = PleasureRuntime.Profile.Climax;
+        int limit = ClimaxLimit.Compute(climax.LimitBase, climax.LimitPerDurability, _lastMaxDurability);
+
+        const float x = 12f;
+        const float y = 12f;
+        const float width = 232f;
+
+        GUI.Box(new Rect(x, y, width, 76f), GUIContent.none);
+
+        // The gauge is drawn even at zero gain: seeing it sit still is how the player can tell the
+        // MOD is loaded but untuned, rather than loaded and broken.
+        GUI.Label(new Rect(x + 8f, y + 4f, width - 16f, 20f), $"快楽  {meter.Value * 100f:F0}%");
+        DrawBar(new Rect(x + 8f, y + 24f, width - 16f, 10f), meter.Value, PleasureRuntime.CanAccumulate);
+
+        GUI.Label(
+            new Rect(x + 8f, y + 36f, width - 16f, 20f),
+            $"感度  {sensitivity:F2} / {PleasureRuntime.Sensitivity?.Cap ?? 0f:F0}");
+        GUI.Label(
+            new Rect(x + 8f, y + 54f, width - 16f, 20f),
+            limit > 0 ? $"絶頂  {count} / {limit}" : $"絶頂  {count}");
+    }
+
+    [HideFromIl2Cpp]
+    private void DrawBar(Rect area, float fill, bool active)
+    {
+        GUI.DrawTexture(area, BackdropTexture());
+        if (fill <= 0f)
+        {
+            return;
+        }
+
+        var filled = new Rect(area.x, area.y, area.width * Math.Clamp(fill, 0f, 1f), area.height);
+
+        // Dimmed while pleasure cannot rise, so the gauge also says whether the situation is one
+        // where it could move at all.
+        GUI.DrawTexture(filled, active ? ActiveTexture() : IdleTexture());
+    }
+
+    [HideFromIl2Cpp]
+    private void DrawClimaxFlash()
+    {
+        if (Time.timeAsDouble >= PleasureRuntime.ClimaxFlashUntil)
+        {
+            return;
+        }
+
+        var area = new Rect(0f, Screen.height * 0.38f, Screen.width, 48f);
+        GUI.Label(area, $"絶頂  {PleasureRuntime.Climaxes.Count}");
+    }
+
+    [HideFromIl2Cpp]
+    private Texture2D BackdropTexture() => _backdrop ??= SolidTexture(new Color(0f, 0f, 0f, 0.65f));
+
+    [HideFromIl2Cpp]
+    private Texture2D ActiveTexture() => _active ??= SolidTexture(new Color(1f, 0.24f, 0.62f, 0.95f));
+
+    [HideFromIl2Cpp]
+    private Texture2D IdleTexture() => _idle ??= SolidTexture(new Color(0.55f, 0.35f, 0.45f, 0.75f));
+
+    [HideFromIl2Cpp]
+    private static Texture2D SolidTexture(Color color)
+    {
+        var texture = new Texture2D(1, 1);
+        texture.SetPixel(0, 0, color);
+        texture.Apply();
+
+        // Unity destroys textures on scene unload unless they are marked, and a destroyed texture
+        // would throw on every frame the overlay draws.
+        texture.hideFlags = HideFlags.HideAndDontSave;
+        return texture;
     }
 
     [HideFromIl2Cpp]

@@ -20,7 +20,8 @@ internal static class DamageProbePatches
                 return;
             }
 
-            bool bound = PleasureRuntime.IsBound;
+            bool bound = PleasureRuntime.CanAccumulate;
+            string? sender = SenderName(stack);
             string[] statuses = PleasureRuntime.AppliedStatuses(stack);
             string? enemyId = PleasureRuntime.BinderEnemyId;
 
@@ -43,11 +44,11 @@ internal static class DamageProbePatches
                       + "classifier cannot judge it from statuses alone. Such hits need an entry in "
                       + "Pleasure.SexualEnemyIds.");
 
-            AttackKind kind = PleasureRuntime.Profile.Classifier.Classify(enemyId, statuses);
+            AttackKind kind = PleasureRuntime.Profile.Classifier.Classify(enemyId, sender, statuses);
             PleasureRuntime.Probe(
-                $"classified-{enemyId ?? "unknown"}-{kind}",
-                $"Captor '{enemyId ?? "(unidentified)"}' classified as {kind} "
-                + $"from [{string.Join(", ", statuses)}].");
+                $"classified-{enemyId ?? "unknown"}-{sender ?? "?"}-{kind}",
+                $"Captor '{enemyId ?? "(unidentified)"}' sender '{sender ?? "(unknown)"}' classified "
+                + $"as {kind} from [{string.Join(", ", statuses)}].");
 
             // Everything above is measurement. The gauge only moves once it has been tuned.
             PleasureTuning tuning = PleasureRuntime.Profile.Pleasure;
@@ -75,6 +76,22 @@ internal static class DamageProbePatches
         catch (Exception exception)
         {
             PleasureRuntime.Log?.LogWarning($"Damage observation failed for this hit: {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// The attacker's own name. Needed because an attack that carries no statuses cannot be judged
+    /// any other way when the captor is not in the override list.
+    /// </summary>
+    private static string? SenderName(DamageStack stack)
+    {
+        try
+        {
+            return stack.SenderName;
+        }
+        catch (Exception)
+        {
+            return null;
         }
     }
 }
