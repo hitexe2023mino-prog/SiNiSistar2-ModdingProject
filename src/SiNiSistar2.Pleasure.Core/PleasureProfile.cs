@@ -43,10 +43,11 @@ public sealed record BreastSuperTuning(
     float MilkPerSexualHit,
     float MilkDrainPerSecond,
     string MilkingKey,
-    string MilkingAnimationState)
+    string MilkingAnimationState,
+    string MilkingAnimationSlot)
 {
     public static BreastSuperTuning Disabled { get; } =
-        new(false, 0, 0f, false, false, false, 0f, false, 0f, 0f, 0f, "", "");
+        new(false, 0, 0f, false, false, false, 0f, false, 0f, 0f, 0f, "", "", "");
 
     /// <summary>Whether milking can do anything.</summary>
     public bool CanMilk => MilkDrainPerSecond > 0f;
@@ -375,7 +376,8 @@ public static class PleasureProfileFactory
             Math.Max(0f, options.MilkPerSexualHit),
             Math.Max(0f, options.MilkDrainPerSecond),
             (options.MilkingKey ?? string.Empty).Trim(),
-            (options.MilkingAnimationState ?? string.Empty).Trim());
+            (options.MilkingAnimationState ?? string.Empty).Trim(),
+            (options.MilkingAnimationSlot ?? string.Empty).Trim());
     }
 
     private static SexualAttackClassifier BuildClassifier(

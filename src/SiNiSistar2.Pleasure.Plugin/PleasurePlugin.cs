@@ -388,6 +388,14 @@ public sealed class PleasurePlugin : BasePlugin
             "Animator state played while milking. Empty leaves the animator alone. It is the game's "
             + "own take name played in the situation the game plays it in, so EDI sees a true "
             + "reading; an unauthored funscript for it simply stays fail-closed.");
+        ConfigEntry<string> milkingSlot = Config.Bind(
+            "BreastSuper",
+            "MilkingAnimationSlot",
+            "Sit",
+            "The animator state the milking clip is played in. The milking take is not in the "
+            + "player's field controller, so an override controller puts the clip into a state "
+            + "that is. The clip that plays is the game's own, which is what an observer reads. "
+            + "Pick a state the player is not otherwise in.");
         ConfigEntry<bool> breastBelowMax = Config.Bind(
             "BreastSuper",
             "CountBelowMaxLevel",
@@ -490,6 +498,7 @@ public sealed class PleasurePlugin : BasePlugin
             MilkDrainPerSecond = milkDrain.Value,
             MilkingKey = milkingKey.Value,
             MilkingAnimationState = milkingState.Value,
+            MilkingAnimationSlot = milkingSlot.Value,
             BreastSuperMakeHaanjaCurable = breastHaanja.Value,
             BreastSuperCountBelowMaxLevel = breastBelowMax.Value,
             LogTransitions = logTransitions.Value,

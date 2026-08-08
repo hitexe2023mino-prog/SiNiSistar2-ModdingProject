@@ -115,6 +115,18 @@ public sealed record PleasureOptions
     public string MilkingAnimationState { get; init; } = "ResumeBreast";
 
     /// <summary>
+    /// The animator state whose clip is replaced by the milking clip while milking.
+    ///
+    /// The milking take is not in the player's field controller — measured, not assumed (付録A
+    /// A-23). What the field controller does have is a set of states, and an override controller
+    /// can put a different clip in any of them. So the state is a vehicle: the clip that plays is
+    /// the game's own milking clip, and an observer reading the animator reads that clip's name.
+    /// The slot has to be a state the player is not otherwise in, or leaving milking would put
+    /// them back into a pose they never chose.
+    /// </summary>
+    public string MilkingAnimationSlot { get; init; } = "Sit";
+
+    /// <summary>
     /// Counts every <c>Breast</c> application rather than only those at the maximum level. A
     /// debugging aid: it makes the escalation reachable by using the item that applies swelling a
     /// few times, without having to reach the ceiling first.

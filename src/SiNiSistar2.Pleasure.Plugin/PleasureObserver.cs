@@ -43,7 +43,6 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _breastReported;
     private bool _breastSuperReported;
     private bool _breastSuperRequested;
-    private int _milkingReturnState;
     private KeyCode _milkingKey = KeyCode.None;
     private double _swellingOverlapSince;
     private double _breastSuperLoadAsked;
@@ -1296,191 +1295,16 @@ public sealed class PleasureObserver : MonoBehaviour
     }
 
     /// <summary>
-    /// Plays the game's own milking take on the player (SPEC003 5.8, FR-258).
-    ///
-    /// This is the one place the MOD drives the animator, and the reason FR-228 was amended rather
-    /// than ignored. What that requirement protects is the honesty of what an observer reads: SPEC001
-    /// identifies what is happening from the take name, so a name must never be played over something
-    /// it does not describe. Playing the real milking take while the player is really milking does
-    /// not break that — it is the same name meaning the same thing. Inventing a name, or borrowing
-    /// one from a situation that is not occurring, still would.
-    ///
-    /// The state played is checked for first. Asking an animator for a state it does not have is
-    /// silent, and a silent nothing here would read as "the animation does not work" rather than
-    /// "this build calls it something else".
+    /// Starts and stops the milking animation. The work is in <see cref="MilkingAnimation"/>.
     /// </summary>
     [HideFromIl2Cpp]
-    private void StartMilkingAnimation()
-    {
-        _milkingReturnState = 0;
-        string clipName = PleasureRuntime.Profile.BreastSuper.MilkingAnimationState;
-        if (clipName.Length == 0)
-        {
-            return;
-        }
-
-        try
-        {
-            Animator? animator = ManagerList.Object?.Lelia?.m_Animator;
-            if (animator is null)
-            {
-                return;
-            }
-
-            int hash = ResolveMilkingState(animator, clipName);
-            if (hash == 0)
-            {
-                return;
-            }
-
-            // Remembered so the player is put back rather than left standing in a pose. The state
-            // machine would normally drive out of it on the next input, but "normally" is not a
-            // guarantee worth leaving a player stuck on.
-            _milkingReturnState = animator.GetCurrentAnimatorStateInfo(0).fullPathHash;
-            animator.Play(hash, 0, 0f);
-        }
-        catch (Exception exception)
-        {
-            _milkingReturnState = 0;
-            PleasureRuntime.Log?.LogWarning($"The milking animation could not be started: {exception.Message}");
-        }
-    }
-
-    /// <summary>
-    /// Finds the animator state that plays the milking clip (SPEC003 付録A A-23).
-    ///
-    /// The first attempt asked for a state called <c>ResumeBreast</c> and was told there is none.
-    /// The reason is in the reading it printed alongside: the controller is
-    /// <c>Breast2_AnimatorOverride</c>, an override controller. Those keep the base controller's
-    /// state names and swap only the clips, so <c>ResumeBreast</c> is the name of a clip, not of a
-    /// state. What plays it is whichever state the base controller gave that slot, and the override
-    /// table is what maps one to the other.
-    ///
-    /// Both are tried, because a build that does name a state after the clip should still work, and
-    /// the whole override table is recorded once so a name that is neither can be found by reading
-    /// rather than by guessing again.
-    /// </summary>
-    [HideFromIl2Cpp]
-    private static int ResolveMilkingState(Animator animator, string clipName)
-    {
-        RuntimeAnimatorController? controller = animator.runtimeAnimatorController;
-        string controllerName = controller?.name ?? "(none)";
-
-        int direct = Animator.StringToHash(clipName);
-        if (animator.HasState(0, direct))
-        {
-            PleasureRuntime.Probe(
-                $"milking-state-direct-{clipName}",
-                $"A-23: milking plays the animator state '{clipName}' directly.");
-            return direct;
-        }
-
-        var overrides = controller?.TryCast<AnimatorOverrideController>();
-        if (overrides is null)
-        {
-            PleasureRuntime.Probe(
-                $"milking-state-missing-{clipName}",
-                $"A-23: '{controllerName}' has no state '{clipName}' and is not an override "
-                + "controller, so there is nothing to map through. Milking has no animation. Set "
-                + "BreastSuper.MilkingAnimationState to the name this build uses, or empty to leave "
-                + "the animator alone.");
-            return 0;
-        }
-
-        // The override table is read through the two clip arrays rather than through
-        // AnimationClipPair, which is a stub in this interop assembly with no readable members. The
-        // base controller lists the original clips and the override lists the effective ones, both
-        // built from the same controller, so position lines them up.
-        var pairs = new List<string>();
-        string? original = null;
-        try
-        {
-            RuntimeAnimatorController? baseController = overrides.runtimeAnimatorController;
-            var effective = overrides.animationClips;
-            var originals = baseController?.animationClips;
-            int count = Math.Min(effective?.Length ?? 0, originals?.Length ?? 0);
-            for (var index = 0; index < count; index++)
-            {
-                string from = originals![index]?.name ?? "(none)";
-                string to = effective![index]?.name ?? "(none)";
-                pairs.Add($"{from}->{to}");
-                if (original is null && string.Equals(to, clipName, StringComparison.OrdinalIgnoreCase))
-                {
-                    original = from;
-                }
-            }
-
-            if (count == 0)
-            {
-                for (var index = 0; index < (effective?.Length ?? 0); index++)
-                {
-                    pairs.Add(effective![index]?.name ?? "(none)");
-                }
-            }
-        }
-        catch (Exception exception)
-        {
-            PleasureRuntime.Probe(
-                "milking-overrides-unreadable",
-                $"A-23: the clips of '{controllerName}' could not be read: {exception.Message}");
-            return 0;
-        }
-
-        PleasureRuntime.Probe(
-            $"milking-overrides-{controllerName}",
-            $"A-23: '{controllerName}' maps {pairs.Count} clip(s): {string.Join(", ", pairs)}.");
-
-        if (original is null)
-        {
-            PleasureRuntime.Probe(
-                $"milking-clip-missing-{clipName}-{controllerName}",
-                $"A-23: no clip named '{clipName}' is in that table, so milking has no animation. "
-                + "Measured on this build: the player's field controller carries only the Breast2_* "
-                + "set, and the milking take belongs to the gallery. The MOD will not stand a "
-                + "different take in for it — borrowing one would tell SPEC001 that something else "
-                + "is happening (DEC-224). Leave MilkingAnimationState empty unless a real name is "
-                + "in the table above.");
-            return 0;
-        }
-
-        int mapped = Animator.StringToHash(original);
-        if (!animator.HasState(0, mapped))
-        {
-            PleasureRuntime.Probe(
-                $"milking-mapped-missing-{original}",
-                $"A-23: '{clipName}' overrides the clip '{original}', but there is no state of that "
-                + "name on layer 0 either. The state is named something else again.");
-            return 0;
-        }
-
-        PleasureRuntime.Probe(
-            $"milking-state-mapped-{original}",
-            $"A-23: milking plays the state '{original}', which '{controllerName}' overrides with "
-            + $"the clip '{clipName}'.");
-        return mapped;
-    }
+    private void StartMilkingAnimation() => MilkingAnimation.Start(
+        PleasureRuntime.Profile.BreastSuper.MilkingAnimationState,
+        PleasureRuntime.Profile.BreastSuper.MilkingAnimationSlot);
 
     /// <summary>Puts the player back into whatever they were doing before milking.</summary>
     [HideFromIl2Cpp]
-    private void StopMilkingAnimation()
-    {
-        if (_milkingReturnState == 0)
-        {
-            return;
-        }
-
-        int state = _milkingReturnState;
-        _milkingReturnState = 0;
-        try
-        {
-            ManagerList.Object?.Lelia?.m_Animator?.Play(state, 0, 0f);
-        }
-        catch (Exception exception)
-        {
-            PleasureRuntime.Log?.LogWarning(
-                $"The player could not be returned to their previous animation: {exception.Message}");
-        }
-    }
+    private static void StopMilkingAnimation() => MilkingAnimation.Stop();
 
     /// <summary>
     /// Notes that this enemy has been met, so the editor can offer the handful that matter ahead of
