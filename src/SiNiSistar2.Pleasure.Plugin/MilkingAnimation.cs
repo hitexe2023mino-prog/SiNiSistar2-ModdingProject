@@ -41,6 +41,7 @@ internal static class MilkingAnimation
     private static readonly HashSet<string> _galleryClips = new(StringComparer.Ordinal);
     private static readonly HashSet<string> _eventClips = new(StringComparer.Ordinal);
     private static readonly List<(string Name, Animator Animator)> _eventCast = new();
+    private static int _castRetries;
     private static bool _reportedPaths;
     private static double _lastRequest;
     private static int _sweeps;
@@ -155,8 +156,21 @@ internal static class MilkingAnimation
                 return;
             }
 
-            var clips = animator.GetCurrentAnimatorClipInfo(0);
-            AnimationClip? clip = clips.Length == 0 ? null : clips[0].clip;
+            // Every layer, for the same reason as A-27: a performance on an upper layer reads as
+            // standing still if only layer 0 is asked, and standing still is exactly what this
+            // probe reported for an event that is known to animate.
+            AnimationClip? clip = null;
+            var layer = 0;
+            for (; layer < animator.layerCount; layer++)
+            {
+                var candidates = animator.GetCurrentAnimatorClipInfo(layer);
+                if (candidates.Length > 0 && candidates[0].clip is not null)
+                {
+                    clip = candidates[0].clip;
+                    break;
+                }
+            }
+
             string? name = clip?.name;
             if (clip is null || string.IsNullOrEmpty(name))
             {
@@ -171,7 +185,7 @@ internal static class MilkingAnimation
             PleasureRuntime.Log?.LogInfo(
                 $"A-32: in '{scene}'{(swollen ? " while the escalated swelling is worn" : " during a scripted event")}, "
                 + $"the player is playing the clip '{name}' ({clip.length:0.00}s, "
-                + $"looping={clip.isLooping}) on controller "
+                + $"looping={clip.isLooping}) on layer {layer} of controller "
                 + $"'{animator.runtimeAnimatorController.name}'.");
         }
         catch (Exception)
@@ -195,6 +209,7 @@ internal static class MilkingAnimation
     internal static void ProbeEventObjects(string scene)
     {
         _eventCast.Clear();
+        bool repeat = _castRetries > 0;
         try
         {
             GameObject? root = GameObject.Find("Root/Event");
@@ -211,21 +226,31 @@ internal static class MilkingAnimation
             for (var index = 0; index < count && index < 30; index++)
             {
                 Transform child = parent.GetChild(index);
-                var animator = child.gameObject.GetComponent(Il2CppType.Of<Animator>())?.TryCast<Animator>();
-                names.Add(child.name + (animator is null ? string.Empty : " (has an animator)"));
 
-                // Kept so the clip can be read as the event plays. An animator that has just been
-                // created is not playing the take yet, so reading only at the start would report
-                // the pose it was built in.
-                if (animator is not null && _eventCast.Count < 8)
+                // The whole subtree, not the child itself. Reading only the object directly under
+                // Root/Event reported "none of them has an animator" for an event that is known to
+                // animate, and that reading was then used to conclude the event was not the one
+                // being looked for. An event's performer is under it, not necessarily on it.
+                var found = child.gameObject.GetComponentsInChildren(Il2CppType.Of<Animator>(), true);
+                names.Add($"{child.name} ({found.Length} animator(s) beneath it)");
+
+                for (var slot = 0; slot < found.Length && _eventCast.Count < 24; slot++)
                 {
-                    _eventCast.Add((child.name, animator));
+                    var animator = found[slot]?.TryCast<Animator>();
+                    if (animator is not null)
+                    {
+                        _eventCast.Add((Describe(animator.gameObject), animator));
+                    }
                 }
             }
 
-            PleasureRuntime.Log?.LogInfo(
-                $"A-33: an event started in '{scene}'. 'Root/Event' holds {count} object(s): "
-                + $"{(names.Count == 0 ? "(none)" : string.Join(", ", names))}.");
+            if (!repeat || _eventCast.Count > 0)
+            {
+                PleasureRuntime.Log?.LogInfo(
+                    $"A-33: an event {(repeat ? "is running" : "started")} in '{scene}'. "
+                    + $"'Root/Event' holds {count} object(s): "
+                    + $"{(names.Count == 0 ? "(none)" : string.Join(", ", names))}.");
+            }
         }
         catch (Exception exception)
         {
@@ -236,6 +261,14 @@ internal static class MilkingAnimation
     /// <summary>Reads the event's own cast while it plays. At most eight objects, none of them searched for.</summary>
     internal static void ProbeEventCast(string scene)
     {
+        // The event's objects are built as it runs, so an empty cast at the first frame is not an
+        // answer. Looked for again until something is there.
+        if (_eventCast.Count == 0 && _castRetries < 40)
+        {
+            _castRetries++;
+            ProbeEventObjects(scene);
+        }
+
         for (var index = 0; index < _eventCast.Count; index++)
         {
             (string name, Animator animator) = _eventCast[index];
@@ -244,7 +277,11 @@ internal static class MilkingAnimation
     }
 
     /// <summary>Forgets the cast when the event ends, so a stale animator is never read.</summary>
-    internal static void ForgetEventCast() => _eventCast.Clear();
+    internal static void ForgetEventCast()
+    {
+        _eventCast.Clear();
+        _castRetries = 0;
+    }
 
     /// <summary>
     /// Reads the take's own cast (SPEC003 付録A A-27, A-31).
@@ -315,14 +352,27 @@ internal static class MilkingAnimation
                 return;
             }
 
-            var clips = animator.GetCurrentAnimatorClipInfo(0);
-            AnimationClip? clip = clips.Length == 0 ? null : clips[0].clip;
+            // Every layer. Layer 0 is where ordinary movement lives, so a performance driven on
+            // an upper layer reads as "standing still" if only layer 0 is asked.
+            AnimationClip? clip = null;
+            var layer = 0;
+            for (; layer < animator.layerCount; layer++)
+            {
+                var candidates = animator.GetCurrentAnimatorClipInfo(layer);
+                if (candidates.Length > 0 && candidates[0].clip is not null)
+                {
+                    clip = candidates[0].clip;
+                    break;
+                }
+            }
+
             string? name = clip?.name;
             if (clip is null || string.IsNullOrEmpty(name))
             {
                 PleasureRuntime.Log?.LogInfo(
                     $"A-27: during '{takeName}', {who} is on controller "
-                    + $"'{animator.runtimeAnimatorController.name}' with no clip on layer 0.");
+                    + $"'{animator.runtimeAnimatorController.name}' with no clip on any of its "
+                    + $"{animator.layerCount} layer(s).");
                 return;
             }
 
@@ -333,7 +383,7 @@ internal static class MilkingAnimation
 
             PleasureRuntime.Log?.LogInfo(
                 $"A-27: during '{takeName}', {who} is playing the clip '{name}' "
-                + $"({clip.length:0.00}s, looping={clip.isLooping}) on controller "
+                + $"({clip.length:0.00}s, looping={clip.isLooping}) on layer {layer} of controller "
                 + $"'{animator.runtimeAnimatorController.name}'.");
         }
         catch (Exception exception)
