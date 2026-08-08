@@ -101,9 +101,8 @@ public sealed class PleasurePlugin : BasePlugin
         PleasureRuntime.Sensitivity = new SensitivityTrack(profile.Sensitivity.Cap);
         PleasureRuntime.SuperTimer = new BreastSuperTimer(profile.BreastSuper.Seconds);
         PleasureRuntime.Milk = new MilkReservoir(
-            profile.BreastSuper.MilkFillPerSecond,
-            profile.BreastSuper.MilkDrainPerSecond,
-            profile.BreastSuper.MilkSuperMultiplier);
+            profile.BreastSuper.MilkPerSexualHit,
+            profile.BreastSuper.MilkDrainPerSecond);
         PleasureRuntime.Breasts = new BreastEscalation(
             profile.BreastSuper.ApplicationsAtMaxLevel,
             profile.BreastSuper.SensitivityThreshold);
@@ -214,15 +213,16 @@ public sealed class PleasurePlugin : BasePlugin
                 : string.Empty));
 
         Log.LogInfo(
-            "Press F11 in game to apply Breast to the player, for checking the escalation. Press C "
-            + $"Press {profile.BreastSuper.MilkingKey} while swollen to milk: it empties the milk "
-            + "gauge, works anywhere, and being hit wastes it.");
+            "Press F11 in game to apply Breast to the player, for checking the escalation. "
+            + $"Press {profile.BreastSuper.MilkingKey} while BreastSuper is active to milk: it "
+            + "empties the milk gauge, works anywhere, and being hit wastes it.");
 
         if (profile.ShowOverlay)
         {
             Log.LogInfo(
-                "Press F9 in game to place the overlay with the mouse: Tab picks the gauge or the "
-                + "cross, drag moves it, the wheel resizes it, Enter saves and Escape cancels.");
+                "Press F9 in game to place the overlay with the mouse: Tab cycles the gauge, the "
+                + "cross and the milk gauge, drag moves it, the wheel resizes it, Enter saves and "
+                + "Escape cancels.");
         }
 
         Log.LogInfo(
@@ -373,19 +373,17 @@ public sealed class PleasurePlugin : BasePlugin
             + "not move and the scene is not reloaded; the black only covers the swap.");
         ConfigEntry<float> milkFill = Config.Bind(
             "BreastSuper",
-            "MilkFillPerSecond",
-            0.02f,
-            "Milk gained per second while swollen, as a fraction of the gauge. 0.02 fills it in "
-            + "about 50 seconds. 0 means it never fills and milking has nothing to remove.");
+            "MilkPerSexualHit",
+            0.12f,
+            "Milk gained from one sexual hit taken while swollen, as a fraction of the gauge. It "
+            + "does not fill with time: waiting is not what the escalation is a penalty for. A full "
+            + "gauge escalates Breast to BreastSuper.");
         ConfigEntry<float> milkDrain = Config.Bind(
             "BreastSuper",
             "MilkDrainPerSecond",
             0.25f,
-            "Milk removed per second while milking. The swelling steps down when the gauge empties, "
-            + "so this and MilkFillPerSecond together decide how long milking takes. 0 switches "
-            + "milking off.");
-        ConfigEntry<float> milkSuper = Config.Bind(
-            "BreastSuper", "MilkSuperMultiplier", 2f, "How much faster BreastSuper fills the gauge.");
+            "Milk removed per second while milking. Only BreastSuper can be milked, and it "
+            + "subsides to Breast when the gauge empties. 0 switches milking off.");
         ConfigEntry<string> milkingKey = Config.Bind(
             "BreastSuper",
             "MilkingKey",
@@ -506,9 +504,8 @@ public sealed class PleasurePlugin : BasePlugin
             BreastSuperSeconds = breastSeconds.Value,
             BreastSuperCuredWithBreast = breastCured.Value,
             BreastSuperFadeSeconds = breastFade.Value,
-            MilkFillPerSecond = milkFill.Value,
+            MilkPerSexualHit = milkFill.Value,
             MilkDrainPerSecond = milkDrain.Value,
-            MilkSuperMultiplier = milkSuper.Value,
             MilkingKey = milkingKey.Value,
             MilkingAnimationState = milkingState.Value,
             BreastSuperMakeHaanjaCurable = breastHaanja.Value,

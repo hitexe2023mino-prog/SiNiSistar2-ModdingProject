@@ -88,14 +88,13 @@ public sealed record PleasureOptions
     /// seconds and is wasted if anything hits you is a decision about whether it is safe enough
     /// right now, which the player can get wrong.
     /// </summary>
-    /// <summary>Milk gained per second while swollen. 0 means the reservoir never fills.</summary>
-    public float MilkFillPerSecond { get; init; } = 0.02f;
+    /// <summary>
+    /// Milk gained from one sexual hit taken while swollen. 0 means the gauge never fills.
+    /// </summary>
+    public float MilkPerSexualHit { get; init; } = 0.12f;
 
     /// <summary>Milk removed per second while milking. 0 switches milking off.</summary>
     public float MilkDrainPerSecond { get; init; } = 0.25f;
-
-    /// <summary>How much faster the escalated swelling fills.</summary>
-    public float MilkSuperMultiplier { get; init; } = 2f;
 
     /// <summary>
     /// The key that milks, as a <c>KeyCode</c> name.

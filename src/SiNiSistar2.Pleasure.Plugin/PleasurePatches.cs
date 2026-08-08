@@ -1,4 +1,5 @@
 using SiNiSistar2.Damage;
+using SiNiSistar2.Obj;
 using SiNiSistar2.EventLabel;
 using SiNiSistar2.Pleasure.Core;
 
@@ -85,6 +86,8 @@ internal static class DamageProbePatches
                     + $"on a hit from '{sender ?? "(unknown)"}'.");
             }
 
+            RecordMilkFromHit();
+
             PleasureRuntime.LogTransition(
                 $"Pleasure {meter.Value:F2} (sensitivity {sensitivity?.Value ?? 0f:F2}).");
         }
@@ -92,6 +95,50 @@ internal static class DamageProbePatches
         {
             PleasureRuntime.Log?.LogWarning($"Damage observation failed for this hit: {exception.Message}");
         }
+    }
+
+    /// <summary>
+    /// Adds to the milk reservoir when a sexual hit lands on a swollen body (SPEC003 FR-259).
+    ///
+    /// The gauge fills from what is done to the player, never from time. "Sexual hit while swollen"
+    /// is as close as this build allows to "an attack on the breasts": the game does not label an
+    /// attack by where it lands, and inventing that label would be a guess dressed as a measurement.
+    /// A full gauge escalates the swelling.
+    /// </summary>
+    private static void RecordMilkFromHit()
+    {
+        MilkReservoir? milk = PleasureRuntime.Milk;
+        AbnormalList? abnormals = PleasureRuntime.PlayerAbnormals;
+        if (milk is null || abnormals is null || BreastPatches.IsGalleryActive())
+        {
+            return;
+        }
+
+        try
+        {
+            if (abnormals.Has(AbnormalType.BreastSuper) || !abnormals.Has(AbnormalType.Breast))
+            {
+                return;
+            }
+        }
+        catch (Exception)
+        {
+            return;
+        }
+
+        float before = milk.Fill;
+        if (!milk.AddFromHit())
+        {
+            if (milk.Fill > before)
+            {
+                PleasureRuntime.LogTransition($"Milk {before:P0} -> {milk.Fill:P0}.");
+            }
+
+            return;
+        }
+
+        PleasureRuntime.PendingBreastSuper = true;
+        PleasureRuntime.Log?.LogInfo("The milk gauge filled; Breast escalates to BreastSuper.");
     }
 
     /// <summary>

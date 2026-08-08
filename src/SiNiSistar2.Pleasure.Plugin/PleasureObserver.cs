@@ -950,9 +950,17 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        bool super = abnormals.Has(AbnormalType.BreastSuper);
-        if (!super && !abnormals.Has(AbnormalType.Breast))
+        // Only the escalated swelling can be milked. Ordinary swelling has no way out through
+        // milking: its gauge fills one way towards the escalation, and its cure is the game's own
+        // (FR-262).
+        if (!abnormals.Has(AbnormalType.BreastSuper))
         {
+            if (abnormals.Has(AbnormalType.Breast))
+            {
+                PleasureRuntime.Log?.LogInfo(
+                    "Ordinary swelling cannot be milked away; only BreastSuper can.");
+            }
+
             return;
         }
 
@@ -976,82 +984,74 @@ public sealed class PleasureObserver : MonoBehaviour
             PleasureRuntime.MilkingWasHit = false;
             StartMilkingAnimation();
             PleasureRuntime.Log?.LogInfo(
-                $"Milking started at {milk.Fill:P0}; being hit will waste it. "
-                + $"{(super ? "BreastSuper will subside to Breast." : "Breast will be cleared.")}");
+                $"Milking started at {milk.Fill:P0}; being hit will waste it and the gauge will "
+                + "start filling again. BreastSuper will subside to Breast.");
         }
     }
 
     /// <summary>
-    /// Fills the reservoir while swollen, drains it while milking, and steps the swelling down when
-    /// it empties (SPEC003 FR-259).
+    /// Drains the reservoir while milking, and takes <c>BreastSuper</c> back down to <c>Breast</c>
+    /// when it empties (SPEC003 FR-259, FR-262).
+    ///
+    /// Nothing fills it here. Milk comes from sexual hits taken while swollen, recorded where those
+    /// hits are already being watched.
     /// </summary>
     [HideFromIl2Cpp]
     private void UpdateMilk(PlayerStatusManager status, double delta)
     {
         MilkReservoir? milk = PleasureRuntime.Milk;
         AbnormalList? abnormals = status.AbnormalList;
-        if (milk is null || abnormals is null)
+        if (milk is null || abnormals is null || !milk.IsMilking)
         {
+            PleasureRuntime.MilkingWasHit = false;
             return;
         }
 
         bool super;
-        bool swollen;
         try
         {
             super = abnormals.Has(AbnormalType.BreastSuper);
-            swollen = super || abnormals.Has(AbnormalType.Breast);
         }
         catch (Exception)
         {
             return;
         }
 
-        if (milk.IsMilking
-            && (PleasureRuntime.MilkingWasHit || PleasureRuntime.IsBound
-                || PleasureRuntime.IsDefeatPerformance || !swollen))
+        if (PleasureRuntime.MilkingWasHit || PleasureRuntime.IsBound
+            || PleasureRuntime.IsDefeatPerformance || !super)
         {
             PleasureRuntime.MilkingWasHit = false;
             if (milk.StopMilking())
             {
                 StopMilkingAnimation();
-                PleasureRuntime.Log?.LogInfo("Milking was interrupted; the gauge keeps what is left.");
+                PleasureRuntime.Log?.LogInfo(
+                    $"Milking was interrupted at {milk.Fill:P0}; the gauge fills again from here.");
             }
 
             return;
         }
 
-        PleasureRuntime.MilkingWasHit = false;
-        if (milk.Tick(delta, swollen, super) != MilkOutcome.Emptied)
+        if (milk.Tick(delta) != MilkOutcome.Emptied)
         {
             return;
         }
 
         StopMilkingAnimation();
 
-        // One step down, not a full cure from either state. Milking out of the escalation still
-        // leaves the swelling, which is the same ladder the duration walks back down.
-        if (super)
+        // Down to Breast, not to nothing. Milking out of the escalation still leaves the swelling,
+        // which is the same ladder the duration walks back down.
+        abnormals.RemoveAbnormal(AbnormalType.BreastSuper);
+        PleasureRuntime.SuperTimer?.Stop();
+        AbnormalManager? manager = ManagerList.Abnormal;
+        AbnormalData? data = null;
+        if (manager is not null && manager.TryGetData(AbnormalType.Breast, out data) && data is not null)
         {
-            abnormals.RemoveAbnormal(AbnormalType.BreastSuper);
-            PleasureRuntime.SuperTimer?.Stop();
-            AbnormalManager? manager = ManagerList.Abnormal;
-            AbnormalData? data = null;
-            if (manager is not null && manager.TryGetData(AbnormalType.Breast, out data) && data is not null)
-            {
-                abnormals.AddAbnormal(data, 1, null);
-            }
-
-            PleasureRuntime.Log?.LogInfo("Milked dry: BreastSuper subsided to Breast.");
-        }
-        else
-        {
-            abnormals.RemoveAbnormal(AbnormalType.Breast);
-            PleasureRuntime.Log?.LogInfo("Milked dry: Breast was cleared.");
+            abnormals.AddAbnormal(data, 1, null);
         }
 
         PleasureRuntime.Breasts?.Reset();
         BeginTransition();
+        PleasureRuntime.Log?.LogInfo("Milked dry: BreastSuper subsided to Breast.");
     }
 
     /// <summary>
@@ -1194,8 +1194,11 @@ public sealed class PleasureObserver : MonoBehaviour
             PleasureRuntime.Probe(
                 $"milking-clip-missing-{clipName}",
                 $"A-23: no clip named '{clipName}' is in that table, so milking has no animation. "
-                + "One of the names above is the state to use; set "
-                + "BreastSuper.MilkingAnimationState to it.");
+                + "Measured on this build: the player's field controller carries only the Breast2_* "
+                + "set, and the milking take belongs to the gallery. The MOD will not stand a "
+                + "different take in for it — borrowing one would tell SPEC001 that something else "
+                + "is happening (DEC-224). Leave MilkingAnimationState empty unless a real name is "
+                + "in the table above.");
             return 0;
         }
 
@@ -1361,8 +1364,8 @@ public sealed class PleasureObserver : MonoBehaviour
         _editing = true;
         _layoutBeforeEdit = PleasureRuntime.Overlay;
         PleasureRuntime.Log?.LogInfo(
-            "Layout editing started. Tab picks the gauge or the cross, drag moves it, the wheel "
-            + "resizes it, Enter saves and Escape cancels.");
+            "Layout editing started. Tab cycles the gauge, the cross and the milk gauge, drag "
+            + "moves it, the wheel resizes it, Enter saves and Escape cancels.");
     }
 
     [HideFromIl2Cpp]
