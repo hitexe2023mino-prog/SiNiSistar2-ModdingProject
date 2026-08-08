@@ -19,7 +19,7 @@ Every tuning value still ships at no-change (FR-233), so a fresh install only re
 
 ## Automated coverage
 
-`dotnet test SiNiSistar2.Edi.sln -c Release` → 71 for this MOD, 89 for SPEC002, 143 for SPEC001, 0 failures.
+`dotnet test SiNiSistar2.Edi.sln -c Release` → 82 for this MOD, 89 for SPEC002, 143 for SPEC001, 0 failures.
 
 ## 要件台帳
 
@@ -45,7 +45,10 @@ Every tuning value still ships at no-change (FR-233), so a fresh install only re
 | FR-218 | 絶頂と性的被弾で感度が増える | `PleasureObserver.ConsumeClimax`、`DamageProbePatches` | `SensitivityAndClimaxTests` | Tested / unverified |
 | FR-219 | 感度を減少させる経路を持たない | `SensitivityTrack.Add`（非正を無視） | `SensitivityAndClimaxTests.SensitivityNeverFalls`、AC-215 実機 | Tested |
 | FR-220 | 感度は上限で頭打ち、減少ではない | `SensitivityTrack` | `SensitivityAndClimaxTests.TheCapStopsGrowth...` | Tested |
-| FR-221 | 条件成立で `BreastSuper` を正規経路で付与 | — | AC-217 | Not started |
+| FR-221 | 条件成立で `BreastSuper` へ遷移、正規経路で付与 | `BreastEscalation`、`BreastPatches.AddAbnormalPostfix`、`PleasureObserver.ApplyPendingBreastSuper` | `BreastEscalationTests`（7件）、AC-217 実機 | Tested / unverified |
+| FR-240 | 最大レベルでの付与のみ計数、上限を読めなければ遷移しない | `BreastEscalation.Record`、`BreastPatches.MaxLevel`（読めなければ0） | `BreastEscalationTests.ApplicationsBelowTheMaximum...`、AC-235 実機 | Tested / unverified |
+| FR-241 | 治療手段を新設しない | 治療コードなし。`MakeHaanjaCurable` は `m_HaanjaCanCure` を立てるのみ | 3.8 の A-14、AC-237 実機 | Design-time |
+| FR-242 | `AbnormalData` の変更を記録しアンロードで戻す | `PleasureObserver.ApplyHaanjaCurableOverride`、`InterventionLedger` | AC-237 実機 | Implemented / unverified |
 | FR-222 | 感度と絶頂回数をスロット単位で保存しセーブに同期 | `SidecarStore`、`PleasureRuntime.LoadSlot` / `SaveSlot`、`PleasureObserver.ProbeSaveSlot`、`SavePointPatches` | `SidecarStoreTests`（8件）、`SidecarDocumentTests`、AC-218 実機 | Tested / unverified |
 | FR-223 | 随伴ファイルの書き込みは原子的 | `SidecarStore.Save`（一時ファイル＋置換） | `SidecarStoreTests.SavingLeavesNoTemporaryFile` ほか | Tested |
 | FR-224 | ファイルがなければ初期値 | `SidecarDocument.Parse` | `SidecarDocumentTests` | Tested |
@@ -56,13 +59,14 @@ Every tuning value still ships at no-change (FR-233), so a fresh install only re
 | FR-229 | SPEC002の管理面へ介入しない | 参照なし | AC-223 実機 | Implemented / unverified |
 | FR-230 | メインスレッドで完結、待機しない | `PleasureObserver`（同期処理のみ） | AC-224 実機 | Implemented / unverified |
 | FR-231 | 起動ログに構成を記録 | `PleasurePlugin.Load` | AC-225 実機 | Implemented / unverified |
-| FR-232 | 判定と直列化をゲーム非依存層へ | `SiNiSistar2.Pleasure.Core`（ゲーム参照ゼロ） | 71件がゲーム起動なしで実行 | Tested |
+| FR-232 | 判定と直列化をゲーム非依存層へ | `SiNiSistar2.Pleasure.Core`（ゲーム参照ゼロ） | 82件がゲーム起動なしで実行 | Tested |
 | FR-233 | 未実測の既定は無変更相当、HP0抑止のみ例外 | `PleasureOptions` の既定値 | `PleasureProfileTests.ShippedDefaults...` | Tested |
 | FR-234 | `Enabled=false` でパッチも随伴ファイルもなし | `PleasurePlugin.Load` の早期 return | `PleasureProfileTests.DisablingTheMod...` | Tested |
 | FR-235 | 敵別分類を独立したカタログファイルへ、既存設定を種に | `EnemyAttackCatalogStore`、`EnemyAttackCatalog.SeedFrom`、`PleasurePlugin.LoadEnemyCatalog` | `EnemyAttackCatalogTests.TheOldConfigListsSeed...` ほか、AC-230 実機 | Tested / unverified |
 | FR-236 | ゲーム内編集画面、再起動なしで反映 | `EnemyCatalogEditor`（F10）、分類器がカタログを参照保持 | `EnemyAttackCatalogTests.AnEditAppliesWithoutRebuilding...`、AC-231 実機 | Tested / unverified |
 | FR-237 | `GalleryEnemyID` 全件を列挙し拘束経験のある敵を先頭に | `PleasurePlugin.KnownEnemyIds`、`EnemyAttackCatalog.AddMissing` / `Rows` | `EnemyAttackCatalogTests`（2件）、AC-232 実機 | Tested / unverified |
 | FR-238 | 保存と取り消しの区別、取り消しで開始時点へ | `EnemyCatalogEditor.Commit` / `Cancel`、`EnemyAttackCatalog.RestoreFrom` | `EnemyAttackCatalogTests.CancellingRestores...`、AC-233 実機 | Tested / unverified |
+| FR-243 | 旧スキーマ版の随伴ファイルを読む | `SidecarDocument.Parse`（新しい版のみ拒否） | `SidecarStoreTests.AnOlderSchemaIsRead...` | Tested |
 | FR-239 | カタログの原子的書き込み、非対応版を上書きしない、失敗で止めない | `EnemyAttackCatalogStore`、`JsonFile` | `EnemyAttackCatalogStoreTests`（6件） | Tested |
 
 ## 判断記録
@@ -117,7 +121,8 @@ Every tuning value still ships at no-change (FR-233), so a fresh install only re
 
 ## 完了監査
 
-- 未着手は **FR-221（`BreastSuper` の通常付与）のみ**。状態欄に **Not started** と明記した。仕様が満たされたと誤読される箇所はない。
+- **未着手の要件はない。** ただし FR-241（治療）は **Design-time** であり、既存の治療経路が `BreastSuper` へ届くかは実機の A-14 待ちである。届かないと判明した場合に限り `MakeHaanjaCurable` を既定で有効にする。それでも届かない場合は延期事項へ移す。
+- `BreastSuperChance`（確率付与）は廃止し、`BreastSuperAfterApplications`（最大レベルでの付与回数）へ置き換えた。要求が「一定回数受けた場合に遷移」であり、確率では回数を表現できない。
 - 新規の FR-235〜239 は Core 側を単体テストで、ゲーム内編集画面（`EnemyCatalogEditor`）を **Implemented / unverified** として扱う。実機確認は AC-230〜234 と 付録A A-13。
 - 実機で確認済み: HP0 抑止（A-1）、拘束中の被弾の観測（A-2）、状態異常の同伴（A-3）、耐久値（A-6）、セーブポイント検出（A-7）、スロット識別（A-9）。
 - SPEC001 と SPEC002 のファイルは未変更。`SiNiSistar2.Edi.sln` へは3プロジェクトの追加のみ。

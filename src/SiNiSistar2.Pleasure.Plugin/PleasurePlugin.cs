@@ -96,6 +96,9 @@ public sealed class PleasurePlugin : BasePlugin
             profile.Pleasure.SensitivityScale,
             profile.Pleasure.DecayPerSecond);
         PleasureRuntime.Sensitivity = new SensitivityTrack(profile.Sensitivity.Cap);
+        PleasureRuntime.Breasts = new BreastEscalation(
+            profile.BreastSuper.ApplicationsAtMaxLevel,
+            profile.BreastSuper.SensitivityThreshold);
         PleasureRuntime.ContributionKey = new Il2CppSystem.Object();
         PleasureRuntime.Sidecar = new SidecarStore(
             Path.Combine(Paths.BepInExRootPath, "data", PluginGuid),
@@ -119,6 +122,14 @@ public sealed class PleasurePlugin : BasePlugin
             AccessTools.Method(typeof(DamageManager), nameof(DamageManager.OneDamage)),
             typeof(DamageProbePatches),
             postfix: nameof(DamageProbePatches.OneDamagePostfix));
+        applied += Patch(
+            "breast-escalation",
+            AccessTools.Method(
+                typeof(AbnormalList),
+                nameof(AbnormalList.AddAbnormal),
+                new[] { typeof(AbnormalType), typeof(int), typeof(DamageStack) }),
+            typeof(BreastPatches),
+            postfix: nameof(BreastPatches.AddAbnormalPostfix));
         applied += Patch(
             "save-point",
             AccessTools.Method(typeof(SavePointAsyncLabel), nameof(SavePointAsyncLabel.ExecutionOneAsync)),
@@ -251,14 +262,31 @@ public sealed class PleasurePlugin : BasePlugin
             "Sensitivity", "SensitivityGainScale", 0f, "How much sensitivity multiplies pleasure gain.");
         ConfigEntry<float> cap = Config.Bind("Sensitivity", "SensitivityCap", 10f, "");
 
-        ConfigEntry<float> breastChance = Config.Bind(
+        ConfigEntry<int> breastAfter = Config.Bind(
             "BreastSuper",
-            "BreastSuperChance",
-            0f,
-            "Chance of applying BreastSuper when the conditions hold. It is authored for an event, "
-            + "so confirm its in-game behaviour before raising this.");
+            "BreastSuperAfterApplications",
+            0,
+            "How many further Breast applications, arriving while Breast is already at its maximum "
+            + "level, escalate to BreastSuper. 0 never escalates and is the shipped state. "
+            + "Applications below the maximum are not counted: those raise the level, which is the "
+            + "game's own escalation.");
         ConfigEntry<float> breastThreshold = Config.Bind(
-            "BreastSuper", "BreastSuperSensitivityThreshold", 0f, "");
+            "BreastSuper",
+            "BreastSuperSensitivityThreshold",
+            0f,
+            "Sensitivity required before the escalation may happen. 0 means no requirement.");
+        ConfigEntry<bool> breastReplaces = Config.Bind(
+            "BreastSuper",
+            "BreastSuperReplacesBreast",
+            true,
+            "Remove Breast as BreastSuper is applied, so the two do not stack.");
+        ConfigEntry<bool> breastHaanja = Config.Bind(
+            "BreastSuper",
+            "MakeHaanjaCurable",
+            false,
+            "Mark BreastSuper as curable by Haanja for the session, so the game's existing cure "
+            + "event covers it. Off until the SPEC003 付録A A-14 reading says whether the cure "
+            + "actually completes. Undone on unload.");
 
         ConfigEntry<bool> logTransitions = Config.Bind("Diagnostics", "LogTransitions", false, "");
         ConfigEntry<bool> probe = Config.Bind(
@@ -317,8 +345,10 @@ public sealed class PleasurePlugin : BasePlugin
             SensitivityPerSexualHit = perHit.Value,
             SensitivityGainScale = gainScale.Value,
             SensitivityCap = cap.Value,
-            BreastSuperChance = breastChance.Value,
+            BreastSuperAfterApplications = breastAfter.Value,
             BreastSuperSensitivityThreshold = breastThreshold.Value,
+            BreastSuperReplacesBreast = breastReplaces.Value,
+            BreastSuperMakeHaanjaCurable = breastHaanja.Value,
             LogTransitions = logTransitions.Value,
             ProbeMeasurements = probe.Value,
             ShowOverlay = showOverlay.Value,

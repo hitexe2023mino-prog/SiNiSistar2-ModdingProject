@@ -13,7 +13,7 @@ namespace SiNiSistar2.Pleasure.Core;
 /// </summary>
 public sealed record SidecarDocument
 {
-    public const int CurrentSchemaVersion = 1;
+    public const int CurrentSchemaVersion = 2;
 
     [JsonPropertyName("schemaVersion")]
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
@@ -27,6 +27,13 @@ public sealed record SidecarDocument
 
     [JsonPropertyName("climaxCount")]
     public int ClimaxCount { get; init; }
+
+    /// <summary>
+    /// How many <c>Breast</c> applications have landed while it was already at its maximum level
+    /// (SPEC003 5.8). Added in schema 2; a schema 1 file simply has none and starts from zero.
+    /// </summary>
+    [JsonPropertyName("breastAtMaxCount")]
+    public int BreastAtMaxCount { get; init; }
 
     public string Serialize() => JsonSerializer.Serialize(this, SerializerOptions);
 
@@ -62,7 +69,10 @@ public sealed record SidecarDocument
             return SidecarParse.Failed("The sidecar file held no object.", false);
         }
 
-        if (document.SchemaVersion != CurrentSchemaVersion)
+        // Only a newer file is refused. An older one is read: every field this version added is
+        // absent rather than wrong, so it defaults, and refusing it would have thrown away the
+        // player's accumulated sensitivity on the very upgrade that introduced a new field.
+        if (document.SchemaVersion > CurrentSchemaVersion)
         {
             return SidecarParse.Failed(
                 $"The sidecar file is schema version {document.SchemaVersion}; this MOD reads "
@@ -70,12 +80,22 @@ public sealed record SidecarDocument
                 unsupportedSchema: true);
         }
 
+        if (document.SchemaVersion < 1)
+        {
+            return SidecarParse.Failed(
+                $"The sidecar file declares schema version {document.SchemaVersion}, which is not a "
+                + "version this MOD ever wrote.",
+                unsupportedSchema: false);
+        }
+
         // Negative values can only come from a hand-edited or damaged file; clamping keeps them
         // from turning into a limit that can never be reached.
         return SidecarParse.Loaded(document with
         {
+            SchemaVersion = CurrentSchemaVersion,
             Sensitivity = Math.Max(0f, document.Sensitivity),
             ClimaxCount = Math.Max(0, document.ClimaxCount),
+            BreastAtMaxCount = Math.Max(0, document.BreastAtMaxCount),
         });
     }
 }

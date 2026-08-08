@@ -30,11 +30,17 @@ public sealed record SensitivityTuning(bool Enabled, float PerClimax, float PerS
 }
 
 /// <summary>Tuning for opening <c>BreastSuper</c> to ordinary play (SPEC003 5.8).</summary>
-public sealed record BreastSuperTuning(bool Enabled, float Chance, float SensitivityThreshold)
+public sealed record BreastSuperTuning(
+    bool Enabled,
+    int ApplicationsAtMaxLevel,
+    float SensitivityThreshold,
+    bool ReplaceBreast,
+    bool MakeHaanjaCurable)
 {
-    public static BreastSuperTuning Disabled { get; } = new(false, 0f, 0f);
+    public static BreastSuperTuning Disabled { get; } = new(false, 0, 0f, false, false);
 
-    public bool HasEffect => Enabled && Chance > 0f;
+    /// <summary>A count of zero means the escalation can never be reached, which is the shipped state.</summary>
+    public bool HasEffect => Enabled && ApplicationsAtMaxLevel > 0;
 }
 
 /// <summary>
@@ -286,9 +292,11 @@ public static class PleasureProfileFactory
         List<string> errors,
         List<string> warnings)
     {
-        if (options.BreastSuperChance < 0f || options.BreastSuperChance > 1f)
+        if (options.BreastSuperAfterApplications < 0)
         {
-            errors.Add($"BreastSuper.BreastSuperChance is {options.BreastSuperChance}; it must be between 0 and 1. BreastSuper is disabled.");
+            errors.Add(
+                $"BreastSuper.BreastSuperAfterApplications is {options.BreastSuperAfterApplications}; "
+                + "a negative count has no meaning. BreastSuper is disabled.");
             return BreastSuperTuning.Disabled;
         }
 
@@ -298,7 +306,7 @@ public static class PleasureProfileFactory
             return BreastSuperTuning.Disabled;
         }
 
-        if (options.BreastSuperChance > 0f)
+        if (options.BreastSuperAfterApplications > 0)
         {
             warnings.Add(
                 "BreastSuper can now occur in ordinary play. It is authored for an event, so check "
@@ -306,7 +314,21 @@ public static class PleasureProfileFactory
                 + "(SPEC003 付録A A-10).");
         }
 
-        return new BreastSuperTuning(true, options.BreastSuperChance, options.BreastSuperSensitivityThreshold);
+        if (options.BreastSuperMakeHaanjaCurable)
+        {
+            warnings.Add(
+                "BreastSuper.MakeHaanjaCurable is on: the MOD will mark BreastSuper as curable by "
+                + "Haanja. This changes a value on the game's own AbnormalData for the session and "
+                + "is undone on unload. Confirm in game that the cure actually completes "
+                + "(SPEC003 付録A A-14).");
+        }
+
+        return new BreastSuperTuning(
+            true,
+            options.BreastSuperAfterApplications,
+            options.BreastSuperSensitivityThreshold,
+            options.BreastSuperReplacesBreast,
+            options.BreastSuperMakeHaanjaCurable);
     }
 
     private static SexualAttackClassifier BuildClassifier(

@@ -80,7 +80,7 @@ public sealed class SidecarStore
     /// Writes a slot atomically. Returns null on success or the reason it failed; a failure never
     /// stops the game (SPEC003 FR-223, FR-226).
     /// </summary>
-    public string? Save(string slotKey, float sensitivity, int climaxCount)
+    public string? Save(string slotKey, float sensitivity, int climaxCount, int breastAtMaxCount = 0)
     {
         if (_locked.Contains(slotKey))
         {
@@ -92,6 +92,7 @@ public sealed class SidecarStore
             GameBuildId = _gameBuildId,
             Sensitivity = Math.Max(0f, sensitivity),
             ClimaxCount = Math.Max(0, climaxCount),
+            BreastAtMaxCount = Math.Max(0, breastAtMaxCount),
         };
 
         return JsonFile.WriteAtomically(_root, PathFor(slotKey), document.Serialize());

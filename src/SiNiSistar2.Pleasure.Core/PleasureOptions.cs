@@ -55,9 +55,22 @@ public sealed record PleasureOptions
 
     public float SensitivityCap { get; init; } = 10f;
 
-    public float BreastSuperChance { get; init; }
+    /// <summary>
+    /// How many further <c>Breast</c> applications, arriving while it is already at its maximum
+    /// level, escalate to <c>BreastSuper</c>. 0 means never, which is the shipped state.
+    /// </summary>
+    public int BreastSuperAfterApplications { get; init; }
 
     public float BreastSuperSensitivityThreshold { get; init; }
+
+    /// <summary>Whether <c>Breast</c> is removed as <c>BreastSuper</c> is applied.</summary>
+    public bool BreastSuperReplacesBreast { get; init; } = true;
+
+    /// <summary>
+    /// Whether to mark <c>BreastSuper</c> curable by Haanja, so the game's existing cure event
+    /// covers it. Off until the in-game check in 付録A A-14 has been made.
+    /// </summary>
+    public bool BreastSuperMakeHaanjaCurable { get; init; }
 
     public bool LogTransitions { get; init; }
 

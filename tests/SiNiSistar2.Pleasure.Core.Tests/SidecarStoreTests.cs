@@ -134,6 +134,39 @@ public sealed class SidecarStoreTests : IDisposable
         Assert.Contains("older-build", load.Notice!, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A file written by an earlier schema is still read. Refusing it would have thrown away the
+    /// player's accumulated sensitivity on the very upgrade that added a field, which is the
+    /// opposite of what a version check is for.
+    /// </summary>
+    [Fact]
+    public void AnOlderSchemaIsReadWithDefaultsForWhatItLacks()
+    {
+        Directory.CreateDirectory(_root);
+        SidecarStore store = Store();
+        File.WriteAllText(
+            store.PathFor("slot7"),
+            "{\"schemaVersion\": 1, \"gameBuildId\": \"b869-a562\", \"sensitivity\": 4.5, \"climaxCount\": 2}");
+
+        SidecarLoad load = store.Load("slot7");
+
+        Assert.True(load.IsLoaded);
+        Assert.Equal(4.5f, load.Document!.Sensitivity, 5);
+        Assert.Equal(2, load.Document.ClimaxCount);
+        Assert.Equal(0, load.Document.BreastAtMaxCount);
+        Assert.False(load.Locked);
+    }
+
+    /// <summary>The breast escalation count rides along with the rest (SPEC003 5.8).</summary>
+    [Fact]
+    public void TheBreastCountSurvivesASaveAndLoad()
+    {
+        SidecarStore store = Store();
+        Assert.Null(store.Save("slot8", 1f, 1, breastAtMaxCount: 4));
+
+        Assert.Equal(4, store.Load("slot8").Document!.BreastAtMaxCount);
+    }
+
     /// <summary>FR-226: an unwritable location is reported, not thrown.</summary>
     [Fact]
     public void AnUnwritableRootIsReportedRatherThanThrown()

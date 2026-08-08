@@ -288,14 +288,25 @@ OnAfterSaveMainSaveData  ──> スロットキーを決定 ──> 随伴フ�
 
 ### 5.8 通常プレイ中の `BreastSuper`
 
-- `BreastSuper` は完成済みの状態異常であり、イベント限定であるのはコンテンツ側の都合である。MODはこれを通常プレイの到達点として付与する。
-- 付与の条件は次のすべてを満たすことである。
-  1. プレイヤーに `Breast` が有効である。
-  2. 絶頂が発生した。
-  3. 感度が `BreastSuperSensitivityThreshold` 以上である。
-- 条件成立時、`BreastSuperChance` の確率で `BreastSuper` を付与する。
-- 付与はゲームの状態異常付与経路（`AbnormalList.AddAbnormal`）で行い、`AbnormalList.Has` が真を返す実体のある状態として成立させる。偽の状態を報告させてはならない。
-- `BreastSuperChance` の既定は `0` とし、実機で挙動を確認してから有効化する。
+`BreastSuper` は完成済みの状態異常であり、イベント限定であるのはコンテンツ側の都合である。MODはこれを **`Breast` の上位ペナルティ**として通常プレイへ開放する。
+
+**遷移の条件。** `Breast` が既に最大レベルにある状態で、さらに `Breast` の付与が `BreastSuperAfterApplications` 回到達したとき、`BreastSuper` へ遷移する。
+
+- **最大レベル未満の付与は数えない。** その付与にはまだ行き先があり、レベルを上げることがゲーム自身の段階表現だからである。数えてしまうと、通常の進行が終わらないうちに上限側の演出が来る。最大レベルの `Breast` が吸収できなくなった打撃だけが、`Breast` の表現を超えた証拠になる。
+- `BreastSuperSensitivityThreshold` を満たさない間は回数を保持したまま遷移を保留する。破棄はしない。閾値を満たした次の付与で遷移する。
+- 既に `BreastSuper` がある場合は数えず、回数を `0` へ戻す。上位が存在しないため、治療後に再び膨乳したときは初めから積み直す。
+- 遷移時、`BreastSuperReplacesBreast` が真なら `Breast` を除去する。`BreastSuper` の付与を先に行い、除去を後に行う。逆順は両方が存在しないフレームを作り、身体表現と立ち絵が状態異常一覧から駆動されるためである。
+- 付与はゲームの状態異常付与経路（`AbnormalList.AddAbnormal(AbnormalType, int, DamageStack)`）で行い、`AbnormalList.Has` が真を返す実体のある状態として成立させる。偽の状態を報告させてはならない。`AbnormalSaveData` は `m_Type` と `m_Level` を持つため、ゲーム自身のセーブに乗る。MODの随伴ファイルへは書かない。
+- 回数は随伴ファイルへ保存する。ロードで白紙に戻ると、上限付近まで積んだ状態が失われる（FR-222）。
+- `BreastSuperAfterApplications` の既定は `0` とし、遷移が起こらない状態で出荷する（FR-233）。
+
+**治療。** MODは治療手段を新設しない。ゲームが持つ治療経路が `BreastSuper` へ届くかどうかを実測し（付録A A-14）、届かない場合にのみ最小の介入を行う。
+
+- 静的調査で確認できたのは次である。`Breast` の治療は `ChoiceLocalizeID.ID_Choice_CureBreast` の選択肢から `DramaID.ID_CureBreast_Player`（自身で搾乳）と `ID_CureBreast_Haanja1` / `ID_CureBreast_Haanja2`（ハーニャによる搾乳）へ分岐する。搾乳の映像は `SceneID.Ga_Player_Other_1_Breast2` として存在する。
+- 治療イベントを出す条件がどの値を見ているかは、シーンとプレハブに author されたデータ側にあり、静的には読めない。`OneConditionCheckType` には `AbnormalCondition`（型とレベルの一致）と `PhysicalCondition`（`PhysicalConditionFlag` の一致）と `HasHaanjaCureableStatus` があり、どれで書かれているかで結論が変わる。
+- `BreastSuper` が `PhysicalConditionFlag.Breast` を持ち、治療イベントが `PhysicalCondition` で書かれている場合、**MODの介入なしに既存の治療がそのまま届く**。これが最良の結末であり、最初に確認する。
+- 届かない場合の最小の介入は `AbnormalData.m_HaanjaCanCure` を真にすることである（`BreastSuperMakeHaanjaCurable`）。これはゲーム自身の治療イベントに「この状態異常も対象である」と伝えるだけで、治療処理そのものはゲームが行う。セッション限りの変更とし、アンロード時に戻す。
+- **MODから搾乳シーンを再生する案は採らない。** `GaTakePlayer.Play` と `DramaManager.PlayDrama` は公開されているが、前者はギャラリー用のシーンと `GaTakePlayer` の実体が読み込まれていることを要求し、フィールド上で満たせない。ギャラリーモードへ入れる案は `GalleryManager.IsActive` が `LabelEvent.DisableWhenGallery` をはじめ広範な挙動を切り替えるため、進行中のランを壊す危険が実利を上回る。後者は台詞だけを再生するもので、映像を伴わない。詳細は DEC-213。
 
 ### 5.9 永続化と同期
 
@@ -349,8 +360,10 @@ BepInEx の `ConfigEntry` として `BepInEx/config/community.sinisistar2.pleasu
 | `Sensitivity` | `SensitivityPerSexualHit` | float | 実測後に確定 | 性的攻撃1回あたりの感度増加。 |
 | `Sensitivity` | `SensitivityGainScale` | float | 実測後に確定 | 感度が快楽上昇量へ与える係数。 |
 | `Sensitivity` | `SensitivityCap` | float | `10.0` | 感度の上限。 |
-| `BreastSuper` | `BreastSuperChance` | float | `0` | 条件成立時に `BreastSuper` を付与する確率。 |
-| `BreastSuper` | `BreastSuperSensitivityThreshold` | float | 実測後に確定 | 付与に必要な感度。 |
+| `BreastSuper` | `BreastSuperAfterApplications` | int | `0` | 最大レベルの `Breast` へさらに何回付与されたら `BreastSuper` へ遷移するか。`0` は遷移しない。 |
+| `BreastSuper` | `BreastSuperSensitivityThreshold` | float | `0` | 遷移に必要な感度。`0` は要求しない。 |
+| `BreastSuper` | `BreastSuperReplacesBreast` | bool | `true` | 遷移時に `Breast` を除去するか。 |
+| `BreastSuper` | `MakeHaanjaCurable` | bool | `false` | `BreastSuper` をハーニャの治療対象として印付けするか。付録A A-14 の実測まで無効。 |
 | `Diagnostics` | `LogTransitions` | bool | `false` | 快楽・絶頂・感度の変化をログへ記録するか。 |
 
 「実測後に確定」と記した既定値は、付録Aの実測を経て確定する。実測前は挙動を変更しない値（上昇量0、増分0）とし、MODを導入しただけではゲームの挙動が変わらないようにする。ただし `SuppressHp0WhileBound` は既定で有効とする。これは撤廃そのものが要求であり、調整値を持たないためである。
@@ -448,7 +461,10 @@ SPEC002 の快楽系集合とは目的が異なるため一致させない。SPE
 | FR-218 | 感度は絶頂と性的攻撃の被弾で増加しなければならない。 | Must | 感度の蓄積（1.2） |
 | FR-219 | MODは感度を減少させる経路を持ってはならない。状態異常の治療、回復、セーブポイント、絶頂回数のリセットのいずれでも減少させてはならない。 | Must | 一方通行の要求（1.2） |
 | FR-220 | 感度は `SensitivityCap` を上限としなければならない。上限への到達は減少であってはならない。 | Must | 際限のない増加の防止 |
-| FR-221 | MODは5.8の条件成立時に `BreastSuper` を付与しなければならない。付与はゲームの状態異常付与経路で行い、`AbnormalList.Has` が偽を返す状態を作ってはならない。 | Must | 通常プレイへの開放（1.2）、SPEC001のfiller選択の保護 |
+| FR-221 | MODは5.8の条件成立時に `BreastSuper` へ遷移させなければならない。付与はゲームの状態異常付与経路で行い、`AbnormalList.Has` が偽を返す状態を作ってはならない。 | Must | 上位ペナルティ（1.2）、SPEC001のfiller選択の保護 |
+| FR-240 | 遷移の計数は、`Breast` が最大レベルにある状態での付与のみを対象としなければならない。最大レベルを読めない場合、遷移を行ってはならない。 | Must | 通常進行との二重計上の防止（5.8） |
+| FR-241 | MODは `BreastSuper` の治療手段を新設してはならない。ゲームの既存の治療経路が届くようにする以上の介入を行ってはならない。 | Must | 治療不能状態の防止、ゲーム進行の保存（DEC-213） |
+| FR-242 | `AbnormalData` の値を変更する場合、MODは変更前の値を記録し、アンロード時に戻さなければならない。 | Must | 巻き戻し（5.10） |
 | FR-222 | MODは感度と絶頂回数をセーブスロット単位の随伴ファイルへ保存し、ゲームのセーブ・ロードに同期しなければならない。 | Must | 永続化（1.2）、DEC-206 |
 | FR-223 | 随伴ファイルの書き込みは原子的でなければならず、部分書き込みを残してはならない。 | Must | 破損データの防止 |
 | FR-224 | 対応する随伴ファイルがない場合、MODは初期値で開始しなければならない。 | Must | 新規プレイと既存セーブの受け入れ |
@@ -540,7 +556,10 @@ SPEC002 の快楽系集合とは目的が異なるため一致させない。SPE
 | AC-214 | FR-217 | Given 絶頂回数が1以上 / When オベリスクをアクティベートする / Then 絶頂回数が `0` になり、感度は変化しない。Given `ResetAtObeliskOnly` が真 / When 通常のセーブポイントを使う / Then 絶頂回数は変化しない |
 | AC-215 | FR-218, FR-219 | Given 感度が蓄積した状態 / When 状態異常を治療し、回復し、セーブポイントをアクティベートする / Then 感度が減少しない |
 | AC-216 | FR-220 | Given 感度が上限付近 / When さらに絶頂する / Then 感度が上限を超えず、減少もしない |
-| AC-217 | FR-221 | Given 5.8の条件が成立し `BreastSuperChance` が `1` / When 絶頂する / Then `BreastSuper` が付与され、`AbnormalList.Has(BreastSuper)` が真を返し、SPEC001が当該状態異常を観測できる |
+| AC-217 | FR-221 | Given `BreastSuperAfterApplications` が `2` で `Breast` が最大レベル / When さらに2回 `Breast` を受ける / Then `BreastSuper` が付与され、`AbnormalList.Has(BreastSuper)` が真を返し、SPEC001が当該状態異常を観測できる |
+| AC-235 | FR-240 | Given `Breast` が最大レベル未満 / When 繰り返し `Breast` を受ける / Then レベルのみが上がり遷移しない。Given 最大レベル到達後 / Then そこからの付与が数えられる |
+| AC-236 | FR-221, FR-222 | Given 遷移の手前まで計数が進んだ状態でセーブする / When 再起動して同じスロットをロードする / Then 計数が保存時点から続く |
+| AC-237 | FR-241, FR-242 | Given `MakeHaanjaCurable` を有効にする / When ハーニャの治療を受ける / Then `BreastSuper` が治療される。When MODをアンロードする / Then `m_HaanjaCanCure` が元の値へ戻る |
 | AC-218 | FR-222, FR-224 | Given 感度と絶頂回数が蓄積した状態でセーブする / When ゲームを再起動して同じスロットをロードする / Then 保存時点の値へ戻る。Given 随伴ファイルのないスロット / Then 初期値で開始する |
 | AC-219 | FR-223 | Given 書き込み中に異常終了する / When 次回ロードする / Then 部分書き込みのファイルが読まれず、直前の完全なファイルまたは初期値で開始する |
 | AC-220 | FR-225 | Given 非対応スキーマ版の随伴ファイル / When ロードする / Then 読まれず、上書きもされず、検出した版と要求する版が提示される |
@@ -600,6 +619,8 @@ SPEC002 の快楽系集合とは目的が異なるため一致させない。SPE
 | DEC-208 | 感度に減少経路を一切設けない。 | 要求が明示的に一方通行を求めている。治療や休息で下がる逃げ道を作ると、蓄積そのものの意味が薄れる。上限は設けるが、これは成長の頭打ちであって減少ではない。 | 高難度の治療手段を用意する、時間経過で微減させる |
 | DEC-209 | 絶頂限界の到達を、HP0抑止の寄与の解除として表現し、ゲームオーバー処理そのものは呼ばない。 | ゲームオーバーの発火は復帰処理、ペナルティ、セーブ、演出へ波及する。MODが自前で呼ぶと、そのすべてを正しく再現する責任を負い、誤れば進行不能やセーブ破損を招く。抑止を外すだけなら、以降はゲーム自身が普段どおりの経路を走る。MODが増やしたのは「いつHPが0へ到達し得るか」という条件だけであり、到達後の処理は一切変えていない。SPEC001の `game-over` トリガーが従来どおり成立するのも同じ理由による。 | `GameOverLabel.ExecutionOne` を自前の `GameOverParameter` で呼ぶ、`Lelia.RequestCommonDead` を立てる |
 | DEC-210 | 性的とみなす状態異常の集合を、SPEC002の快楽系集合と一致させない。 | 目的が異なる。SPEC002は「抵抗の意思が損なわれる状態」を、本仕様は「性的な行為を受けたことを示す状態」を指す。`Defilement` はSPEC002では穢れ軸との二重作用を避けるため意図的に除外されるが、本仕様では性的攻撃の最も直接的な指標である。 | 両仕様で同じ集合を共有する、SPEC002から参照する |
+| DEC-213 | `BreastSuper` の治療について、MODは搾乳シーンを自前で再生せず、ゲームの既存の治療経路が届くかを実測し、届かない場合に `m_HaanjaCanCure` を立てるにとどめる。 | 搾乳の映像は `SceneID.Ga_Player_Other_1_Breast2` として存在し、`GaTakePlayer.Play` も `DramaManager.PlayDrama` も公開されている。しかし前者はギャラリー用シーンと `GaTakePlayer` の実体の読み込みを前提とし、フィールド上では満たせない。ギャラリーモードへ入れて満たす案は、`GalleryManager.IsActive` が `LabelEvent.DisableWhenGallery` をはじめ広範な挙動を切り替えるため、進行中のランの状態を壊す危険が実利を上回る。`PlayDrama` は台詞だけを再生し映像を伴わない。一方、治療が届かない状態異常を新設することは治療不能な進行阻害であり、それだけは避けなければならない。`m_HaanjaCanCure` はゲーム自身の治療イベントに対象を伝えるだけで、治療処理そのものはゲームが行う。 | ギャラリーのテイクをフィールドで再生する、`ID_CureBreast_Player` の台詞だけを再生して治療扱いにする、MOD独自の治療手段を新設する、治療不能のまま出す |
+| DEC-214 | 遷移の計数を「最大レベルの `Breast` へのさらなる付与」に限る。 | 付与のたびに数えると、レベルが上がっている最中にも計数が進み、ゲーム自身の段階表現が終わらないうちに上位へ飛ぶ。最大レベルの `Breast` が吸収できなくなった打撃だけが、`Breast` では足りないことの証拠である。最大レベルを読めない場合に遷移しないのも同じ理由で、未知の上限に対して数えれば初回で発火する。 | 付与回数を一律に数える、時間で数える、絶頂回数に紐づける |
 | DEC-212 | 敵別の分類を設定ファイルの文字列から独立したカタログファイルへ移し、編集手段をゲーム内に置く。分類器はカタログを参照で保持する。 | 対象が108件あり、カンマ区切りの1行では読むことも差分を取ることもできない。さらに、その敵の攻撃が性的かどうかは画面に映っているものを見て下す判断であり、ゲームを終了してテキストを編集し再起動する経路では、判断の対象が目の前にないまま記憶で決めることになる。参照で保持するのは、値を複製すると編集が次回起動まで効かず、ゲーム内編集の意味が失われるためである。 | `ConfigEntry` の文字列を増やす、外部エディタ用のCSVのみを用意する、編集のたびにプロファイルを再構築する |
 | DEC-211 | 本MODを第3のプラグインとして分離する。 | SPEC002は「セーブを書き換えない」を要件として固定しており、機構も難易度の強化に閉じている。本MODは新しいサブシステムであり、随伴ファイルという別の永続化責任を持つ。分離すれば片方だけを導入でき、一方の障害が他方を止めない。 | SPEC002のプラグインへ同居させる、SPEC002を拡張する |
 
@@ -657,6 +678,7 @@ SPEC002 の快楽系集合とは目的が異なるため一致させない。SPE
 | A-8 | `SaveData` のセーブ・ロードSubjectの発火順序と、実際のファイル入出力との前後関係 | 5.9、FR-222 |
 | A-9 | `MainSaveData.LoadedFileName` がオートセーブと手動セーブで安定しているか | 5.9のスロットキー |
 | A-10 | `AbnormalType.BreastSuper` を通常付与したときの挙動。演出、UI、セリフ、解除可否 | 5.8、FR-221 |
+| A-14 | `Breast` と `BreastSuper` の `MaxLevel`、`HaanjaCanCure`、`PhysicalConditionFlag`。および `Breast` の治療イベントが `AbnormalCondition` と `PhysicalCondition` のどちらで条件付けられているか | 5.8、FR-241。治療が届くかを決める |
 | A-13 | 拘束中に編集画面を開いたときの入力の干渉。キー入力とクリックがゲーム側へ同時に届くことによる実害の有無 | 5.11、FR-236 |
 | A-11 | 絶頂演出のオーバーレイがゲームのUIやSPEC001のホールドUIと競合しないか | 5.4、14.3 |
 | A-12 | 快楽の上昇量、減衰量、感度の増分、絶頂限界の基礎値の実用域 | 6章の「実測後に確定」全項目 |

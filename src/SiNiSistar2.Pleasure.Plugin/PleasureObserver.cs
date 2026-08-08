@@ -38,6 +38,7 @@ public sealed class PleasureObserver : MonoBehaviour
     private double _lastFrameTime;
     private float _lastMaxDurability;
     private readonly EnemyCatalogEditor _enemyEditor = new();
+    private bool _cureSurfaceReported;
 
 
     public PleasureObserver(IntPtr pointer)
@@ -178,6 +179,8 @@ public sealed class PleasureObserver : MonoBehaviour
 
         _gameplayActive = true;
         ReportSelfCheck(status);
+        ReportBreastCureSurface(status);
+        ApplyPendingBreastSuper(status);
         UpdateHp0Suppression(lelia, bound);
         ConsumeClimax(status);
         DecayWhenFree(bound);
@@ -260,6 +263,162 @@ public sealed class PleasureObserver : MonoBehaviour
 
         int limit = ClimaxLimit.Compute(tuning.LimitBase, tuning.LimitPerDurability, durability);
         return PleasureRuntime.Climaxes.IsAtLimit(limit);
+    }
+
+    /// <summary>
+    /// Applies the <c>BreastSuper</c> escalation decided by the status patch (SPEC003 5.8, FR-221).
+    ///
+    /// Through <c>AddAbnormal</c>, the game's own path, so the status is a real one:
+    /// <c>AbnormalList.Has</c> returns true, it is written into the game's save as an
+    /// <c>AbnormalSaveData</c> entry, and SPEC001 sees it like any other. Nothing here fabricates a
+    /// state the game would disagree with.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void ApplyPendingBreastSuper(PlayerStatusManager status)
+    {
+        if (!PleasureRuntime.PendingBreastSuper)
+        {
+            return;
+        }
+
+        PleasureRuntime.PendingBreastSuper = false;
+
+        AbnormalList? abnormals = status.AbnormalList;
+        if (abnormals is null)
+        {
+            return;
+        }
+
+        if (abnormals.Has(AbnormalType.BreastSuper))
+        {
+            return;
+        }
+
+        // Applied before the removal. The other order leaves a frame with neither status, and the
+        // body and portrait are driven from the status list.
+        abnormals.AddAbnormal(AbnormalType.BreastSuper, 1, null);
+
+        bool applied = abnormals.Has(AbnormalType.BreastSuper);
+        if (applied && PleasureRuntime.Profile.BreastSuper.ReplaceBreast)
+        {
+            abnormals.RemoveAbnormal(AbnormalType.Breast);
+        }
+
+        if (!applied)
+        {
+            PleasureRuntime.Log?.LogWarning(
+                "BreastSuper was requested but AbnormalList.Has still reports it absent. The "
+                + "escalation is not taking effect; leaving Breast in place.");
+            return;
+        }
+
+        PleasureRuntime.Log?.LogInfo(
+            $"Breast escalated to BreastSuper (Breast "
+            + $"{(PleasureRuntime.Profile.BreastSuper.ReplaceBreast ? "removed" : "kept")}). "
+            + $"Sensitivity {PleasureRuntime.Sensitivity?.Value ?? 0f:F2}.");
+    }
+
+    /// <summary>
+    /// Reports what the game itself says about curing <c>Breast</c> and <c>BreastSuper</c>
+    /// (SPEC003 付録A A-14).
+    ///
+    /// This is the measurement that decides whether the existing self-milking cure can reach the
+    /// escalated status at all. Two values settle it: whether <c>BreastSuper</c> carries the same
+    /// <c>PhysicalConditionFlag</c> as <c>Breast</c> — the interaction that offers the cure is
+    /// conditioned on something, and a shared flag means it already sees it — and whether the game
+    /// marks it curable by Haanja.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void ReportBreastCureSurface(PlayerStatusManager status)
+    {
+        if (_cureSurfaceReported || !PleasureRuntime.Profile.ProbeMeasurements)
+        {
+            return;
+        }
+
+        AbnormalManager? manager = ManagerList.Abnormal;
+        if (manager is null)
+        {
+            return;
+        }
+
+        _cureSurfaceReported = true;
+        DescribeAbnormal(manager, AbnormalType.Breast);
+        DescribeAbnormal(manager, AbnormalType.BreastSuper);
+        ApplyHaanjaCurableOverride(manager);
+    }
+
+    [HideFromIl2Cpp]
+    private static void DescribeAbnormal(AbnormalManager manager, AbnormalType type)
+    {
+        try
+        {
+            AbnormalData? data = null;
+            if (!manager.TryGetData(type, out data) || data is null)
+            {
+                PleasureRuntime.Log?.LogInfo(
+                    $"[probe] A-14: {type} is not loaded yet, so its cure surface cannot be read "
+                    + "here. It is loaded on demand; the reading is retried when it appears.");
+                return;
+            }
+
+            PleasureRuntime.Log?.LogInfo(
+                $"[probe] A-14: {type} maxLevel={data.MaxLevel}, haanjaCanCure={data.HaanjaCanCure}, "
+                + $"physicalConditionFlag={data.PhysicalConditionFlag}, "
+                + $"removeWhenChangeScene={data.m_RemoveWhenChangeScene}, deleteTime={data.m_DeleteTime}, "
+                + $"nameID={data.AbnormalNameID}.");
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Log?.LogInfo($"[probe] A-14: {type} could not be read: {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Marks <c>BreastSuper</c> curable by Haanja, if asked.
+    ///
+    /// This is a value on the game's own loaded <c>AbnormalData</c>, so it is recorded in the ledger
+    /// and put back on unload. It is off by default: it changes what an existing cure event will do,
+    /// and that has to be seen working in game before it can be the shipped behaviour.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private static void ApplyHaanjaCurableOverride(AbnormalManager manager)
+    {
+        if (!PleasureRuntime.Profile.BreastSuper.MakeHaanjaCurable
+            || PleasureRuntime.Ledger.IsOpen(PleasureRuntime.HaanjaCurableKey))
+        {
+            return;
+        }
+
+        try
+        {
+            AbnormalData? data = null;
+            if (!manager.TryGetData(AbnormalType.BreastSuper, out data) || data is null)
+            {
+                return;
+            }
+
+            bool previous = data.m_HaanjaCanCure;
+            if (previous)
+            {
+                PleasureRuntime.Log?.LogInfo(
+                    "BreastSuper is already curable by Haanja; no override was needed.");
+                return;
+            }
+
+            data.m_HaanjaCanCure = true;
+            PleasureRuntime.Ledger.Register(
+                PleasureRuntime.HaanjaCurableKey,
+                () => data.m_HaanjaCanCure = previous);
+            PleasureRuntime.Log?.LogInfo(
+                "BreastSuper is now marked curable by Haanja. Confirm in game that the cure "
+                + "actually completes; this only makes the game's own cure consider it.");
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Log?.LogWarning(
+                $"BreastSuper could not be marked curable by Haanja: {exception.Message}");
+        }
     }
 
     [HideFromIl2Cpp]

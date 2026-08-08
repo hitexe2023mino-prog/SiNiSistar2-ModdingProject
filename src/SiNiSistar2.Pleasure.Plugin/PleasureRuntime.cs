@@ -16,6 +16,8 @@ internal static class PleasureRuntime
 {
     internal const string RemainHp1Key = "pleasure-remain-hp1-while-bound";
 
+    internal const string HaanjaCurableKey = "pleasure-breastsuper-haanja-curable";
+
     private static readonly HashSet<string> Reported = new(StringComparer.Ordinal);
 
     internal static readonly InterventionLedger Ledger = new();
@@ -52,6 +54,16 @@ internal static class PleasureRuntime
     internal static SensitivityTrack? Sensitivity { get; set; }
 
     internal static ClimaxLedger Climaxes { get; } = new();
+
+    /// <summary>Counts the <c>Breast</c> applications that lead to <c>BreastSuper</c> (SPEC003 5.8).</summary>
+    internal static BreastEscalation? Breasts { get; set; }
+
+    /// <summary>
+    /// Set by the status patch when the escalation is due, consumed by the observer. Applying a
+    /// status from inside the game's own add path would re-enter it; the main-thread update is the
+    /// safe place, the same arrangement the climax uses.
+    /// </summary>
+    internal static bool PendingBreastSuper { get; set; }
 
     /// <summary>The player's own status list, used to tell player-received from enemy-received.</summary>
     internal static AbnormalList? PlayerAbnormals { get; set; }
@@ -187,15 +199,18 @@ internal static class PleasureRuntime
         {
             Sensitivity?.LoadFrom(stored.Sensitivity);
             Climaxes.LoadFrom(stored.ClimaxCount);
+            Breasts?.LoadFrom(stored.BreastAtMaxCount);
         }
         else
         {
             Sensitivity?.LoadFrom(0f);
             Climaxes.ResetCount();
+            Breasts?.Reset();
         }
 
         Meter?.Reset();
         PendingClimax = false;
+        PendingBreastSuper = false;
         ClimaxFlashUntil = 0d;
 
         string state = stored is not null
@@ -230,7 +245,8 @@ internal static class PleasureRuntime
             return;
         }
 
-        string? failure = Sidecar.Save(CurrentSlotKey, Sensitivity?.Value ?? 0f, Climaxes.Count);
+        string? failure = Sidecar.Save(
+            CurrentSlotKey, Sensitivity?.Value ?? 0f, Climaxes.Count, Breasts?.Count ?? 0);
         if (failure is not null)
         {
             Log?.LogWarning($"Slot '{CurrentSlotKey}' could not be written ({reason}): {failure}");

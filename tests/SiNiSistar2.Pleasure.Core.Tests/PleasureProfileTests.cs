@@ -104,18 +104,39 @@ public sealed class PleasureProfileTests
     [Fact]
     public void EnablingBreastSuperWarns()
     {
-        PleasureValidation result = Validate(new PleasureOptions { BreastSuperChance = 0.25f });
+        PleasureValidation result = Validate(new PleasureOptions { BreastSuperAfterApplications = 3 });
 
         Assert.Contains(result.Warnings, x => x.Contains("BreastSuper", StringComparison.Ordinal));
         Assert.True(result.Profile.BreastSuper.HasEffect);
     }
 
+    /// <summary>FR-233: the shipped count of 0 means the escalation can never happen.</summary>
     [Fact]
-    public void AnOutOfRangeChanceIsRefused()
+    public void TheShippedCountNeverEscalates()
     {
-        Assert.Contains(
-            Validate(new PleasureOptions { BreastSuperChance = 1.5f }).Errors,
-            x => x.Contains("between 0 and 1", StringComparison.Ordinal));
+        PleasureValidation result = Validate(new PleasureOptions());
+
+        Assert.False(result.Profile.BreastSuper.HasEffect);
+        Assert.DoesNotContain(result.Warnings, x => x.Contains("BreastSuper", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ANegativeCountIsRefused()
+    {
+        PleasureValidation result = Validate(new PleasureOptions { BreastSuperAfterApplications = -1 });
+
+        Assert.Contains(result.Errors, x => x.Contains("BreastSuperAfterApplications", StringComparison.Ordinal));
+        Assert.False(result.Profile.BreastSuper.HasEffect);
+    }
+
+    /// <summary>Changing a value on the game's own AbnormalData is announced, not done quietly.</summary>
+    [Fact]
+    public void TheHaanjaCurableOverrideWarns()
+    {
+        PleasureValidation result = Validate(new PleasureOptions { BreastSuperMakeHaanjaCurable = true });
+
+        Assert.Contains(result.Warnings, x => x.Contains("Haanja", StringComparison.Ordinal));
+        Assert.True(result.Profile.BreastSuper.MakeHaanjaCurable);
     }
 
     /// <summary>An unknown status name is dropped and named, not fatal to the whole group.</summary>
