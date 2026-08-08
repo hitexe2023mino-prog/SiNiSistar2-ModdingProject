@@ -1,3 +1,4 @@
+using SiNiSistar2.Manager;
 using SiNiSistar2.Obj;
 using SiNiSistar2.Pleasure.Core;
 using UnityEngine;
@@ -21,6 +22,7 @@ internal static class BreastPatches
 {
     private static int _lastCountedFrame = int.MinValue;
     private static IntPtr _lastCountedList = IntPtr.Zero;
+    private static bool _identityReported;
 
     /// <summary><c>AbnormalList.AddAbnormal(AbnormalType, int, DamageStack)</c>.</summary>
     internal static void AddByTypePostfix(AbnormalList __instance, AbnormalType __0) =>
@@ -62,18 +64,41 @@ internal static class BreastPatches
 
             bool isPlayer = IsPlayer(list);
 
-            // Reported whoever it belongs to, and annotated. Filtering first is what made the last
-            // attempt silent: the filter was wrong, so it dropped every application and the log
-            // could not distinguish "nothing was applied" from "everything was discarded". A
-            // diagnostic must not be gated on the thing it is diagnosing.
-            PleasureRuntime.Probe(
-                $"status-{type}-{isPlayer}",
-                $"A-15: {type} was added through {entryPoint} to "
-                + $"{(isPlayer ? "the player" : "something other than the player")}; level "
-                + $"{SafeLevel(list, type)}, timeScale {Time.timeScale}.");
+            if (type == AbnormalType.Breast)
+            {
+                // Every Breast application, at Info, unconditionally.
+                //
+                // The one-shot probe hid the failure that led here: it keyed on the outcome of the
+                // attribution, so once "Breast, not the player" had been recorded, every later
+                // application that was also mis-attributed produced no line at all. The log then
+                // read the same whether the item did nothing or the MOD threw the evidence away.
+                // Breast is rare enough that recording each one costs nothing.
+                PleasureRuntime.Log?.LogInfo(
+                    $"Breast applied via {entryPoint}: owner={Describe(list)}, "
+                    + $"isPlayer={isPlayer}, level={SafeLevel(list, type)}, timeScale={Time.timeScale}, "
+                    + $"gameplayStarted={PleasureRuntime.GameplayStarted}.");
+                ReportIdentities(list);
+            }
+            else
+            {
+                PleasureRuntime.Probe(
+                    $"status-{type}",
+                    $"A-15: {type} was added through {entryPoint} to {Describe(list)}; level "
+                    + $"{SafeLevel(list, type)}, timeScale {Time.timeScale}.");
+            }
 
             if (!isPlayer || type != AbnormalType.Breast)
             {
+                return;
+            }
+
+            // Statuses are re-added as a save is restored. Counting those would advance the
+            // escalation just for loading a game that already had swelling.
+            if (!PleasureRuntime.GameplayStarted)
+            {
+                PleasureRuntime.Log?.LogInfo(
+                    "Breast was applied before gameplay started, which is the save being restored; "
+                    + "it is not counted towards BreastSuper.");
                 return;
             }
 
@@ -110,57 +135,59 @@ internal static class BreastPatches
                 alreadySuper,
                 PleasureRuntime.Sensitivity?.Value ?? 0f);
 
-            switch (outcome)
+            PleasureRuntime.Log?.LogInfo(
+                $"Breast escalation: outcome={outcome}, counted={escalation.Count}, "
+                + $"remaining={escalation.Remaining}, atMax={atMax} (level {level}/{maxLevel}), "
+                + $"alreadySuper={alreadySuper}.");
+
+            if (outcome == BreastOutcome.Escalate)
             {
-                case BreastOutcome.Counted:
-                    // At Info rather than behind LogTransitions: this is what the escalation is
-                    // counted by, and there is no way to tell "not counting" from "counting slowly"
-                    // without seeing it. It only advances at the maximum level, so it is not chatty.
-                    PleasureRuntime.Log?.LogInfo(
-                        $"Breast applied at level {level}/{maxLevel} via {entryPoint}: "
-                        + $"{escalation.Count} counted, {escalation.Remaining} more before BreastSuper.");
-                    break;
-
-                case BreastOutcome.Escalate:
-                    PleasureRuntime.PendingBreastSuper = true;
-                    break;
-
-                case BreastOutcome.None when !atMax:
-                    PleasureRuntime.LogTransition(
-                        $"Breast applied at level {level}/{maxLevel} via {entryPoint}; below the "
-                        + "maximum, so it raises the level rather than counting towards BreastSuper.");
-                    break;
+                PleasureRuntime.PendingBreastSuper = true;
             }
         }
         catch (Exception exception)
         {
-            PleasureRuntime.Log?.LogWarning($"Breast escalation failed for this application: {exception.Message}");
+            PleasureRuntime.Log?.LogWarning($"Breast escalation failed for this application: {exception}");
         }
     }
 
     /// <summary>
     /// Whether this is the player's status list.
     ///
-    /// Compared by native pointer, not by reference. Il2CppInterop hands a Harmony postfix its own
-    /// managed wrapper for the instance, so two wrappers around the same native object are not the
-    /// same object to <c>ReferenceEquals</c> — which silently rejected every application. SPEC002's
-    /// <c>DifficultyRuntime.IsPlayerList</c> already compares this way.
+    /// Compared by native pointer, never by reference: Il2CppInterop hands a Harmony postfix its own
+    /// managed wrapper, so two wrappers around one native object are not the same object to
+    /// <c>ReferenceEquals</c>.
+    ///
+    /// Resolved from the managers on every call rather than from state the observer caches. The
+    /// cached value is null until the observer's first successful frame, and the game restores a
+    /// save's statuses before that — so relying on the cache attributed the player's own swelling to
+    /// nobody. Three identities are accepted because it is not established which of them the game
+    /// hands to the add path, and being wrong about that silently disables the whole mechanism.
     /// </summary>
     private static bool IsPlayer(AbnormalList list)
     {
+        IntPtr subject;
         try
         {
-            AbnormalList? player = PleasureRuntime.PlayerAbnormals;
-            if (player is null)
-            {
-                PleasureRuntime.Probe(
-                    "player-abnormals-unknown",
-                    "A-15 caution: a status was added before the MOD had resolved the player's own "
-                    + "status list, so it could not be attributed.");
-                return false;
-            }
+            subject = list.Pointer;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
 
-            return list.Pointer == player.Pointer;
+        return Matches(subject, () => PleasureRuntime.PlayerAbnormals)
+            || Matches(subject, () => ManagerList.PlayerStatus?.AbnormalList)
+            || Matches(subject, () => ManagerList.Object?.Lelia?.AbnormalList)
+            || TargetIsLelia(list);
+    }
+
+    private static bool Matches(IntPtr subject, Func<AbnormalList?> candidate)
+    {
+        try
+        {
+            AbnormalList? other = candidate();
+            return other is not null && other.Pointer == subject;
         }
         catch (Exception)
         {
@@ -169,11 +196,76 @@ internal static class BreastPatches
     }
 
     /// <summary>
+    /// The list's own answer about whose it is. Independent of which manager holds a reference to
+    /// it, so it still works if the managers expose different instances.
+    /// </summary>
+    private static bool TargetIsLelia(AbnormalList list)
+    {
+        try
+        {
+            SiNiObject? target = list.Target;
+            Lelia? lelia = ManagerList.Object?.Lelia;
+            return target is not null && lelia is not null && target.Pointer == lelia.Pointer;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private static string Describe(AbnormalList list)
+    {
+        try
+        {
+            SiNiObject? target = list.Target;
+            return target is null ? "a list with no target" : target.name;
+        }
+        catch (Exception)
+        {
+            return "a list whose target could not be read";
+        }
+    }
+
+    /// <summary>
+    /// Prints every candidate identity once, so which one the add path uses is a matter of record
+    /// rather than of assumption.
+    /// </summary>
+    private static void ReportIdentities(AbnormalList list)
+    {
+        if (_identityReported)
+        {
+            return;
+        }
+
+        _identityReported = true;
+        PleasureRuntime.Log?.LogInfo(
+            $"[probe] A-17: the list receiving Breast is {Hex(() => list.Pointer)}. "
+            + $"PleasureRuntime.PlayerAbnormals={Hex(() => PleasureRuntime.PlayerAbnormals?.Pointer)}, "
+            + $"PlayerStatus.AbnormalList={Hex(() => ManagerList.PlayerStatus?.AbnormalList?.Pointer)}, "
+            + $"Lelia.AbnormalList={Hex(() => ManagerList.Object?.Lelia?.AbnormalList?.Pointer)}, "
+            + $"list.Target={Hex(() => list.Target?.Pointer)}, "
+            + $"Lelia={Hex(() => ManagerList.Object?.Lelia?.Pointer)}.");
+    }
+
+    private static string Hex(Func<IntPtr?> get)
+    {
+        try
+        {
+            IntPtr? value = get();
+            return value is null ? "(null)" : "0x" + value.Value.ToString("X");
+        }
+        catch (Exception exception)
+        {
+            return $"(unavailable: {exception.GetType().Name})";
+        }
+    }
+
+    /// <summary>
     /// Counts one application per frame per status list.
     ///
     /// The overloads call one another — an add by type resolves the data and adds by data — so all
-    /// three postfixes can fire for a single application. De-duplicating on the frame rather than
-    /// with a re-entry counter means an exception thrown inside the game's add path cannot leave the
+    /// the postfixes can fire for a single application. De-duplicating on the frame rather than with
+    /// a re-entry counter means an exception thrown inside the game's add path cannot leave the
     /// guard stuck closed.
     /// </summary>
     private static bool ClaimThisFrame(AbnormalList list)

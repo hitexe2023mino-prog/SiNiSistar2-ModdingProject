@@ -182,6 +182,7 @@ public sealed class PleasureObserver : MonoBehaviour
         RecordSighting(PleasureRuntime.BinderEnemyId);
 
         _gameplayActive = true;
+        PleasureRuntime.GameplayStarted = true;
         ReportSelfCheck(status);
         ReportBreastCureSurface(status);
         ApplyPendingBreastSuper(status);

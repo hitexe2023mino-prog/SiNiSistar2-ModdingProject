@@ -68,6 +68,13 @@ internal static class PleasureRuntime
     /// <summary>The player's own status list, used to tell player-received from enemy-received.</summary>
     internal static AbnormalList? PlayerAbnormals { get; set; }
 
+    /// <summary>
+    /// True once the observer has seen a running game with a player in it. Statuses are re-added as
+    /// a save is restored, which happens before this; counting those would advance the escalation
+    /// just for loading a game that already had swelling.
+    /// </summary>
+    internal static bool GameplayStarted { get; set; }
+
     /// <summary>True while the player is held. Set by the observer each frame.</summary>
     internal static bool IsBound { get; set; }
 
@@ -282,6 +289,7 @@ internal static class PleasureRuntime
     internal static void Reset()
     {
         PlayerAbnormals = null;
+        GameplayStarted = false;
         IsBound = false;
         IsDefeatPerformance = false;
         BinderEnemyId = null;
