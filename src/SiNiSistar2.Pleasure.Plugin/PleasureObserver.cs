@@ -45,6 +45,7 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _breastReported;
     private bool _breastSuperReported;
     private bool _breastSuperRequested;
+    private bool _crestRequested;
     private double _swellingOverlapSince;
     private double _breastSuperLoadAsked;
     private double _breastSuperWaitLogged;
@@ -832,6 +833,7 @@ public sealed class PleasureObserver : MonoBehaviour
         }
 
         RequestBreastSuperLoad(manager);
+        RequestLustCrestLoad(manager);
 
         // Retried rather than latched on the first attempt. Statuses are loaded on demand, and the
         // first attempt found BreastSuper absent and then never looked again — which read as "it
@@ -896,6 +898,40 @@ public sealed class PleasureObserver : MonoBehaviour
             PleasureRuntime.Log?.LogInfo(
                 "The BreastSuper escalation is waiting for its data; the game has been asked to "
                 + "load it. This repeats until it arrives.");
+        }
+    }
+
+    /// <summary>
+    /// Asks the game to load <c>BreastSuper</c>.
+    ///
+    /// Not only so it can be measured: a status the game has not loaded cannot be applied either, so
+    /// without this the escalation would have nothing to escalate to. <c>PreloadResist</c> is the
+    /// game's own registration call — the same "resist" spelling as
+    /// <c>MultiSettingValue.ResitValue</c> — and it only adds to the preload list.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void RequestLustCrestLoad(AbnormalManager manager)
+    {
+        if (_crestRequested || !PleasureRuntime.Profile.Corruption.MarksTheBody)
+        {
+            return;
+        }
+
+        _crestRequested = true;
+        try
+        {
+            // The same registration BreastSuper needs. The crest is a status the game applies
+            // itself, so its data may well already be loaded — but "may well" is a guess, and the
+            // failure it guards against is silent: the application returns quietly and the mark
+            // never lands (FR-252, A-24).
+            manager.PreloadResist(AbnormalType.LustMarkCurse);
+            PleasureRuntime.Log?.LogInfo(
+                "The lust crest was registered for preloading so it can be applied.");
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Log?.LogWarning(
+                $"The lust crest could not be registered for preloading: {exception.Message}");
         }
     }
 
