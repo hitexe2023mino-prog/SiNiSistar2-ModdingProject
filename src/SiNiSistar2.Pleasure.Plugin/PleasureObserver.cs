@@ -49,6 +49,7 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _lustReported;
     private readonly HashSet<AbnormalType> _lustAsked = new();
     private bool _crestLoadAsked;
+    private double _crestDebtChecked;
     private double _crestWaitLogged;
     private double _swellingOverlapSince;
     private double _breastSuperLoadAsked;
@@ -433,20 +434,29 @@ public sealed class PleasureObserver : MonoBehaviour
     [HideFromIl2Cpp]
     private void ApplyPendingLustCrest(PlayerStatusManager status)
     {
-        // Asked every pass, not only when corruption is gained. What decides whether the mark
-        // belongs on the body is the corruption standing there now, so a cure taken while the
-        // corruption still demands a stock is undone at once: lifting a symptom does not remove the
-        // cause. A cure taken with no corruption behind it holds, because then nothing demands it —
-        // which is the difference between the two cases (FR-274).
+        // What decides whether the mark belongs on the body is the corruption standing there now,
+        // so a cure taken while the corruption still demands a stock is undone at once: lifting a
+        // symptom does not remove the cause. A cure taken with no corruption behind it holds,
+        // because then nothing demands it — which is the difference between the two cases (FR-274).
         //
-        // The first version only looked on the frame corruption rose, so a cure at a standing
-        // corruption stuck until the next gain.
-        int owed = PleasureRuntime.CrestSublimated
-            ? PleasureRuntime.CrestMaxLevel
-            : PleasureRuntime.EarnedCrestLevel(PleasureRuntime.CrestMaxLevel);
-        if (owed > PleasureRuntime.CrestLevel)
+        // Not recomputed every frame, though. Reading the level costs an interop call, and the
+        // answer can only move when the corruption moves, when the status is added or removed, or
+        // when a slot is loaded — all of which this MOD already sees and flags. Behind those sits a
+        // half-second sweep, because a path nobody noticed must not be able to strand the mark, and
+        // half a second is far below what a cure and its undoing look like (DEC-254).
+        double checkedAt = Time.unscaledTimeAsDouble;
+        if (PleasureRuntime.CrestDebtDirty || checkedAt - _crestDebtChecked > 0.5d)
         {
-            PleasureRuntime.PendingLustCrest = true;
+            PleasureRuntime.CrestDebtDirty = false;
+            _crestDebtChecked = checkedAt;
+
+            int owed = PleasureRuntime.CrestSublimated
+                ? PleasureRuntime.CrestMaxLevel
+                : PleasureRuntime.EarnedCrestLevel(PleasureRuntime.CrestMaxLevel);
+            if (owed > PleasureRuntime.CrestLevel)
+            {
+                PleasureRuntime.PendingLustCrest = true;
+            }
         }
 
         if (!PleasureRuntime.PendingLustCrest)

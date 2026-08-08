@@ -48,6 +48,13 @@ internal static class BreastPatches
     /// <summary><c>AbnormalList.AddOrRemoveAbnormal(AbnormalType, bool)</c>, the event-label path.</summary>
     internal static void AddOrRemovePostfix(AbnormalList __instance, AbnormalType __0, bool __1)
     {
+        // Either direction. A removal is exactly the case the crest debt has to notice, and it is
+        // the one an add-only hook cannot see (DEC-254).
+        if (__0 == AbnormalType.LustMarkCurse)
+        {
+            PleasureRuntime.CrestDebtDirty = true;
+        }
+
         if (__1)
         {
             Observe(__instance, __0, "AddOrRemoveAbnormal");

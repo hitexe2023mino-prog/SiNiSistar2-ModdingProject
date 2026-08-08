@@ -60,6 +60,17 @@ internal static class PleasureRuntime
     internal static bool PendingLustCrest { get; set; }
 
     /// <summary>
+    /// Whether the crest debt is worth recomputing (SPEC003 FR-274, DEC-254).
+    ///
+    /// Asking costs an interop call — the level has to be read from the game's own list — and the
+    /// answer can only change when the corruption moves, when a status is added or removed, or when
+    /// a slot is loaded. All three are events this MOD already sees, so the question is asked on
+    /// those rather than on every frame. A slow sweep still runs behind it, because a path nobody
+    /// noticed must not be able to strand the mark.
+    /// </summary>
+    internal static bool CrestDebtDirty { get; set; } = true;
+
+    /// <summary>
     /// The crest's own level ceiling, read from the game once it is known.
     ///
     /// Read rather than assumed: it is three in this build, and a number the MOD wrote down would
@@ -166,6 +177,7 @@ internal static class PleasureRuntime
         }
 
         track.Add(amount * Profile.Corruption.ScaleFor(IsCrestWorn));
+        CrestDebtDirty = true;
 
         // Nothing about the crest is decided here any more. Whether the body owes a stock is a
         // question about the corruption standing now, not about the moment it last rose, and the
@@ -353,6 +365,7 @@ internal static class PleasureRuntime
         PendingBreastSuper = false;
         PendingLustCrest = false;
         CrestSublimated = false;
+        CrestDebtDirty = true;
         ClimaxFlashUntil = 0d;
         Log?.LogInfo(
             "No save is loaded, so this is a new run: corruption, climaxes, swelling, milk and the "
@@ -374,6 +387,7 @@ internal static class PleasureRuntime
             Breasts?.LoadFrom(stored.BreastAtMaxCount);
             Milk?.LoadFrom(stored.Milk);
             CrestSublimated = stored.LustCrest;
+            CrestDebtDirty = true;
         }
         else
         {
