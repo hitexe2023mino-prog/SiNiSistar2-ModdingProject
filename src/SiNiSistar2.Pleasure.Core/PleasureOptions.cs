@@ -82,6 +82,13 @@ public sealed record PleasureOptions
     public bool LogTransitions { get; init; }
 
     /// <summary>
+    /// Records every status added to anyone, every time, with no de-duplication. The one-shot probe
+    /// records each status name once, so a status the save restored at load is never reported again
+    /// — which made an item that applies it look as though it did nothing at all.
+    /// </summary>
+    public bool LogAllStatusChanges { get; init; }
+
+    /// <summary>
     /// Records what the 付録A measurements need, each distinct finding once. On by default because
     /// the MOD ships in a state where measuring is the only thing it can usefully do.
     /// </summary>

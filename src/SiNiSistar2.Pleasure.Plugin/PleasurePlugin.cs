@@ -158,6 +158,14 @@ public sealed class PleasurePlugin : BasePlugin
             typeof(AbnormalLabelPatches),
             postfix: nameof(AbnormalLabelPatches.ExecutionOnePostfix));
         applied += Patch(
+            "item-use",
+            AccessTools.Method(
+                typeof(InventoryHandler),
+                nameof(InventoryHandler.PlayItemEvent),
+                new[] { typeof(ItemID), typeof(System.Threading.CancellationToken) }),
+            typeof(ItemUsePatches),
+            postfix: nameof(ItemUsePatches.PlayItemEventPostfix));
+        applied += Patch(
             "save-point",
             AccessTools.Method(typeof(SavePointAsyncLabel), nameof(SavePointAsyncLabel.ExecutionOneAsync)),
             typeof(SavePointPatches),
@@ -323,6 +331,14 @@ public sealed class PleasurePlugin : BasePlugin
             + "actually completes. Undone on unload.");
 
         ConfigEntry<bool> logTransitions = Config.Bind("Diagnostics", "LogTransitions", false, "");
+        ConfigEntry<bool> logStatuses = Config.Bind(
+            "Diagnostics",
+            "LogAllStatusChanges",
+            false,
+            "Record every status added to anyone, every time. The probe records each status name "
+            + "only once, so a status the save restored at load is never reported again, which "
+            + "makes an item that applies it look as though it did nothing. Verbose; for "
+            + "diagnosing what an item actually does.");
         ConfigEntry<bool> probe = Config.Bind(
             "Diagnostics",
             "ProbeMeasurements",
@@ -385,6 +401,7 @@ public sealed class PleasurePlugin : BasePlugin
             BreastSuperMakeHaanjaCurable = breastHaanja.Value,
             BreastSuperCountBelowMaxLevel = breastBelowMax.Value,
             LogTransitions = logTransitions.Value,
+            LogAllStatusChanges = logStatuses.Value,
             ProbeMeasurements = probe.Value,
             ShowOverlay = showOverlay.Value,
             GaugeCentreX = _gaugeX.Value,

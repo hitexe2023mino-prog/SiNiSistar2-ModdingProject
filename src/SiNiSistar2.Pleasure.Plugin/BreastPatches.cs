@@ -1,4 +1,5 @@
 using SiNiSistar2.Manager;
+using SiNiSistar2.Manager.Gallery;
 using SiNiSistar2.Obj;
 using SiNiSistar2.Pleasure.Core;
 using UnityEngine;
@@ -64,6 +65,14 @@ internal static class BreastPatches
 
             bool isPlayer = IsPlayer(list);
 
+            if (PleasureRuntime.Profile.LogAllStatusChanges)
+            {
+                PleasureRuntime.Log?.LogInfo(
+                    $"[status] {type} added via {entryPoint} to {Describe(list)}; isPlayer={isPlayer}, "
+                    + $"level={SafeLevel(list, type)}, gallery={IsGalleryActive()}, "
+                    + $"timeScale={Time.timeScale}.");
+            }
+
             if (type == AbnormalType.Breast)
             {
                 // Every Breast application, at Info, unconditionally.
@@ -89,6 +98,19 @@ internal static class BreastPatches
 
             if (!isPlayer || type != AbnormalType.Breast)
             {
+                return;
+            }
+
+            // The gallery forces statuses on for playback: AnimationTakeData carries m_BreastSetting
+            // and m_AddAbnormalArray, and applies them to the player's own list. Counting those
+            // escalated the status during a replay and left the player carrying BreastSuper back out
+            // into the world. A viewer is not play, and nothing the MOD does may follow the player
+            // out of it (FR-248).
+            if (IsGalleryActive())
+            {
+                PleasureRuntime.Log?.LogInfo(
+                    "Breast was applied by the gallery, which forces statuses on for playback; it is "
+                    + "not counted towards BreastSuper.");
                 return;
             }
 
@@ -148,6 +170,24 @@ internal static class BreastPatches
         catch (Exception exception)
         {
             PleasureRuntime.Log?.LogWarning($"Breast escalation failed for this application: {exception}");
+        }
+    }
+
+    /// <summary>
+    /// Whether a gallery replay is running. Unreadable means "assume it is", because counting a
+    /// replay is the failure that put BreastSuper on the player outside the gallery, and not
+    /// counting is only a missed application.
+    /// </summary>
+    internal static bool IsGalleryActive()
+    {
+        try
+        {
+            GalleryManager? gallery = ManagerList.Gallery;
+            return gallery is null || gallery.IsActive || gallery.IsOpenedUI;
+        }
+        catch (Exception)
+        {
+            return true;
         }
     }
 

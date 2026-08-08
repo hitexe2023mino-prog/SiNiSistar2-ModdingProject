@@ -84,6 +84,7 @@ public sealed record PleasureProfile(
     SexualAttackClassifier Classifier,
     bool RaiseDuringDefeatPerformance,
     bool LogTransitions,
+    bool LogAllStatusChanges,
     bool ProbeMeasurements,
     bool ShowOverlay,
     PleasureOverlayLayout Overlay)
@@ -96,6 +97,7 @@ public sealed record PleasureProfile(
         SensitivityTuning.Disabled,
         BreastSuperTuning.Disabled,
         new SexualAttackClassifier(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>()),
+        false,
         false,
         false,
         false,
@@ -155,6 +157,7 @@ public static class PleasureProfileFactory
             classifier,
             options.RaiseDuringDefeatPerformance,
             options.LogTransitions,
+            options.LogAllStatusChanges,
             options.ProbeMeasurements,
             options.ShowOverlay,
             new PleasureOverlayLayout(

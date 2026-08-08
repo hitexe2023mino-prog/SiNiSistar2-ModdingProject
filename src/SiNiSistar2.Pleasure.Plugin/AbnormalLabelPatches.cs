@@ -37,11 +37,19 @@ internal static class AbnormalLabelPatches
                 names.Add(types![index].ToString());
             }
 
-            PleasureRuntime.Probe(
-                $"label-{change}-{string.Join("+", names)}",
-                $"A-15: AbnormalConditionLabel ran with change={change} over "
-                + $"[{string.Join(", ", names)}]; timeScale {Time.timeScale}. This is the path items "
-                + "and authored events use.");
+            string message =
+                $"AbnormalConditionLabel ran with change={change} over [{string.Join(", ", names)}]; "
+                + $"gallery={BreastPatches.IsGalleryActive()}, timeScale {Time.timeScale}. This is "
+                + "the path items and authored events use.";
+
+            if (PleasureRuntime.Profile.LogAllStatusChanges)
+            {
+                PleasureRuntime.Log?.LogInfo($"[status] {message}");
+            }
+            else
+            {
+                PleasureRuntime.Probe($"label-{change}-{string.Join("+", names)}", $"A-15: {message}");
+            }
 
             // Only an add can escalate. The label's other change types remove, cap or level down.
             if (change != AbnormalChangeType.Add)
