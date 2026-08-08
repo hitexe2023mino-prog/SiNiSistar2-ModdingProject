@@ -13,7 +13,7 @@ namespace SiNiSistar2.Pleasure.Core;
 /// </summary>
 public sealed record SidecarDocument
 {
-    public const int CurrentSchemaVersion = 4;
+    public const int CurrentSchemaVersion = 5;
 
     [JsonPropertyName("schemaVersion")]
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
@@ -51,6 +51,17 @@ public sealed record SidecarDocument
     /// <summary>How full the milk reservoir is (SPEC003 5.8). Added in schema 3.</summary>
     [JsonPropertyName("milk")]
     public float Milk { get; init; }
+
+    /// <summary>
+    /// Whether the lust crest has ever been received in this run (SPEC003 FR-272). Added in
+    /// schema 5.
+    ///
+    /// Kept separately from the corruption that earned it, because it does not come off: a cure
+    /// that took the status away must not also take away the fact that it was once carried, or the
+    /// mark would be curable by being cured of something else.
+    /// </summary>
+    [JsonPropertyName("lustCrest")]
+    public bool LustCrest { get; init; }
 
     public string Serialize() => JsonSerializer.Serialize(this, SerializerOptions);
 

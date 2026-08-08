@@ -85,7 +85,8 @@ public sealed class SidecarStore
         float corruption,
         int climaxCount,
         int breastAtMaxCount = 0,
-        float milk = 0f)
+        float milk = 0f,
+        bool lustCrest = false)
     {
         if (_locked.Contains(slotKey))
         {
@@ -99,6 +100,7 @@ public sealed class SidecarStore
             ClimaxCount = Math.Max(0, climaxCount),
             BreastAtMaxCount = Math.Max(0, breastAtMaxCount),
             Milk = Math.Clamp(milk, 0f, 1f),
+            LustCrest = lustCrest,
         };
 
         return JsonFile.WriteAtomically(_root, PathFor(slotKey), document.Serialize());

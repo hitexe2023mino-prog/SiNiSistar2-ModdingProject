@@ -46,6 +46,8 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _breastSuperReported;
     private bool _breastSuperRequested;
     private bool _crestRequested;
+    private double _crestLoadAsked;
+    private double _crestWaitLogged;
     private double _swellingOverlapSince;
     private double _breastSuperLoadAsked;
     private double _breastSuperWaitLogged;
@@ -428,6 +430,14 @@ public sealed class PleasureObserver : MonoBehaviour
     [HideFromIl2Cpp]
     private void ApplyPendingLustCrest(PlayerStatusManager status)
     {
+        // Put back whenever it is missing. The crest does not come off for the rest of the run
+        // (FR-272), so the fact that it was received is what is remembered, not the status: a cure
+        // written for something else must not be able to lift it.
+        if (PleasureRuntime.CrestReceived && !PleasureRuntime.IsCrestWorn)
+        {
+            PleasureRuntime.PendingLustCrest = true;
+        }
+
         if (!PleasureRuntime.PendingLustCrest)
         {
             return;
@@ -454,13 +464,17 @@ public sealed class PleasureObserver : MonoBehaviour
         AbnormalData? data = null;
         if (manager is null || !manager.TryGetData(AbnormalType.LustMarkCurse, out data) || data is null)
         {
-            // Left standing. Loading is asynchronous, so "not yet" must not become "never" — the
-            // same reasoning as the escalation, and the same failure it once had.
+            // Left standing: loading is asynchronous, so "not yet" must not become "never". Asked
+            // for out loud, though. The first version returned here in silence, and a mark that
+            // never arrives with nothing in the log to say why is indistinguishable from one that
+            // was never earned — which is exactly how it was reported.
+            RequestLustCrestData(manager);
             return;
         }
 
         abnormals.AddAbnormal(data, 1, null);
         PleasureRuntime.PendingLustCrest = false;
+        PleasureRuntime.CrestReceived = true;
 
         if (!abnormals.Has(AbnormalType.LustMarkCurse))
         {
@@ -919,6 +933,48 @@ public sealed class PleasureObserver : MonoBehaviour
     /// <c>MultiSettingValue.ResitValue</c> — and it only adds to the preload list.
     /// </summary>
     [HideFromIl2Cpp]
+    private void RequestLustCrestData(AbnormalManager? manager)
+    {
+        double now = Time.unscaledTimeAsDouble;
+        bool report = now - _crestWaitLogged > 5d;
+        if (report)
+        {
+            _crestWaitLogged = now;
+        }
+
+        if (manager is null)
+        {
+            return;
+        }
+
+        if (now - _crestLoadAsked > 2d)
+        {
+            _crestLoadAsked = now;
+            try
+            {
+                manager.LoadAbnormalData(AbnormalType.LustMarkCurse, ManagerList.RootTokenSource.Token);
+            }
+            catch (Exception exception)
+            {
+                if (report)
+                {
+                    PleasureRuntime.Log?.LogWarning(
+                        $"The lust crest could not be loaded on request: {exception.Message}");
+                }
+
+                return;
+            }
+        }
+
+        if (report)
+        {
+            PleasureRuntime.Log?.LogInfo(
+                "The lust crest has been earned and is waiting for its data; the game has been "
+                + "asked to load it. This repeats until it arrives.");
+        }
+    }
+
+    [HideFromIl2Cpp]
     private void RequestLustCrestLoad(AbnormalManager manager)
     {
         if (_crestRequested || !PleasureRuntime.Profile.Corruption.MarksTheBody)
@@ -1365,6 +1421,7 @@ public sealed class PleasureObserver : MonoBehaviour
         {
             corruption.LoadFrom(0f);
             PleasureRuntime.PendingLustCrest = false;
+            PleasureRuntime.CrestReceived = false;
             RemoveLustCrestForDebugging();
             PleasureRuntime.Log?.LogInfo(
                 "F8: corruption was at the cap, so it has been wound back to nothing and the lust "

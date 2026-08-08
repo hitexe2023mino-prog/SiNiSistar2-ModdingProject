@@ -60,6 +60,16 @@ internal static class PleasureRuntime
     internal static bool PendingLustCrest { get; set; }
 
     /// <summary>
+    /// Whether the crest has ever been received in this run (SPEC003 FR-272).
+    ///
+    /// Once true it stays true until the run ends, and the observer puts the status back whenever
+    /// it finds it missing. The crest is a curse, and the game's cures are written for statuses
+    /// that were meant to be curable; letting one of them lift this would make the mark removable
+    /// by treating something else entirely.
+    /// </summary>
+    internal static bool CrestReceived { get; set; }
+
+    /// <summary>
     /// Whether the game's lust crest is on the player right now (SPEC003 FR-267).
     ///
     /// Asked wherever corruption is gained, so it has to be cheap and it has to be safe during a
@@ -289,10 +299,13 @@ internal static class PleasureRuntime
         PendingClimax = false;
         PendingBreastSuper = false;
         PendingLustCrest = false;
+        CrestReceived = false;
         ClimaxFlashUntil = 0d;
         Log?.LogInfo(
-            "No save is loaded, so this is a new run: corruption, climaxes, swelling and milk all "
-            + "start from zero. They attach to a slot when the game is first saved.");
+            "No save is loaded, so this is a new run: corruption, climaxes, swelling, milk and the "
+            + "lust crest all start from zero. A new game plus is a new run by this reading, which "
+            + "is why the crest does not follow it across (FR-272). They attach to a slot when the "
+            + "game is first saved.");
     }
 
     internal static void LoadSlot(string slotKey, string reason)
@@ -307,6 +320,7 @@ internal static class PleasureRuntime
             Climaxes.LoadFrom(stored.ClimaxCount);
             Breasts?.LoadFrom(stored.BreastAtMaxCount);
             Milk?.LoadFrom(stored.Milk);
+            CrestReceived = stored.LustCrest;
         }
         else
         {
@@ -366,7 +380,8 @@ internal static class PleasureRuntime
             Corruption?.Value ?? 0f,
             Climaxes.Count,
             Breasts?.Count ?? 0,
-            Milk?.Fill ?? 0f);
+            Milk?.Fill ?? 0f,
+            CrestReceived);
         if (failure is not null)
         {
             Log?.LogWarning($"Slot '{CurrentSlotKey}' could not be written ({reason}): {failure}");

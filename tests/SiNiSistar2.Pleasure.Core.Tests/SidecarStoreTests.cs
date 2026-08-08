@@ -225,4 +225,29 @@ public sealed class SidecarStoreTests : IDisposable
     {
         Assert.Equal("slot2-Save03", SlotKey.Compose(2, "Save03.sav"));
     }
+
+    /// <summary>
+    /// FR-272: the crest does not come off for the rest of the run, so the fact that it was
+    /// received has to survive a reload — a cure written for something else must not lift it.
+    /// </summary>
+    [Fact]
+    public void TheCrestSurvivesAReload()
+    {
+        SidecarParse parse = SidecarDocument.Parse(
+            """{"schemaVersion":5,"gameBuildId":"x","corruption":6,"lustCrest":true}""");
+
+        Assert.True(parse.IsLoaded);
+        Assert.True(parse.Document!.LustCrest);
+    }
+
+    /// <summary>A file written before the crest existed simply has not received it.</summary>
+    [Fact]
+    public void AnOlderFileHasNoCrest()
+    {
+        SidecarParse parse = SidecarDocument.Parse(
+            """{"schemaVersion":4,"gameBuildId":"x","corruption":6}""");
+
+        Assert.True(parse.IsLoaded);
+        Assert.False(parse.Document!.LustCrest);
+    }
 }
