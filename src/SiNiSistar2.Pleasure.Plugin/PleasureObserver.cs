@@ -113,7 +113,7 @@ public sealed class PleasureObserver : MonoBehaviour
             }
 
             string name = take.m_TakeName;
-            MilkingAnimation.ProbeGallery(string.IsNullOrEmpty(name) ? "(unnamed)" : name);
+            MilkingAnimation.ProbeGallery(take, string.IsNullOrEmpty(name) ? "(unnamed)" : name);
         }
         catch (Exception)
         {

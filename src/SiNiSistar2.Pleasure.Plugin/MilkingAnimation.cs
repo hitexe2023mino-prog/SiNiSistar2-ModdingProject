@@ -1,6 +1,7 @@
 using Il2CppInterop.Runtime;
 using SiNiSistar2;
 using SiNiSistar2.Manager;
+using SiNiSistar2.Manager.Gallery;
 using SiNiSistar2.Obj;
 using UnityEngine;
 
@@ -88,7 +89,7 @@ internal static class MilkingAnimation
     ///
     /// Read-only, one line per distinct take-and-clip pair, and only in the gallery.
     /// </summary>
-    internal static void ProbeGallery(string takeName)
+    internal static void ProbeGallery(AnimationTakeData take, string takeName)
     {
         try
         {
@@ -121,7 +122,7 @@ internal static class MilkingAnimation
                     + $"'{controller?.name ?? "(none)"}'.");
             }
 
-            SweepActors(takeName);
+            InspectTake(take, takeName);
         }
         catch (Exception)
         {
@@ -130,69 +131,98 @@ internal static class MilkingAnimation
     }
 
     /// <summary>
-    /// Records every animator in the scene during a gallery take (SPEC003 付録A A-27).
+    /// Reads the take's own cast (SPEC003 付録A A-27, A-31).
     ///
-    /// Watching the player alone was not enough: through the milking take she plays <c>Idle</c> and
-    /// then <c>Breast2_Idle</c>, which are both standing still. An <c>EventPlayer</c> take is a
-    /// scripted performance with its own cast, so the milking is being animated on some other
-    /// object. Naming every animator that is playing something, with the path that identifies it,
-    /// is what turns "she is not doing it" into "this is who is".
+    /// This replaces a walk of every object in the scene. That walk froze the game twice, in the
+    /// gallery, on the take it was meant to measure — the second time on the keypress that was
+    /// supposed to prove it innocent. It is not innocent, and no reading is worth a hang, so it is
+    /// gone rather than made more careful.
     ///
-    /// Throttled and de-duplicated: this walks the scene, and a line per frame would be unreadable
-    /// even if the cost were free.
+    /// The take knows its own performers, which is a handful of objects rather than the whole
+    /// scene. Its animator is read first: an EventPlayer take is reported by SPEC001 without ever
+    /// looking at that field, so "no clip" was never measured for it — only assumed.
     /// </summary>
-    private static void SweepActors(string takeName)
+    private static void InspectTake(AnimationTakeData take, string takeName)
     {
-        // Asked for, not automatic. The game froze while a gallery take was being played, and this
-        // walk of every object in the scene was the newest thing running in exactly that place. It
-        // is not proven to be the cause — but a measurement that only has to happen when someone is
-        // looking has no business running on its own, and leaving it automatic would mean the next
-        // freeze could not be told apart from this one either.
         if (!_sweepAsked)
         {
             return;
         }
 
         _sweepAsked = false;
-        if (_sweeps >= 40 || _galleryClips.Count > 120)
+        if (_sweeps >= 20)
         {
             return;
         }
 
         _sweeps++;
 
-        var animators = UnityEngine.Object.FindObjectsOfType(Il2CppType.Of<Animator>());
-        for (var index = 0; index < animators.Length; index++)
+        Report(take.m_Animator, takeName, "the take's own animator");
+
+        var players = take.m_EventPlayerArray;
+        int count = players?.Length ?? 0;
+        var rows = new List<string>(count);
+        for (var index = 0; index < count; index++)
         {
-            var animator = animators[index]?.TryCast<Animator>();
-            if (animator is null || !animator.isActiveAndEnabled || animator.layerCount == 0)
+            var player = players![index];
+            if (player is null)
             {
                 continue;
+            }
+
+            GameObject host = player.gameObject;
+            var animator = host.GetComponent(Il2CppType.Of<Animator>())?.TryCast<Animator>();
+            rows.Add($"{Describe(host)}{(animator is null ? "" : " (has an animator)")}");
+            Report(animator, takeName, $"the performer '{host.name}'");
+        }
+
+        PleasureRuntime.Log?.LogInfo(
+            $"A-27: the take '{takeName}' has {count} event player(s): "
+            + $"{(rows.Count == 0 ? "(none readable)" : string.Join(", ", rows))}.");
+    }
+
+    /// <summary>
+    /// One animator, reported once per distinct clip.
+    ///
+    /// The clip is only asked for when the animator has a controller and has been initialised.
+    /// Asking an unbound animator what it is playing is the one thing in the old scene walk that
+    /// could plausibly have hung it, and there is no reason to do it here either.
+    /// </summary>
+    private static void Report(Animator? animator, string takeName, string who)
+    {
+        try
+        {
+            if (animator is null || !animator.isActiveAndEnabled || !animator.isInitialized
+                || animator.runtimeAnimatorController is null || animator.layerCount == 0)
+            {
+                PleasureRuntime.Log?.LogInfo($"A-27: during '{takeName}', {who} has nothing to read.");
+                return;
             }
 
             var clips = animator.GetCurrentAnimatorClipInfo(0);
-            if (clips.Length == 0)
-            {
-                continue;
-            }
-
-            AnimationClip? clip = clips[0].clip;
+            AnimationClip? clip = clips.Length == 0 ? null : clips[0].clip;
             string? name = clip?.name;
             if (clip is null || string.IsNullOrEmpty(name))
             {
-                continue;
+                PleasureRuntime.Log?.LogInfo(
+                    $"A-27: during '{takeName}', {who} is on controller "
+                    + $"'{animator.runtimeAnimatorController.name}' with no clip on layer 0.");
+                return;
             }
 
-            string path = Describe(animator.gameObject);
-            if (!_galleryClips.Add($"{takeName}\n{path}\n{name}"))
+            if (!_galleryClips.Add($"{takeName}|{who}|{name}"))
             {
-                continue;
+                return;
             }
 
             PleasureRuntime.Log?.LogInfo(
-                $"A-27: during '{takeName}', '{path}' is playing the clip '{name}' "
+                $"A-27: during '{takeName}', {who} is playing the clip '{name}' "
                 + $"({clip.length:0.00}s, looping={clip.isLooping}) on controller "
-                + $"'{animator.runtimeAnimatorController?.name ?? "(none)"}'.");
+                + $"'{animator.runtimeAnimatorController.name}'.");
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Log?.LogWarning($"A-27: {who} could not be read: {exception.Message}");
         }
     }
 
