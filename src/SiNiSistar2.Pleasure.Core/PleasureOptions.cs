@@ -82,6 +82,15 @@ public sealed record PleasureOptions
     public float BreastSuperFadeSeconds { get; init; } = 0.8f;
 
     /// <summary>
+    /// Seconds of self-milking before the swelling steps down. 0 switches the key off.
+    ///
+    /// The duration is the whole mechanism. An instant cure on a key is a menu; one that takes
+    /// seconds and is wasted if anything hits you is a decision about whether it is safe enough
+    /// right now, which the player can get wrong.
+    /// </summary>
+    public float SelfMilkingSeconds { get; init; } = 6f;
+
+    /// <summary>
     /// Counts every <c>Breast</c> application rather than only those at the maximum level. A
     /// debugging aid: it makes the escalation reachable by using the item that applies swelling a
     /// few times, without having to reach the ceiling first.

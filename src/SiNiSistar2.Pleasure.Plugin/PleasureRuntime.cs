@@ -74,6 +74,12 @@ internal static class PleasureRuntime
     /// <summary>Game time at which the transition's black stops being drawn.</summary>
     internal static double TransitionFadeUntil { get; set; }
 
+    /// <summary>Self-milking in progress: it takes time and being hit wastes it (SPEC003 FR-257).</summary>
+    internal static MilkingChannel? Milking { get; set; }
+
+    /// <summary>Set by the damage patch when the player is hit, consumed by the observer.</summary>
+    internal static bool MilkingWasHit { get; set; }
+
     /// <summary>The player's own status list, used to tell player-received from enemy-received.</summary>
     internal static AbnormalList? PlayerAbnormals { get; set; }
 

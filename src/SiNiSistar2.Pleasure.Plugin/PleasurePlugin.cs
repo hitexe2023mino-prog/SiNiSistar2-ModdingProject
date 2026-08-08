@@ -97,6 +97,7 @@ public sealed class PleasurePlugin : BasePlugin
             profile.Pleasure.DecayPerSecond);
         PleasureRuntime.Sensitivity = new SensitivityTrack(profile.Sensitivity.Cap);
         PleasureRuntime.SuperTimer = new BreastSuperTimer(profile.BreastSuper.Seconds);
+        PleasureRuntime.Milking = new MilkingChannel(profile.BreastSuper.MilkingSeconds);
         PleasureRuntime.Breasts = new BreastEscalation(
             profile.BreastSuper.ApplicationsAtMaxLevel,
             profile.BreastSuper.SensitivityThreshold);
@@ -205,8 +206,8 @@ public sealed class PleasurePlugin : BasePlugin
 
         Log.LogInfo(
             "Press F11 in game to apply Breast to the player, for checking the escalation. Press C "
-            + "while BreastSuper is active to start the game's own milking cure, where the scene "
-            + "provides it.");
+            + "while swollen to milk: it takes "
+            + $"{profile.BreastSuper.MilkingSeconds:F0}s, works anywhere, and being hit wastes it.");
 
         if (profile.ShowOverlay)
         {
@@ -361,6 +362,13 @@ public sealed class PleasurePlugin : BasePlugin
             0.8f,
             "Seconds of black over the transition. The body is rebuilt in place, so the player does "
             + "not move and the scene is not reloaded; the black only covers the swap.");
+        ConfigEntry<float> milkingSeconds = Config.Bind(
+            "BreastSuper",
+            "SelfMilkingSeconds",
+            6f,
+            "Seconds of self-milking, on the C key, before the swelling steps down. 0 switches the "
+            + "key off. It works anywhere: a safe place is not an area the game marks, it is any "
+            + "moment nothing is attacking. Being hit wastes the attempt.");
         ConfigEntry<bool> breastBelowMax = Config.Bind(
             "BreastSuper",
             "CountBelowMaxLevel",
@@ -461,6 +469,7 @@ public sealed class PleasurePlugin : BasePlugin
             BreastSuperSeconds = breastSeconds.Value,
             BreastSuperCuredWithBreast = breastCured.Value,
             BreastSuperFadeSeconds = breastFade.Value,
+            SelfMilkingSeconds = milkingSeconds.Value,
             BreastSuperMakeHaanjaCurable = breastHaanja.Value,
             BreastSuperCountBelowMaxLevel = breastBelowMax.Value,
             LogTransitions = logTransitions.Value,

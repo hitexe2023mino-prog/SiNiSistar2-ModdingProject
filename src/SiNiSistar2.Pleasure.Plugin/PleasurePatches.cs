@@ -20,6 +20,10 @@ internal static class DamageProbePatches
                 return;
             }
 
+            // Being hit wastes the attempt. This is the whole point of milking taking time: doing it
+            // where something can reach you is a real risk rather than a formality (FR-257).
+            PleasureRuntime.MilkingWasHit = true;
+
             bool bound = PleasureRuntime.CanAccumulate;
             string? sender = SenderName(stack);
             string[] statuses = PleasureRuntime.AppliedStatuses(stack);

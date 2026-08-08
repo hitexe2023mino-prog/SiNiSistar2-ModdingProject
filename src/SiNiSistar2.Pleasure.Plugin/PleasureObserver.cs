@@ -124,6 +124,7 @@ public sealed class PleasureObserver : MonoBehaviour
 
         DrawGauge();
         DrawClimaxFlash();
+        DrawMilking();
         DrawTransitionFade();
         DrawEditorChrome();
     }
@@ -641,6 +642,7 @@ public sealed class PleasureObserver : MonoBehaviour
         if (status is not null)
         {
             UpdateBreastSuperLife(status, delta);
+            UpdateMilking(status, delta);
         }
 
         // Decaying inside a hold would let the player wait out the danger (SPEC003 5.2).
@@ -838,7 +840,7 @@ public sealed class PleasureObserver : MonoBehaviour
             && !_enemyEditor.IsOpen
             && !_editing)
         {
-            TryStartBreastCure();
+            TryStartMilking();
             current.Use();
             return;
         }
@@ -895,69 +897,112 @@ public sealed class PleasureObserver : MonoBehaviour
     }
 
     /// <summary>
-    /// Starts the game's own milking cure, where the scene provides it (SPEC003 5.8, FR-255).
+    /// Starts self-milking (SPEC003 5.8, FR-257).
     ///
-    /// The MOD does not reproduce the scene. It looks for the event the game already has —
-    /// <c>Root/Event/BreastCure</c>, seen in the log when the cure ran — and asks it to start, which
-    /// is the same thing walking up to it and interacting does. That is why this only works where
-    /// the event exists: it is the game's content, in the place the game put it, and the places it
-    /// put it are the safe ones.
+    /// It works wherever the player is standing. An earlier attempt looked for the game's own cure
+    /// event in the scene, on the reasoning that reusing authored content beats reproducing it —
+    /// but the object it needs is created by the event and does not exist beforehand, and tying the
+    /// cure to the few places the game put it misses the point. A safe place is not an area the game
+    /// marks as safe; it is any moment nothing is attacking, which is the player's judgement to make
+    /// and to get wrong.
     /// </summary>
     [HideFromIl2Cpp]
-    private void TryStartBreastCure()
+    private void TryStartMilking()
     {
         AbnormalList? abnormals = PleasureRuntime.PlayerAbnormals;
-        if (abnormals is null || !abnormals.Has(AbnormalType.BreastSuper))
+        MilkingChannel? milking = PleasureRuntime.Milking;
+        if (abnormals is null || milking is null || !milking.IsEnabled)
         {
             return;
         }
 
-        try
+        if (milking.IsRunning)
         {
-            // Every trigger in the scene, named. "Root/Event/BreastCure" was a path seen in the log
-            // while the cure was running, which is the one thing it cannot be looked up by: the
-            // object is created for the event and is not there beforehand. What is there beforehand
-            // is whatever the player walks up to, so that is what gets listed (A-22).
-            var triggers = UnityEngine.Object.FindObjectsOfType<InteractiveEventTrigger>();
-            if (triggers is null || triggers.Length == 0)
-            {
-                PleasureRuntime.Log?.LogInfo("C: this scene has no interactive triggers at all.");
-                return;
-            }
+            milking.Interrupt();
+            PleasureRuntime.Log?.LogInfo("Milking stopped.");
+            return;
+        }
 
-            InteractiveEventTrigger? match = null;
-            var names = new List<string>(triggers.Length);
-            for (var index = 0; index < triggers.Length; index++)
-            {
-                InteractiveEventTrigger candidate = triggers[index];
-                string name = candidate.gameObject.name;
-                names.Add(name);
-                if (match is null
-                    && (name.Contains("Breast", StringComparison.OrdinalIgnoreCase)
-                        || name.Contains("Cure", StringComparison.OrdinalIgnoreCase)))
-                {
-                    match = candidate;
-                }
-            }
+        bool super = abnormals.Has(AbnormalType.BreastSuper);
+        if (!super && !abnormals.Has(AbnormalType.Breast))
+        {
+            return;
+        }
 
+        // Not while held or downed: the hands are not free, and letting it run there would make a
+        // hold something to be waited out rather than escaped.
+        if (PleasureRuntime.IsBound || PleasureRuntime.IsDefeatPerformance)
+        {
+            PleasureRuntime.Log?.LogInfo("Milking cannot be started while held.");
+            return;
+        }
+
+        if (milking.TryStart())
+        {
+            PleasureRuntime.MilkingWasHit = false;
             PleasureRuntime.Log?.LogInfo(
-                $"C: {triggers.Length} interactive trigger(s) here: {string.Join(", ", names)}.");
+                $"Milking started; it will take a moment and being hit will waste it. "
+                + $"{(super ? "BreastSuper will subside to Breast." : "Breast will be cleared.")}");
+        }
+    }
 
-            if (match is null)
+    /// <summary>Advances a milking attempt, and ends it on completion or interruption.</summary>
+    [HideFromIl2Cpp]
+    private void UpdateMilking(PlayerStatusManager status, double delta)
+    {
+        MilkingChannel? milking = PleasureRuntime.Milking;
+        if (milking is null || !milking.IsRunning)
+        {
+            PleasureRuntime.MilkingWasHit = false;
+            return;
+        }
+
+        AbnormalList? abnormals = status.AbnormalList;
+        if (abnormals is null)
+        {
+            milking.Interrupt();
+            return;
+        }
+
+        if (PleasureRuntime.MilkingWasHit || PleasureRuntime.IsBound || PleasureRuntime.IsDefeatPerformance)
+        {
+            PleasureRuntime.MilkingWasHit = false;
+            if (milking.Interrupt())
             {
-                PleasureRuntime.Log?.LogInfo(
-                    "C: none of them is named for the cure. If one of the names above is the milking "
-                    + "cure, say so and it will be matched by name.");
-                return;
+                PleasureRuntime.Log?.LogInfo("Milking was interrupted; nothing was cured.");
             }
 
-            match.OnStartInteractive();
-            PleasureRuntime.Log?.LogInfo($"C: started '{match.gameObject.name}'.");
+            return;
         }
-        catch (Exception exception)
+
+        if (milking.Tick(delta) != MilkingOutcome.Completed)
         {
-            PleasureRuntime.Log?.LogWarning($"C: the cure event could not be started: {exception.Message}");
+            return;
         }
+
+        // One step down, not a full cure from either state. Milking out of the escalation still
+        // leaves the swelling, which is the same ladder the duration walks back down.
+        if (abnormals.Has(AbnormalType.BreastSuper))
+        {
+            abnormals.RemoveAbnormal(AbnormalType.BreastSuper);
+            PleasureRuntime.SuperTimer?.Stop();
+            AbnormalManager? manager = ManagerList.Abnormal;
+            AbnormalData? data = null;
+            if (manager is not null && manager.TryGetData(AbnormalType.Breast, out data) && data is not null)
+            {
+                abnormals.AddAbnormal(data, 1, null);
+            }
+
+            PleasureRuntime.Log?.LogInfo("Milking finished: BreastSuper subsided to Breast.");
+        }
+        else
+        {
+            abnormals.RemoveAbnormal(AbnormalType.Breast);
+            PleasureRuntime.Log?.LogInfo("Milking finished: Breast was cleared.");
+        }
+
+        PleasureRuntime.Breasts?.Reset();
+        BeginTransition();
     }
 
     /// <summary>
@@ -1190,6 +1235,36 @@ public sealed class PleasureObserver : MonoBehaviour
         // Blooms quickly and fades slowly, which reads as a pulse instead of a light switching on.
         float strength = progress > 0.75f ? (1f - progress) / 0.25f : progress / 0.75f;
         DrawVignette(Math.Clamp(strength, 0f, 1f));
+    }
+
+    /// <summary>
+    /// The milking bar, drawn while an attempt runs.
+    ///
+    /// Above the centre rather than tucked into a corner: what it is really reporting is how long
+    /// the player is standing still for, and that is worth having in the way.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void DrawMilking()
+    {
+        MilkingChannel? milking = PleasureRuntime.Milking;
+        if (milking is null || !milking.IsRunning)
+        {
+            return;
+        }
+
+        float width = Screen.width * 0.22f;
+        float height = Screen.height * 0.012f;
+        float x = (Screen.width - width) / 2f;
+        float y = Screen.height * 0.62f;
+
+        OverlayPainter.Fill(new Rect(x - 2f, y - 2f, width + 4f, height + 4f), new Color(0f, 0f, 0f, 0.55f));
+        OverlayPainter.Fill(
+            new Rect(x, y, width * milking.Progress, height),
+            new Color(1f, 0.72f, 0.82f, 0.92f));
+        OverlayPainter.Text(
+            new Rect(x, y - 24f, width, 22f),
+            "Milking… (C to stop)",
+            new Color(1f, 0.94f, 0.96f, 1f));
     }
 
     /// <summary>
