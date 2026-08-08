@@ -4,6 +4,7 @@ using BepInEx.Configuration;
 using BepInEx.Unity.IL2CPP;
 using HarmonyLib;
 using SiNiSistar2.Damage;
+using SiNiSistar2.Event.EvSystem;
 using SiNiSistar2.EventLabel;
 using SiNiSistar2.Obj;
 using SiNiSistar2.Pleasure.Core;
@@ -184,6 +185,19 @@ public sealed class PleasurePlugin : BasePlugin
             FindMethod(typeof(InventoryHandler), nameof(InventoryHandler.RemoveItem), typeof(ItemID)),
             typeof(ItemUsePatches),
             postfix: nameof(ItemUsePatches.RemoveItemPostfix));
+        // Every scripted performance goes through this one door, whichever subclass runs it and
+        // wherever the object lives. Four rounds of polling for the milking scene each looked in a
+        // place chosen by guess, and a wrong guess is indistinguishable from an absence (付録A A-38).
+        applied += Patch(
+            "event-player",
+            FindMethod(typeof(EventPlayerBase), nameof(EventPlayerBase.PlayPlayer)),
+            typeof(EventPatches),
+            postfix: nameof(EventPatches.PlayPlayerPostfix));
+        applied += Patch(
+            "animator-swap",
+            FindMethod(typeof(Lelia), nameof(Lelia.ReplaceRuntimeAnimatorController)),
+            typeof(EventPatches),
+            postfix: nameof(EventPatches.ReplaceControllerPostfix));
         applied += Patch(
             "save-point",
             AccessTools.Method(typeof(SavePointAsyncLabel), nameof(SavePointAsyncLabel.ExecutionOneAsync)),
