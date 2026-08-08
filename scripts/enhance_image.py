@@ -223,15 +223,42 @@ def enhance(source: Image.Image, scale: int, iters: int) -> Image.Image:
     return Image.fromarray(np.clip(estimate * 255, 0, 255).astype(np.uint8), "RGB")
 
 
-def key_white(image: Image.Image) -> Image.Image:
-    """White background to alpha: distance-to-white band, speckle-opened, feathered."""
+def key_white(image: Image.Image, reference: Image.Image | None = None) -> Image.Image:
+    """White background to alpha, with two corrections the plain band lacked.
+
+    Un-blending: an anti-aliased edge pixel is stroke colour mixed with the white paper,
+    observed = true*a + white*(1-a). Left as-is with partial alpha, that whitish mix reads as a
+    pale outline on any dark background. Solving for the true colour removes the fringe, and
+    compositing the result back over white reproduces the source exactly - this IS the matching
+    operation, not a departure from it.
+
+    Source gating: a super-resolver can consolidate background noise into a confident pale shape
+    that then passes the key on its own colours. But the *source* knows that region held nothing.
+    The source's own key, dilated so its blur cannot erode the crisp new edges, gates the result:
+    where the original said background, background it stays.
+    """
     arr = np.asarray(image.convert("RGB"), np.float32) / 255.0
     distance = 1.0 - arr.min(axis=2)
-    alpha = np.clip((distance - 0.10) / 0.18, 0.0, 1.0)
+    alpha = np.clip((distance - 0.14) / 0.18, 0.0, 1.0)
+
+    if reference is not None:
+        ref = reference.convert("RGB").resize(image.size, Image.LANCZOS)
+        ref_d = 1.0 - (np.asarray(ref, np.float32) / 255.0).min(axis=2)
+        ref_a = np.clip((ref_d - 0.10) / 0.10, 0.0, 1.0)
+        gate = Image.fromarray((ref_a * 255).astype(np.uint8), "L")
+        gate = gate.filter(ImageFilter.MaxFilter(7)).filter(ImageFilter.GaussianBlur(2.0))
+        alpha = alpha * (np.asarray(gate, np.float32) / 255.0)
+
+    # The un-blend, guarded against division blow-up at the faintest pixels.
+    mix = np.clip((distance - 0.10) / 0.18, 0.0, 1.0)
+    safe = np.maximum(mix, 0.20)[..., None]
+    unblended = np.clip((arr - (1.0 - safe)) / safe, 0.0, 1.0)
+    rgb = np.where(mix[..., None] > 0.999, arr, unblended)
+
     mask = Image.fromarray((alpha * 255).astype(np.uint8), "L")
     mask = mask.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.MaxFilter(3))
     mask = mask.filter(ImageFilter.GaussianBlur(0.8))
-    out = image.convert("RGB").copy()
+    out = Image.fromarray((rgb * 255).round().astype(np.uint8), "RGB")
     out.putalpha(mask)
     return out
 
@@ -343,7 +370,7 @@ def main() -> None:
         result = enhance(source, args.scale, args.iters)
         engine = f"classical, {args.iters} iterations"
     if args.key_white:
-        result = key_white(result)
+        result = key_white(result, reference=source)
     result.save(args.output)
     print(f"{args.input} {source.size} -> {args.output} {result.size} "
           f"[{engine}{', white keyed' if args.key_white else ''}]")
