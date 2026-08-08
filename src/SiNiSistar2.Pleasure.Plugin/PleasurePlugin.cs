@@ -50,7 +50,9 @@ public sealed class PleasurePlugin : BasePlugin
 
         if (StartupGuard.IsAnotherInstanceRunning())
         {
-            Log.LogWarning(StartupGuard.DuplicateInstanceMessage);
+            Log.LogWarning(
+                $"{StartupGuard.DuplicateInstanceMessage} This copy is "
+                + $"{StartupGuard.DescribeLaunch()}.");
         }
 
         PleasureOptions options = BindOptions();

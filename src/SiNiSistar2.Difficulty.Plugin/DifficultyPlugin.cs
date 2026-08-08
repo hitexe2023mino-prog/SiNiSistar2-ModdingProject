@@ -41,7 +41,9 @@ public sealed class DifficultyPlugin : BasePlugin
 
         if (StartupGuard.IsAnotherInstanceRunning())
         {
-            Log.LogWarning(StartupGuard.DuplicateInstanceMessage);
+            Log.LogWarning(
+                $"{StartupGuard.DuplicateInstanceMessage} This copy is "
+                + $"{StartupGuard.DescribeLaunch()}.");
         }
 
         DifficultyOptions options = BindOptions();

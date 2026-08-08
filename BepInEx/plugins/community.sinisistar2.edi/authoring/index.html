@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SiNiSistar2 EDI — funscript オーサリング</title>
+<link rel="stylesheet" href="editor.css">
+</head>
+<body>
+<header>
+  <h1>funscript オーサリング</h1>
+  <div id="buildInfo" class="muted"></div>
+  <button id="reload" type="button">カタログ再読込</button>
+</header>
+
+<main>
+  <section id="catalogPane">
+    <div class="paneHead">
+      <div class="modeBar">
+        <button id="modeTrigger" type="button" class="active">トリガー</button>
+        <button id="modeFiller" type="button">filler（待機）</button>
+      </div>
+      <input id="filter" type="search" placeholder="敵名・番号・段階で絞り込み" autocomplete="off">
+    </div>
+    <div id="triggerOnly">
+      <div id="playing" class="playingBanner"></div>
+      <label class="follow muted">
+        <input id="followPlaying" type="checkbox" checked>
+        再生中の段階まで自動スクロール
+      </label>
+      <div class="legend muted">
+        <span class="stageNumber">#N</span>
+        カタログ内の並び順です。ゲーム内の番号タブとの一致は<strong>未確認</strong>のため、
+        どの段階かはゲームで再生して <strong>▶ ゲームで再生中</strong> の行を見てください。
+      </div>
+    </div>
+    <div id="fillerOnly" class="legend muted" hidden>
+      イベント非再生時に流れる待機波形です。<strong>膨乳</strong>などの状態異常が有効な間は
+      専用fillerに切り替わります。長さを変更すると
+      <code>Definitions.csv</code> の <code>EndTime</code> も自動更新されます。
+    </div>
+    <div id="catalogCount" class="muted"></div>
+    <ul id="catalog"></ul>
+  </section>
+
+  <section id="editorPane">
+    <div id="empty" class="placeholder">
+      左の一覧から段階を選ぶと波形を編集できます。<br>
+      カタログが空の場合は、ゲーム内でギャラリーや拘束演出に到達してください。
+    </div>
+
+    <div id="editor" hidden>
+      <div class="triggerHead">
+        <h2 id="triggerTitle"></h2>
+        <div id="triggerMeta" class="muted"></div>
+      </div>
+
+      <div class="variantBar" id="variantBar"></div>
+      <div id="channelPreview" class="channelPreview muted"></div>
+
+      <div class="canvasWrap">
+        <canvas id="canvas" width="900" height="300"></canvas>
+        <div class="canvasHelp muted">
+          クリックで点を追加 / 点をドラッグで移動 / 右クリックで点を削除
+        </div>
+      </div>
+
+      <div class="controls">
+        <label>長さ (ms)
+          <input id="duration" type="number" min="100" step="10">
+        </label>
+        <button id="fitLoop" type="button">クリップ長に合わせる</button>
+        <button id="simplify" type="button" title="曲線を細かく標本化した点列を、ピストンが実際に表現できる折り返し点だけに減らします。">折り返し点だけに減らす</button>
+        <button id="copyFrom" type="button">別の段階から複製</button>
+        <button id="mirrorSide" type="button">反対側にコピー</button>
+        <button id="clear" type="button">この波形を消去</button>
+      </div>
+
+      <div class="controls">
+        <button id="preview" type="button" class="primary">▶ 試聴</button>
+        <button id="previewStop" type="button">■ 試聴停止</button>
+        <button id="save" type="button" class="primary">保存して EDI へ登録</button>
+        <label class="inline"><input id="approveLoop" type="checkbox"> ループ長の差異を承認</label>
+        <label class="inline" title="画面上でこの段階が繰り返し再生される場合にチェックします。外すと波形は1回だけ再生され、以降デバイスは停止します。"><input id="repeat" type="checkbox"> 繰り返し再生</label>
+      </div>
+
+      <div id="status" class="status"></div>
+    </div>
+  </section>
+</main>
+
+<dialog id="copyDialog">
+  <form method="dialog">
+    <h3>複製元の段階を選択</h3>
+    <select id="copySource" size="12"></select>
+    <div class="dialogButtons">
+      <button value="cancel">キャンセル</button>
+      <button id="copyConfirm" value="ok" class="primary">複製</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="editor.js"></script>
+</body>
+</html>
