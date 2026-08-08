@@ -4,7 +4,6 @@ using BepInEx.Configuration;
 using BepInEx.Unity.IL2CPP;
 using HarmonyLib;
 using SiNiSistar2.Damage;
-using SiNiSistar2.Event.EvSystem;
 using SiNiSistar2.EventLabel;
 using SiNiSistar2.Obj;
 using SiNiSistar2.Pleasure.Core;
@@ -102,7 +101,8 @@ public sealed class PleasurePlugin : BasePlugin
             profile.Pleasure.SensitivityScale,
             profile.Pleasure.DecayPerSecond);
         PleasureRuntime.Sensitivity = new SensitivityTrack(profile.Sensitivity.Cap);
-        PleasureRuntime.SuperTimer = new BreastSuperTimer(profile.BreastSuper.Seconds);
+        PleasureRuntime.SuperTimer = new BreastSuperTimer(
+            profile.BreastSuper.SecondsMin, profile.BreastSuper.SecondsMax);
         PleasureRuntime.Milk = new MilkReservoir(
             profile.BreastSuper.MilkPerSexualHit,
             profile.BreastSuper.MilkDrainPerSecond);
@@ -185,38 +185,6 @@ public sealed class PleasurePlugin : BasePlugin
             FindMethod(typeof(InventoryHandler), nameof(InventoryHandler.RemoveItem), typeof(ItemID)),
             typeof(ItemUsePatches),
             postfix: nameof(ItemUsePatches.RemoveItemPostfix));
-        // Every scripted performance goes through this one door, whichever subclass runs it and
-        // wherever the object lives. Four rounds of polling for the milking scene each looked in a
-        // place chosen by guess, and a wrong guess is indistinguishable from an absence (付録A A-38).
-        // Update, not PlayPlayer. PlayPlayer returns a UniTask — a struct, by value — and a postfix
-        // on it left the player unable to move at the event: the performance started and its
-        // completion never came back, so the game went on waiting for it. A probe that stops the
-        // game being playable is not a probe (DEC-236 again, in a new place). Update returns void
-        // and cannot carry anything away with it, and IsPlaying is the game's own flag for the same
-        // fact (付録A A-39).
-        applied += Patch(
-            "event-player",
-            FindMethod(typeof(EventPlayerBase), "Update"),
-            typeof(EventPatches),
-            postfix: nameof(EventPatches.UpdatePostfix));
-        // The step the event calls 'Play Animation' asks for an animation by name through this
-        // label. Both take a parameter and return void, so a postfix on either carries nothing
-        // away (DEC-239). The async sibling returns a UniTask and is deliberately left alone.
-        applied += Patch(
-            "animator-trigger",
-            FindMethod(typeof(AnimatorTriggerLabel), "ExecutionOne"),
-            typeof(EventPatches),
-            postfix: nameof(EventPatches.AnimatorTriggerPostfix));
-        applied += Patch(
-            "player-action",
-            FindMethod(typeof(PlayerActionLabel), "ExecutionOne"),
-            typeof(EventPatches),
-            postfix: nameof(EventPatches.PlayerActionPostfix));
-        applied += Patch(
-            "animator-swap",
-            FindMethod(typeof(Lelia), nameof(Lelia.ReplaceRuntimeAnimatorController)),
-            typeof(EventPatches),
-            postfix: nameof(EventPatches.ReplaceControllerPostfix));
         applied += Patch(
             "save-point",
             AccessTools.Method(typeof(SavePointAsyncLabel), nameof(SavePointAsyncLabel.ExecutionOneAsync)),
@@ -241,11 +209,6 @@ public sealed class PleasurePlugin : BasePlugin
             "Press F11 in game to apply Breast to the player, for checking the escalation. "
             + $"Press {profile.BreastSuper.MilkingKey} while BreastSuper is active to milk: it "
             + "empties the milk gauge, works anywhere, and being hit wastes it.");
-        Log.LogInfo(
-            $"Press {MilkingAnimation.SweepKey} while the gallery plays a take to read that take's "
-            + "own cast — its animator and its event players (SPEC003 付録A A-27). Every clip the "
-            + "player plays while the escalated swelling is worn is recorded without asking, which "
-            + "is how the milking scene will be named when it runs.");
 
         if (profile.ShowOverlay)
         {
@@ -382,12 +345,24 @@ public sealed class PleasurePlugin : BasePlugin
             "BreastSuperReplacesBreast",
             true,
             "Remove Breast as BreastSuper is applied, so the two do not stack.");
-        ConfigEntry<float> breastSeconds = Config.Bind(
+        // A span, not a number. The game's own way out of the escalation is the self-milking
+        // scene, and that cannot be reproduced away from the map it was authored on (SPEC003 付録A
+        // A-42), so the escalation now ends by being survived. A fixed duration would be counted;
+        // a span has to be read off the fight.
+        ConfigEntry<float> breastSecondsMin = Config.Bind(
             "BreastSuper",
-            "BreastSuperSeconds",
-            0f,
-            "Seconds BreastSuper lasts before subsiding back to Breast. 0 never subsides. Enduring "
-            + "it costs the ordinary swelling rather than curing it.");
+            "BreastSuperSecondsMin",
+            30f,
+            "The shortest BreastSuper lasts in the field, in seconds, before subsiding back to "
+            + "Breast. 0 never subsides. Enduring it costs the ordinary swelling rather than "
+            + "curing it.");
+        ConfigEntry<float> breastSecondsMax = Config.Bind(
+            "BreastSuper",
+            "BreastSuperSecondsMax",
+            60f,
+            "The longest BreastSuper lasts in the field, in seconds. A span is drawn afresh each "
+            + "time it happens, so the wait cannot be counted off. Below the minimum, the minimum "
+            + "is used.");
         ConfigEntry<bool> breastCured = Config.Bind(
             "BreastSuper",
             "CuredWithBreast",
@@ -421,23 +396,6 @@ public sealed class PleasurePlugin : BasePlugin
             "The key that milks, as a UnityEngine.KeyCode name. Not C: the game casts with it, and "
             + "immediate-mode GUI cannot stop the game reading the keyboard for itself, so a shared "
             + "key would do both.");
-        ConfigEntry<string> milkingState = Config.Bind(
-            "BreastSuper",
-            "MilkingAnimationState",
-            "",
-            "Animation clip played while milking. Empty leaves the animator alone, which is the "
-            + "shipped state until the clip the milking performance actually uses has been measured "
-            + "(SPEC003 付録A A-27). ResumeBreast is not a clip: it is the name of a scripted "
-            + "performance. No clip may be put here on a guess — playing the wrong one would tell "
-            + "EDI that something else is happening (DEC-224).");
-        ConfigEntry<string> milkingSlot = Config.Bind(
-            "BreastSuper",
-            "MilkingAnimationSlot",
-            "Sit",
-            "The animator state the milking clip is played in. The milking take is not in the "
-            + "player's field controller, so an override controller puts the clip into a state "
-            + "that is. The clip that plays is the game's own, which is what an observer reads. "
-            + "Pick a state the player is not otherwise in.");
         ConfigEntry<bool> breastBelowMax = Config.Bind(
             "BreastSuper",
             "CountBelowMaxLevel",
@@ -533,14 +491,13 @@ public sealed class PleasurePlugin : BasePlugin
             BreastSuperAfterApplications = breastAfter.Value,
             BreastSuperSensitivityThreshold = breastThreshold.Value,
             BreastSuperReplacesBreast = breastReplaces.Value,
-            BreastSuperSeconds = breastSeconds.Value,
+            BreastSuperSecondsMin = breastSecondsMin.Value,
+            BreastSuperSecondsMax = breastSecondsMax.Value,
             BreastSuperCuredWithBreast = breastCured.Value,
             BreastSuperFadeSeconds = breastFade.Value,
             MilkPerSexualHit = milkFill.Value,
             MilkDrainPerSecond = milkDrain.Value,
             MilkingKey = milkingKey.Value,
-            MilkingAnimationState = milkingState.Value,
-            MilkingAnimationSlot = milkingSlot.Value,
             BreastSuperMakeHaanjaCurable = breastHaanja.Value,
             BreastSuperCountBelowMaxLevel = breastBelowMax.Value,
             LogTransitions = logTransitions.Value,

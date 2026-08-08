@@ -67,9 +67,24 @@ public sealed record PleasureOptions
     public bool BreastSuperReplacesBreast { get; init; } = true;
 
     /// <summary>
-    /// Seconds <c>BreastSuper</c> lasts before subsiding back to <c>Breast</c>. 0 never subsides.
+    /// The shortest the escalation can last in the field, in seconds. 0 never subsides.
+    ///
+    /// The game's own way out of the escalation is the self-milking scene, and that scene cannot be
+    /// reproduced anywhere but the map it was authored on: it fades the screen, switches to a
+    /// virtual camera, and switches on a set of actors that exist only there (SPEC003 付録A A-42).
+    /// With no way out, the escalation has to end by being survived, so it is given a span the
+    /// player has to hold out for while enemies are still coming.
     /// </summary>
-    public float BreastSuperSeconds { get; init; }
+    public float BreastSuperSecondsMin { get; init; } = 30f;
+
+    /// <summary>
+    /// The longest the escalation can last in the field, in seconds.
+    ///
+    /// A span rather than a fixed number, drawn afresh each time. A player who knows the escalation
+    /// lasts exactly forty seconds counts to forty; one who knows it lasts somewhere between thirty
+    /// and sixty has to keep reading the fight. Below the minimum, the minimum is used.
+    /// </summary>
+    public float BreastSuperSecondsMax { get; init; } = 60f;
 
     /// <summary>
     /// Whether the game's own <c>Breast</c> cure also removes <c>BreastSuper</c>. The cure is an
@@ -104,33 +119,6 @@ public sealed record PleasureOptions
     /// with an action would fire both, and "only while swollen" cannot be arranged from here.
     /// </summary>
     public string MilkingKey { get; init; } = "F8";
-
-    /// <summary>
-    /// The animation clip played while milking. Empty leaves the animator alone.
-    ///
-    /// It is the game's own milking clip, played in the situation the game plays it in, so what any
-    /// observer sees is true: milking really is happening. Naming it in the config rather than
-    /// hard-coding it means a build that calls it something else is a config edit, not a rebuild.
-    ///
-    /// Empty until the clip is known. <c>ResumeBreast</c> is not a clip at all: the gallery
-    /// records it with a length of zero, which is the reading for a take played by an EventPlayer
-    /// — a scripted performance rather than an animator state (付録A A-25). Nothing may be put here
-    /// on a guess. A neighbouring clip that happens to be loaded nearby is exactly the substitute
-    /// DEC-224 forbids, and it would make an observer read the wrong event.
-    /// </summary>
-    public string MilkingAnimationState { get; init; } = "";
-
-    /// <summary>
-    /// The animator state whose clip is replaced by the milking clip while milking.
-    ///
-    /// The milking take is not in the player's field controller — measured, not assumed (付録A
-    /// A-23). What the field controller does have is a set of states, and an override controller
-    /// can put a different clip in any of them. So the state is a vehicle: the clip that plays is
-    /// the game's own milking clip, and an observer reading the animator reads that clip's name.
-    /// The slot has to be a state the player is not otherwise in, or leaving milking would put
-    /// them back into a pose they never chose.
-    /// </summary>
-    public string MilkingAnimationSlot { get; init; } = "Sit";
 
     /// <summary>
     /// Counts every <c>Breast</c> application rather than only those at the maximum level. A

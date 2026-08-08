@@ -37,17 +37,16 @@ public sealed record BreastSuperTuning(
     bool ReplaceBreast,
     bool MakeHaanjaCurable,
     bool CountBelowMaxLevel,
-    float Seconds,
+    float SecondsMin,
+    float SecondsMax,
     bool CuredWithBreast,
     float FadeSeconds,
     float MilkPerSexualHit,
     float MilkDrainPerSecond,
-    string MilkingKey,
-    string MilkingAnimationState,
-    string MilkingAnimationSlot)
+    string MilkingKey)
 {
     public static BreastSuperTuning Disabled { get; } =
-        new(false, 0, 0f, false, false, false, 0f, false, 0f, 0f, 0f, "", "", "");
+        new(false, 0, 0f, false, false, false, 0f, 0f, false, 0f, 0f, 0f, "");
 
     /// <summary>Whether milking can do anything.</summary>
     public bool CanMilk => MilkDrainPerSecond > 0f;
@@ -370,14 +369,13 @@ public static class PleasureProfileFactory
             options.BreastSuperReplacesBreast,
             options.BreastSuperMakeHaanjaCurable,
             options.BreastSuperCountBelowMaxLevel,
-            Math.Max(0f, options.BreastSuperSeconds),
+            Math.Max(0f, options.BreastSuperSecondsMin),
+            Math.Max(Math.Max(0f, options.BreastSuperSecondsMin), options.BreastSuperSecondsMax),
             options.BreastSuperCuredWithBreast,
             Math.Max(0f, options.BreastSuperFadeSeconds),
             Math.Max(0f, options.MilkPerSexualHit),
             Math.Max(0f, options.MilkDrainPerSecond),
-            (options.MilkingKey ?? string.Empty).Trim(),
-            (options.MilkingAnimationState ?? string.Empty).Trim(),
-            (options.MilkingAnimationSlot ?? string.Empty).Trim());
+            (options.MilkingKey ?? string.Empty).Trim());
     }
 
     private static SexualAttackClassifier BuildClassifier(

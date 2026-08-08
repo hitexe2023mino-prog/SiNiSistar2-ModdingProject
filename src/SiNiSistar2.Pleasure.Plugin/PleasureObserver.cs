@@ -46,7 +46,6 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _breastSuperReported;
     private bool _breastSuperRequested;
     private KeyCode _milkingKey = KeyCode.None;
-    private static bool _eventWasRunning;
     private double _swellingOverlapSince;
     private double _breastSuperLoadAsked;
     private double _breastSuperWaitLogged;
@@ -107,51 +106,6 @@ public sealed class PleasureObserver : MonoBehaviour
 
         try
         {
-            // The milking scene runs by itself in the field when a swollen player reaches the right
-            // place, so that is where its clip can be learned (付録A A-32). One animator, no walk.
-            //
-            // Widened past IsCinematicEvent. Walking a swollen player around four maps produced
-            // only ordinary clips, and the milking scene did not fire — but there is no reading
-            // that says it would have been flagged cinematic if it had. Every distinct clip the
-            // player plays while the escalated swelling is worn is recorded instead, so the one
-            // that matters cannot be missed by having guessed the wrong flag. Still one animator
-            // and no walk (DEC-236), and distinct names only, of which a swollen player has few.
-            ObjectManager? objects = ManagerList.Object;
-            bool swollen = false;
-            try
-            {
-                swollen = PleasureRuntime.PlayerAbnormals?.Has(AbnormalType.BreastSuper) == true;
-            }
-            catch (Exception)
-            {
-                swollen = false;
-            }
-
-            bool cinematic = objects is not null && objects.IsCinematicEvent;
-            string scene = SceneManager.GetActiveScene().name;
-            if (cinematic && !_eventWasRunning)
-            {
-                MilkingAnimation.ProbeEventObjects(scene);
-            }
-            else if (cinematic)
-            {
-                MilkingAnimation.ProbeEventCast(scene);
-            }
-            else if (_eventWasRunning)
-            {
-                MilkingAnimation.ForgetEventCast();
-            }
-
-            _eventWasRunning = cinematic;
-
-            // Unconditional. This used to run only while the escalated swelling was worn or the
-            // game called the moment cinematic, and the milking scene satisfies neither: the game
-            // strips the escalation on entering that map (付録A A-34), and the scene was watched
-            // playing on screen with not one line written. A condition that is false exactly when
-            // the thing being measured happens is worse than no condition at all. The probe is
-            // throttled and deduped instead, which costs a quarter-second read (付録A A-36).
-            MilkingAnimation.ProbePlayer(scene, swollen);
-
             GaTakePlayer? player = ManagerList.Gallery?.CurrentTakePlayer;
             AnimationTakeData? take = player?.PlayingTakeData;
             if (take is null)
@@ -159,8 +113,7 @@ public sealed class PleasureObserver : MonoBehaviour
                 return;
             }
 
-            string name = take.m_TakeName;
-            MilkingAnimation.ProbeGallery(take, string.IsNullOrEmpty(name) ? "(unnamed)" : name);
+            _ = take.m_TakeName;
         }
         catch (Exception)
         {
@@ -467,6 +420,9 @@ public sealed class PleasureObserver : MonoBehaviour
         // would make the escalated status the cheapest one to be rid of.
         PleasureRuntime.Milk?.LoadFrom(1f);
 
+        // The span is drawn here, and it is what the player now has to live through. The game's own
+        // way out — the self-milking scene — cannot be reproduced away from the map it was authored
+        // on (付録A A-42), so the escalation ends by being survived (FR-259).
         PleasureRuntime.SuperTimer?.Start();
         BeginTransition();
 
@@ -725,7 +681,18 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
+        bool wasRunning = timer.IsRunning;
         timer.Start();
+        if (!wasRunning)
+        {
+            // Said once, when the wait begins. How long it is, is the whole of the situation: a
+            // player who does not know whether this lasts five seconds or five minutes cannot
+            // decide whether to run for it or stand and fight.
+            PleasureRuntime.Log?.LogInfo(
+                $"BreastSuper has to be endured for {timer.Target:0} seconds. Milking it out with "
+                + $"{MilkingKey()} is faster, but being hit wastes it.");
+        }
+
         if (!timer.Tick(delta))
         {
             return;
@@ -743,7 +710,7 @@ public sealed class PleasureObserver : MonoBehaviour
         }
 
         BeginTransition();
-        PleasureRuntime.Log?.LogInfo("BreastSuper subsided back to Breast after its duration.");
+        PleasureRuntime.Log?.LogInfo("BreastSuper was endured to its end and subsided back to Breast.");
     }
 
     /// <summary>
@@ -1168,12 +1135,6 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        // One sweep per press, never on its own (付録A A-27).
-        if (current.type == EventType.KeyDown && current.keyCode == MilkingAnimation.SweepKey)
-        {
-            MilkingAnimation.RequestSweep();
-        }
-
         if (current.type == EventType.KeyDown
             && current.keyCode == MilkingKey()
             && !_enemyEditor.IsOpen
@@ -1311,7 +1272,6 @@ public sealed class PleasureObserver : MonoBehaviour
         if (milk.IsMilking)
         {
             milk.StopMilking();
-            StopMilkingAnimation();
             PleasureRuntime.Log?.LogInfo("Milking stopped.");
             return;
         }
@@ -1348,7 +1308,6 @@ public sealed class PleasureObserver : MonoBehaviour
         if (milk.TryStartMilking())
         {
             PleasureRuntime.MilkingWasHit = false;
-            StartMilkingAnimation();
             PleasureRuntime.Log?.LogInfo(
                 $"Milking started at {milk.Fill:P0}; being hit will waste it and the gauge will "
                 + "start filling again. BreastSuper will subside to Breast.");
@@ -1389,7 +1348,6 @@ public sealed class PleasureObserver : MonoBehaviour
             PleasureRuntime.MilkingWasHit = false;
             if (milk.StopMilking())
             {
-                StopMilkingAnimation();
                 PleasureRuntime.Log?.LogInfo(
                     $"Milking was interrupted at {milk.Fill:P0}; the gauge fills again from here.");
             }
@@ -1397,18 +1355,10 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        // The clip lives in a bundle that is not loaded during ordinary play, so the animation may
-        // arrive a moment after the keypress rather than with it (付録A A-25, A-26).
-        MilkingAnimation.Tick(
-            PleasureRuntime.Profile.BreastSuper.MilkingAnimationState,
-            PleasureRuntime.Profile.BreastSuper.MilkingAnimationSlot);
-
         if (milk.Tick(delta) != MilkOutcome.Emptied)
         {
             return;
         }
-
-        StopMilkingAnimation();
 
         // Down to Breast, not to nothing. Milking out of the escalation still leaves the swelling,
         // which is the same ladder the duration walks back down.
@@ -1426,18 +1376,6 @@ public sealed class PleasureObserver : MonoBehaviour
         BeginTransition();
         PleasureRuntime.Log?.LogInfo("Milked dry: BreastSuper subsided to Breast.");
     }
-
-    /// <summary>
-    /// Starts and stops the milking animation. The work is in <see cref="MilkingAnimation"/>.
-    /// </summary>
-    [HideFromIl2Cpp]
-    private void StartMilkingAnimation() => MilkingAnimation.Start(
-        PleasureRuntime.Profile.BreastSuper.MilkingAnimationState,
-        PleasureRuntime.Profile.BreastSuper.MilkingAnimationSlot);
-
-    /// <summary>Puts the player back into whatever they were doing before milking.</summary>
-    [HideFromIl2Cpp]
-    private static void StopMilkingAnimation() => MilkingAnimation.Stop();
 
     /// <summary>
     /// Notes that this enemy has been met, so the editor can offer the handful that matter ahead of
