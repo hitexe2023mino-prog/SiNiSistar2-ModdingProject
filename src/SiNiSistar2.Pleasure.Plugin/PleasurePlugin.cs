@@ -158,6 +158,11 @@ public sealed class PleasurePlugin : BasePlugin
             typeof(AbnormalLabelPatches),
             postfix: nameof(AbnormalLabelPatches.ExecutionOnePostfix));
         applied += Patch(
+            "breast-over-max",
+            FindMethod(typeof(AbnormalData), nameof(AbnormalData.OnTryAddedOverMax)),
+            typeof(OverMaxPatches),
+            postfix: nameof(OverMaxPatches.OnTryAddedOverMaxPostfix));
+        applied += Patch(
             "item-use",
             FindMethod(typeof(InventoryHandler), nameof(InventoryHandler.PlayItemEvent), typeof(ItemID)),
             typeof(ItemUsePatches),
