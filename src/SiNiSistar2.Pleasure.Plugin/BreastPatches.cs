@@ -55,22 +55,37 @@ internal static class BreastPatches
     {
         try
         {
-            if (list is null || type != AbnormalType.Breast)
+            // Enemies have status lists too. Only the player's is of any interest here.
+            if (list is null || !ReferenceEquals(list, PleasureRuntime.PlayerAbnormals))
             {
                 return;
             }
 
-            // Enemies have status lists too. Only the player's escalates.
-            if (!ReferenceEquals(list, PleasureRuntime.PlayerAbnormals))
-            {
-                return;
-            }
-
+            // Every status, not only Breast. "The item does nothing" has two very different causes
+            // — the MOD never saw the application, or the item applies something other than Breast
+            // — and reporting only Breast cannot tell them apart. Once per status type, so a hold
+            // that reapplies a status every frame does not fill the log (A-15).
             PleasureRuntime.Probe(
-                $"breast-entry-{entryPoint}",
-                $"A-15: Breast reached the MOD through {entryPoint}.");
+                $"status-{type}",
+                $"A-15: {type} was added to the player through {entryPoint}; it is now at level "
+                + $"{SafeLevel(list, type)}.");
 
-            if (!PleasureRuntime.Profile.BreastSuper.HasEffect || !ClaimThisFrame(list))
+            if (type != AbnormalType.Breast)
+            {
+                return;
+            }
+
+            if (!PleasureRuntime.Profile.BreastSuper.HasEffect)
+            {
+                PleasureRuntime.Probe(
+                    "breast-seen-while-off",
+                    "Breast was applied but the escalation is off. Set "
+                    + "BreastSuper.BreastSuperAfterApplications above 0 in "
+                    + "community.sinisistar2.pleasure.cfg to enable it.");
+                return;
+            }
+
+            if (!ClaimThisFrame(list))
             {
                 return;
             }
@@ -171,6 +186,18 @@ internal static class BreastPatches
         catch (Exception exception)
         {
             PleasureRuntime.Probe("breast-attached", $"A-14: the attached Breast could not be read: {exception.Message}");
+        }
+    }
+
+    private static int SafeLevel(AbnormalList list, AbnormalType type)
+    {
+        try
+        {
+            return list.GetAbnormalLevel(type);
+        }
+        catch (Exception)
+        {
+            return -1;
         }
     }
 

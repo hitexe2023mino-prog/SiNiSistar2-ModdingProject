@@ -177,6 +177,13 @@ public static class PleasureProfileFactory
                 + "the HP0 suppression and the probe log are active (FR-233).");
         }
 
+        if (!breastSuper.HasEffect)
+        {
+            notices.Add(
+                "BreastSuper will never be reached: set BreastSuper.BreastSuperAfterApplications "
+                + "above 0. Until then Breast behaves exactly as the game intends it.");
+        }
+
         if (climax.GameOverEnabled && !pleasure.HasEffect)
         {
             warnings.Add(
