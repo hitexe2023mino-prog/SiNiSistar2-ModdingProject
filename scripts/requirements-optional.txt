@@ -1,0 +1,3 @@
+# scripts/enhance_image.py の Real-ESRGAN 経路を使う場合のみ追加でインストールする。
+# 未インストールでも同スクリプトは classical フォールバック（numpy+PIL のみ）で動作する。
+torch
