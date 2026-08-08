@@ -92,6 +92,15 @@ public sealed record PleasureOptions
     public bool EnableDebugKeys { get; init; }
 
     /// <summary>
+    /// Item ids the MOD reports as usable regardless of the game's own condition, comma separated.
+    ///
+    /// The swelling item is refused while the player is already swollen, which is what stops it
+    /// driving the escalation. Lifting that is a deliberate change to what the game permits, so it
+    /// is named item by item rather than applied to everything.
+    /// </summary>
+    public string ForceUsableItems { get; init; } = string.Empty;
+
+    /// <summary>
     /// Records what the 付録A measurements need, each distinct finding once. On by default because
     /// the MOD ships in a state where measuring is the only thing it can usefully do.
     /// </summary>

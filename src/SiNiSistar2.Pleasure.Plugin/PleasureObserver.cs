@@ -299,8 +299,6 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        PleasureRuntime.PendingBreastSuper = false;
-
         AbnormalList? abnormals = status.AbnormalList;
         if (abnormals is null)
         {
@@ -309,25 +307,46 @@ public sealed class PleasureObserver : MonoBehaviour
 
         if (abnormals.Has(AbnormalType.BreastSuper))
         {
+            PleasureRuntime.PendingBreastSuper = false;
+            return;
+        }
+
+        // Added through the AbnormalData overload, which is the one the game itself uses everywhere.
+        // The AbnormalType overload has to resolve the data first, and when BreastSuper had not been
+        // loaded it resolved to nothing and returned quietly: the escalation reported success while
+        // the status stayed at level 0 and Has kept saying it was absent.
+        AbnormalManager? manager = ManagerList.Abnormal;
+        AbnormalData? data = null;
+        if (manager is null || !manager.TryGetData(AbnormalType.BreastSuper, out data) || data is null)
+        {
+            // The flag is deliberately left standing. Loading is asynchronous, so "not yet" must not
+            // become "never" — the escalation was earned and has to land once the data arrives.
+            PleasureRuntime.Probe(
+                "breastsuper-not-loaded",
+                "The BreastSuper escalation is waiting for its data to finish loading. It will be "
+                + "applied as soon as the game has it.");
             return;
         }
 
         // Applied before the removal. The other order leaves a frame with neither status, and the
         // body and portrait are driven from the status list.
-        abnormals.AddAbnormal(AbnormalType.BreastSuper, 1, null);
+        abnormals.AddAbnormal(data, 1, null);
 
         bool applied = abnormals.Has(AbnormalType.BreastSuper);
-        if (applied && PleasureRuntime.Profile.BreastSuper.ReplaceBreast)
-        {
-            abnormals.RemoveAbnormal(AbnormalType.Breast);
-        }
-
         if (!applied)
         {
-            PleasureRuntime.Log?.LogWarning(
-                "BreastSuper was requested but AbnormalList.Has still reports it absent. The "
-                + "escalation is not taking effect; leaving Breast in place.");
+            PleasureRuntime.PendingBreastSuper = false;
+            PleasureRuntime.Log?.LogError(
+                "BreastSuper was applied through AbnormalList.AddAbnormal(AbnormalData) and "
+                + "AbnormalList.Has still reports it absent. The escalation cannot take effect on "
+                + "this build; Breast is left in place.");
             return;
+        }
+
+        PleasureRuntime.PendingBreastSuper = false;
+        if (PleasureRuntime.Profile.BreastSuper.ReplaceBreast)
+        {
+            abnormals.RemoveAbnormal(AbnormalType.Breast);
         }
 
         PleasureRuntime.Log?.LogInfo(
@@ -693,9 +712,11 @@ public sealed class PleasureObserver : MonoBehaviour
         // F11 applies Breast through the game's own add path, so the escalation can be exercised
         // without hunting for the item. Counting only advances once per frame per list, so one
         // press is one application, exactly as a use of the item is.
-        if (current.type == EventType.KeyDown
-            && current.keyCode == KeyCode.F11
-            && PleasureRuntime.Profile.EnableDebugKeys)
+        //
+        // Not behind a config switch. The switch was reset to its default by the game writing the
+        // config back, and a debug key that silently does nothing is worse than no debug key: it
+        // reads as "the mechanism is broken" when nothing was ever asked of it.
+        if (current.type == EventType.KeyDown && current.keyCode == KeyCode.F11)
         {
             ApplyBreastForDebugging();
             current.Use();

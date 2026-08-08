@@ -37,7 +37,7 @@ internal static class ItemUsePatches
     ///
     /// Recorded once per item and answer, so the menu redrawing every frame does not fill the log.
     /// </summary>
-    internal static void IsUsablePostfix(ItemData __instance, bool __result)
+    internal static void IsUsablePostfix(ItemData __instance, ref bool __result)
     {
         try
         {
@@ -51,11 +51,53 @@ internal static class ItemUsePatches
                 $"usable-{id}-{__result}",
                 $"A-20: the game reports {id} as {(__result ? "usable" : "NOT usable")} "
                 + $"(count {__instance.Count}).");
+
+            if (__result || !IsForced(id) || __instance.Count <= 0)
+            {
+                return;
+            }
+
+            __result = true;
+            PleasureRuntime.Probe(
+                $"forced-usable-{id}",
+                $"{id} is refused by the game's own condition and is being reported as usable "
+                + "because Diagnostics.ForceUsableItems names it.");
         }
         catch (Exception exception)
         {
             PleasureRuntime.Log?.LogWarning($"Item usability could not be observed: {exception.Message}");
         }
+    }
+
+    /// <summary><c>ItemData.CanUse</c>, which is what the inventory list asks before greying a row.</summary>
+    internal static void CanUsePostfix(ItemData __instance, ref bool __result)
+    {
+        try
+        {
+            if (__result || __instance is null || !IsForced(__instance.ItemID) || __instance.Count <= 0)
+            {
+                return;
+            }
+
+            __result = true;
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Log?.LogWarning($"Item usability could not be overridden: {exception.Message}");
+        }
+    }
+
+    private static bool IsForced(ItemID id)
+    {
+        foreach (string name in PleasureRuntime.Profile.ForceUsableItems)
+        {
+            if (string.Equals(name, id.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
