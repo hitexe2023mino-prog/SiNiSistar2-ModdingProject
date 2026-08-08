@@ -53,7 +53,14 @@ public sealed record PleasureOptions
 
     public float CorruptionGainScale { get; init; }
 
-    public float CorruptionCap { get; init; } = 10f;
+    /// <summary>
+    /// The most corruption that can be accumulated.
+    ///
+    /// Twelve rather than ten so the two things it drives land on whole numbers: the drawn mark has
+    /// six parts (every 2) and the crest has four stocks above the halfway threshold (every 2 from
+    /// 6). A scale where the boundaries fall between values is a scale that reads as jitter.
+    /// </summary>
+    public float CorruptionCap { get; init; } = 12f;
 
     /// <summary>
     /// How many further <c>Breast</c> applications, arriving while it is already at its maximum

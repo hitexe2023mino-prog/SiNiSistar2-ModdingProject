@@ -118,8 +118,13 @@ internal static class PleasureRuntime
             return 0;
         }
 
+        // Divided into the steps the status has, so the last one lands exactly at the cap: the
+        // drawn mark completes and the thing it pictures sublimates at the same instant. Dividing
+        // by the count rather than by the gaps between them put the last step short of the cap,
+        // which left the mark finished and the curse still curable.
         float span = Math.Max(1e-4f, 1f - tuning.CrestAtFraction);
-        var level = 1 + (int)Math.Floor((fraction - tuning.CrestAtFraction) / span * maxLevel);
+        float steps = Math.Max(1, maxLevel - 1);
+        var level = 1 + (int)Math.Floor(((fraction - tuning.CrestAtFraction) / span * steps) + 1e-4f);
         return Math.Clamp(level, 1, maxLevel);
     }
 

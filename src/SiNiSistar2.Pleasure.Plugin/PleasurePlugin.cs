@@ -349,7 +349,13 @@ public sealed class PleasurePlugin : BasePlugin
         ConfigEntry<float> gainScale = Config.Bind(
             "Corruption", "CorruptionGainScale", 0f, "How much corruption multiplies pleasure gain.");
         ConfigEntry<float> cap = Config.Bind(
-            "Corruption", "CorruptionCap", 10f, "The most corruption that can be accumulated.");
+            "Corruption",
+            "CorruptionCap",
+            12f,
+            "The most corruption that can be accumulated. Twelve rather than ten so the two things "
+            + "it drives land on whole numbers: the drawn mark has six parts and the crest has four "
+            + "stocks above the threshold. Raise it for a finer scale — every boundary stays "
+            + "proportional.");
         ConfigEntry<float> shakeSeconds = Config.Bind(
             "Climax",
             "ClimaxShakeSeconds",

@@ -486,51 +486,39 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        // Added one step at a time, the way the game itself raises a level, and stopped the moment
-        // a step does not take. MaxLevel says four while the game shows the player "1/3", so the
-        // number and the display disagree; the level that will not rise is the real ceiling, and
-        // that is a fact rather than a reading of either (付録A A-46).
-        var stalled = false;
-        for (var step = 0; step < PleasureRuntime.CrestMaxLevel && PleasureRuntime.CrestLevel < target; step++)
-        {
-            int was = PleasureRuntime.CrestLevel;
-            abnormals.AddAbnormal(data, 1, null);
-            if (PleasureRuntime.CrestLevel <= was)
-            {
-                stalled = true;
-                break;
-            }
-        }
+        // Asked for by the level wanted, not by repeating a request for level one. Every repeat
+        // reported "added, level=1" and left the status exactly where it was: the argument names
+        // the level to hold, it does not add one to it (付録A A-47).
+        abnormals.AddAbnormal(data, target, null);
 
         PleasureRuntime.PendingLustCrest = false;
         int now = PleasureRuntime.CrestLevel;
         if (now <= before)
         {
             PleasureRuntime.Log?.LogWarning(
-                "The lust crest was applied and its level did not move. The corruption keeps "
-                + "accumulating; only the game's own status is missing.");
+                $"The lust crest was asked for level {target} and stayed at {now}. The corruption "
+                + "keeps accumulating; only the game's own status is not following it.");
             return;
         }
 
-        // At the ceiling, whether the ceiling is the number the data gives or the one the status
-        // actually enforces. Asking for the top and being refused is how the second is found.
-        CorruptionTrack? track = PleasureRuntime.Corruption;
-        bool atCap = track is not null && track.Cap > 0f && track.Value >= track.Cap - 0.0001f;
-        bool topped = now >= PleasureRuntime.CrestMaxLevel || (atCap && stalled);
-        if (topped && !PleasureRuntime.CrestSublimated)
+        // The last stock is the sublimation. The game carries three of the curse and turns the
+        // fourth into the mark itself, so reaching the ceiling is the moment it stops being a
+        // curse (FR-273).
+        if (now >= PleasureRuntime.CrestMaxLevel && !PleasureRuntime.CrestSublimated)
         {
             PleasureRuntime.CrestSublimated = true;
             PleasureRuntime.Log?.LogInfo(
-                $"The lust crest reached level {now} and has sublimated: "
-                + "it is no longer a curse to be lifted, and no cure will take it off for the rest "
-                + "of this run. A new game starts a new run and clears it (FR-273).");
+                $"The lust crest took its {now}th stock and has sublimated into the mark itself: "
+                + "no cure will take it off for the rest of this run. A new game starts a new run "
+                + "and clears it (FR-273).");
             return;
         }
 
         PleasureRuntime.Log?.LogInfo(
-            $"The corruption has marked the body: the lust crest is at {now}/"
-            + $"{PleasureRuntime.CrestMaxLevel}. It can still be cured at this level. Corruption is "
-            + $"gained {PleasureRuntime.Profile.Corruption.ScaleFor(true):0.##}x faster while it is worn.");
+            $"The corruption has marked the body: the lust crest holds {now} of "
+            + $"{PleasureRuntime.CrestMaxLevel - 1} stocks. It can still be cured at this point; the "
+            + $"{PleasureRuntime.CrestMaxLevel}th sublimates it. Corruption is gained "
+            + $"{PleasureRuntime.Profile.Corruption.ScaleFor(true):0.##}x faster while it is worn.");
     }
 
     /// <summary>
@@ -1537,7 +1525,11 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        float step = corruption.Cap / LustCrestArt.PartCount;
+        // Divided by the multiplier so one press is one part whether or not the crest is worn.
+        // The gain still goes through the real path — the scale is applied there — but a debug key
+        // that jumped two parts once the crest was on skipped the very steps it exists to show.
+        float scale = PleasureRuntime.Profile.Corruption.ScaleFor(PleasureRuntime.IsCrestWorn);
+        float step = corruption.Cap / LustCrestArt.PartCount / Math.Max(1f, scale);
         PleasureRuntime.GainCorruption(step);
 
         var parts = (int)Math.Floor((corruption.Value / corruption.Cap) * LustCrestArt.PartCount);
