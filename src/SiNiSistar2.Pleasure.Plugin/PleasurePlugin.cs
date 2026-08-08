@@ -178,16 +178,6 @@ public sealed class PleasurePlugin : BasePlugin
             typeof(ItemUsePatches),
             postfix: nameof(ItemUsePatches.PlayItemEventPostfix));
         applied += Patch(
-            "item-usable",
-            FindMethod(typeof(ItemData), nameof(ItemData.IsUsable)),
-            typeof(ItemUsePatches),
-            postfix: nameof(ItemUsePatches.IsUsablePostfix));
-        applied += Patch(
-            "item-can-use",
-            FindMethod(typeof(ItemData), "get_CanUse"),
-            typeof(ItemUsePatches),
-            postfix: nameof(ItemUsePatches.CanUsePostfix));
-        applied += Patch(
             "item-consumed",
             FindMethod(typeof(InventoryHandler), nameof(InventoryHandler.RemoveItem), typeof(ItemID)),
             typeof(ItemUsePatches),
@@ -428,14 +418,6 @@ public sealed class PleasurePlugin : BasePlugin
             false,
             "Enables F11, which applies Breast to the player through the game's own add path so the "
             + "BreastSuper escalation can be checked without hunting for the item.");
-        ConfigEntry<string> forceUsable = Config.Bind(
-            "Diagnostics",
-            "ForceUsableItems",
-            string.Empty,
-            "Item ids reported as usable regardless of the game's own condition, comma separated. "
-            + "EnenuthFluids is refused while the player is already swollen, which is what stops it "
-            + "driving the BreastSuper escalation. The game refuses it for a reason of its own, so "
-            + "lifting that is named item by item rather than applied to everything.");
         ConfigEntry<bool> probe = Config.Bind(
             "Diagnostics",
             "ProbeMeasurements",
@@ -513,7 +495,6 @@ public sealed class PleasurePlugin : BasePlugin
             LogTransitions = logTransitions.Value,
             LogAllStatusChanges = logStatuses.Value,
             EnableDebugKeys = debugKeys.Value,
-            ForceUsableItems = forceUsable.Value,
             ProbeMeasurements = probe.Value,
             ShowOverlay = showOverlay.Value,
             GaugeCentreX = _gaugeX.Value,

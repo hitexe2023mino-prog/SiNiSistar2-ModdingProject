@@ -99,7 +99,6 @@ public sealed record PleasureProfile(
     bool LogTransitions,
     bool LogAllStatusChanges,
     bool EnableDebugKeys,
-    IReadOnlyCollection<string> ForceUsableItems,
     bool ProbeMeasurements,
     bool ShowOverlay,
     PleasureOverlayLayout Overlay)
@@ -116,7 +115,6 @@ public sealed record PleasureProfile(
         false,
         false,
         false,
-        Array.Empty<string>(),
         false,
         false,
         PleasureOverlayLayout.Default);
@@ -163,15 +161,6 @@ public static class PleasureProfileFactory
         SensitivityTuning sensitivity = BuildSensitivity(options, errors);
         BreastSuperTuning breastSuper = BuildBreastSuper(options, errors, warnings, notices);
         SexualAttackClassifier classifier = BuildClassifier(options, knownAbnormalNames, enemies, notices);
-        string[] forceUsable = Split(options.ForceUsableItems);
-        if (forceUsable.Length > 0)
-        {
-            warnings.Add(
-                $"Diagnostics.ForceUsableItems reports {string.Join(", ", forceUsable)} as usable "
-                + "regardless of the game's own condition. The game refuses these for a reason of "
-                + "its own; using one outside that reason is not a situation it was authored for.");
-        }
-
         var profile = new PleasureProfile(
             true,
             options.SuppressHp0WhileBound,
@@ -184,7 +173,6 @@ public static class PleasureProfileFactory
             options.LogTransitions,
             options.LogAllStatusChanges,
             options.EnableDebugKeys,
-            forceUsable,
             options.ProbeMeasurements,
             options.ShowOverlay,
             new PleasureOverlayLayout(

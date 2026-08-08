@@ -32,66 +32,15 @@ internal static class ItemUsePatches
     }
 
     /// <summary>
-    /// Whether the game considers an item usable right now (SPEC003 付録A A-20).
+    /// Whether an item is usable is left entirely to the game (SPEC003 付録A A-20, DEC-229).
     ///
-    /// <c>Inventory.Item</c> carries an <c>m_ConditionChecker</c>, so usability is gated by an
-    /// authored condition rather than by stock alone. If the swelling item is refused while the
-    /// player is already swollen, then "use it again while swollen" is not something the game
-    /// permits, and no amount of watching the status paths will ever see it — which is the one
-    /// explanation left for a use that produces no log at all.
-    ///
-    /// Recorded once per item and answer, so the menu redrawing every frame does not fill the log.
+    /// An earlier version forced <c>ItemData.IsUsable</c> and <c>ItemData.CanUse</c> to true for
+    /// named items, to let the swelling item be used while already swollen. It did not work: the
+    /// item's own event carries an <c>m_ConditionChecker</c> that refuses independently, so the use
+    /// ran, nothing was applied, and the stock was not even spent. Opening the outer gate leaves the
+    /// inner one shut. Those two are also the methods the inventory UI asks about constantly, which
+    /// made them a poor thing to be wrong about.
     /// </summary>
-    internal static void IsUsablePostfix(ItemData __instance, ref bool __result)
-    {
-        try
-        {
-            if (__instance is null)
-            {
-                return;
-            }
-
-            ItemID id = __instance.ItemID;
-            PleasureRuntime.Probe(
-                $"usable-{id}-{__result}",
-                $"A-20: the game reports {id} as {(__result ? "usable" : "NOT usable")} "
-                + $"(count {__instance.Count}).");
-
-            if (__result || !IsForced(id) || __instance.Count <= 0)
-            {
-                return;
-            }
-
-            __result = true;
-            PleasureRuntime.Probe(
-                $"forced-usable-{id}",
-                $"{id} is refused by the game's own condition and is being reported as usable "
-                + "because Diagnostics.ForceUsableItems names it.");
-        }
-        catch (Exception exception)
-        {
-            PleasureRuntime.Log?.LogWarning($"Item usability could not be observed: {exception.Message}");
-        }
-    }
-
-    /// <summary><c>ItemData.CanUse</c>, which is what the inventory list asks before greying a row.</summary>
-    internal static void CanUsePostfix(ItemData __instance, ref bool __result)
-    {
-        try
-        {
-            if (__result || __instance is null || !IsForced(__instance.ItemID) || __instance.Count <= 0)
-            {
-                return;
-            }
-
-            __result = true;
-        }
-        catch (Exception exception)
-        {
-            PleasureRuntime.Log?.LogWarning($"Item usability could not be overridden: {exception.Message}");
-        }
-    }
-
     /// <summary>How many are left, and what the player is already wearing.</summary>
     private static string Describe(ItemID id)
     {
@@ -120,19 +69,6 @@ internal static class ItemUsePatches
         }
 
         return string.Join(", ", parts);
-    }
-
-    private static bool IsForced(ItemID id)
-    {
-        foreach (string name in PleasureRuntime.Profile.ForceUsableItems)
-        {
-            if (string.Equals(name, id.ToString(), StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /// <summary>
