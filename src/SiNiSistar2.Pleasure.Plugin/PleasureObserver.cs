@@ -47,7 +47,8 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _breastSuperRequested;
     private bool _crestRequested;
     private bool _lustReported;
-    private double _crestLoadAsked;
+    private readonly HashSet<AbnormalType> _lustAsked = new();
+    private bool _crestLoadAsked;
     private double _crestWaitLogged;
     private double _swellingOverlapSince;
     private double _breastSuperLoadAsked;
@@ -456,12 +457,9 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        if (abnormals.Has(AbnormalType.LustMarkCurse))
-        {
-            PleasureRuntime.PendingLustCrest = false;
-            return;
-        }
-
+        // No early-out on "already worn". That check belonged to a crest that was either on or
+        // off; the crest has levels, and returning here meant the first level was also the last —
+        // which is exactly what was reported (付録A A-46).
         AbnormalManager? manager = ManagerList.Abnormal;
         AbnormalData? data = null;
         if (manager is null || !manager.TryGetData(AbnormalType.LustMarkCurse, out data) || data is null)
@@ -488,11 +486,20 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        // Added one step at a time, the way the game itself raises a level. Bounded by the ceiling
-        // so a status that refuses to climb cannot turn this into a loop.
+        // Added one step at a time, the way the game itself raises a level, and stopped the moment
+        // a step does not take. MaxLevel says four while the game shows the player "1/3", so the
+        // number and the display disagree; the level that will not rise is the real ceiling, and
+        // that is a fact rather than a reading of either (付録A A-46).
+        var stalled = false;
         for (var step = 0; step < PleasureRuntime.CrestMaxLevel && PleasureRuntime.CrestLevel < target; step++)
         {
+            int was = PleasureRuntime.CrestLevel;
             abnormals.AddAbnormal(data, 1, null);
+            if (PleasureRuntime.CrestLevel <= was)
+            {
+                stalled = true;
+                break;
+            }
         }
 
         PleasureRuntime.PendingLustCrest = false;
@@ -505,11 +512,16 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        if (now >= PleasureRuntime.CrestMaxLevel && !PleasureRuntime.CrestSublimated)
+        // At the ceiling, whether the ceiling is the number the data gives or the one the status
+        // actually enforces. Asking for the top and being refused is how the second is found.
+        CorruptionTrack? track = PleasureRuntime.Corruption;
+        bool atCap = track is not null && track.Cap > 0f && track.Value >= track.Cap - 0.0001f;
+        bool topped = now >= PleasureRuntime.CrestMaxLevel || (atCap && stalled);
+        if (topped && !PleasureRuntime.CrestSublimated)
         {
             PleasureRuntime.CrestSublimated = true;
             PleasureRuntime.Log?.LogInfo(
-                $"The lust crest reached {now}/{PleasureRuntime.CrestMaxLevel} and has sublimated: "
+                $"The lust crest reached level {now} and has sublimated: "
                 + "it is no longer a curse to be lifted, and no cure will take it off for the rest "
                 + "of this run. A new game starts a new run and clears it (FR-273).");
             return;
@@ -979,9 +991,13 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        if (now - _crestLoadAsked > 2d)
+        // Asked once, ever. The game's loader adds the result to a dictionary by type, so a second
+        // request for a type already in flight throws "An item with the same key has already been
+        // added" out of an async continuation, where nothing can catch it. Repeating the request
+        // every two seconds turned one wait into a wall of unhandled exceptions (付録A A-46).
+        if (!_crestLoadAsked)
         {
-            _crestLoadAsked = now;
+            _crestLoadAsked = true;
             try
             {
                 manager.LoadAbnormalData(AbnormalType.LustMarkCurse, ManagerList.RootTokenSource.Token);
@@ -1228,12 +1244,15 @@ public sealed class PleasureObserver : MonoBehaviour
     }
 
     /// <summary>
-    /// Names the game's own lust statuses, once (SPEC003 付録A A-45).
+    /// Names the game's own lust statuses, once (SPEC003 付録A A-45, A-46).
     ///
-    /// The crest turned out to be a levelled status — it reads "淫紋の呪い 1/3" in game — and the
-    /// sublimated form it is meant to become at 3/3 may be a different status again. The enum has
-    /// three candidates and their identifiers do not settle which is which, so the game is asked:
-    /// each one's level ceiling, its curability, and the name the player actually sees.
+    /// The first version asked the game to load each type on every pass until it arrived, and the
+    /// game's loader throws when the same type is requested twice — out of an async continuation,
+    /// where nothing can catch it. One request per type, ever.
+    ///
+    /// The localised name is not read. The template's <c>AbnormalNameID</c> is <c>None</c> until
+    /// the status is on someone (付録A A-14), so looking it up returned the localisation table's
+    /// own error string, which is worse than saying nothing.
     /// </summary>
     [HideFromIl2Cpp]
     private void ReportLustStatuses()
@@ -1249,7 +1268,7 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        _lustReported = true;
+        var pending = false;
         foreach (AbnormalType type in new[]
                  {
                      AbnormalType.LustMarkCurse, AbnormalType.Lustfull, AbnormalType.Lustfull_Forever,
@@ -1260,26 +1279,19 @@ public sealed class PleasureObserver : MonoBehaviour
                 AbnormalData? data = null;
                 if (!manager.TryGetData(type, out data) || data is null)
                 {
-                    manager.LoadAbnormalData(type, ManagerList.RootTokenSource.Token);
-                    PleasureRuntime.Log?.LogInfo(
-                        $"A-45: {type} has no data loaded yet; the game has been asked for it.");
-                    _lustReported = false;
+                    if (_lustAsked.Add(type))
+                    {
+                        manager.LoadAbnormalData(type, ManagerList.RootTokenSource.Token);
+                        PleasureRuntime.Log?.LogInfo(
+                            $"A-45: {type} has no data loaded yet; the game has been asked for it, once.");
+                    }
+
+                    pending = true;
                     continue;
                 }
 
-                string shown = "(unreadable)";
-                try
-                {
-                    shown = ManagerList.Localize?.GetLcText(data.AbnormalNameID) ?? "(no name)";
-                }
-                catch (Exception)
-                {
-                    // A missing localisation is not worth losing the rest of the reading over.
-                }
-
                 PleasureRuntime.Log?.LogInfo(
-                    $"A-45: {type} is '{shown}' (nameID={data.AbnormalNameID}), "
-                    + $"maxLevel={data.MaxLevel}, haanjaCanCure={data.HaanjaCanCure}, "
+                    $"A-45: {type} maxLevel={data.MaxLevel}, haanjaCanCure={data.HaanjaCanCure}, "
                     + $"physicalConditionFlag={data.PhysicalConditionFlag}.");
             }
             catch (Exception exception)
@@ -1287,6 +1299,8 @@ public sealed class PleasureObserver : MonoBehaviour
                 PleasureRuntime.Log?.LogWarning($"A-45: {type} could not be read: {exception.Message}");
             }
         }
+
+        _lustReported = !pending;
     }
 
     [HideFromIl2Cpp]
