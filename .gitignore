@@ -23,3 +23,8 @@ BepInEx/config/*.cfg
 # MOD-written save-adjacent data
 BepInEx/data/
 scripts/models/
+
+# Local safety copies of the game executable. Two of these (210 MB each) reached the
+# history once and made the branch unpushable; they are working files, not versioned ones.
+Edi/*.bak-*
+Edi/Edi.exe.bak*
