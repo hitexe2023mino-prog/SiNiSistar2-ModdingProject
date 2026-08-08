@@ -57,13 +57,12 @@ internal static class PortraitRefresh
                     continue;
                 }
 
+                // Three readings, not two. ChangePortrait was called and then UpdatePortrait, and
+                // the art did not move (付録A A-30). That leaves two possibilities which the pair of
+                // readings cannot separate: the change never took, or it took and the redraw threw
+                // it away by recomputing from a list that knows nothing about it. Reading between
+                // the two calls separates them, and costs one line.
                 string before = SpriteName(portrait);
-
-                // Redrawing alone changed nothing — measured: the breast art was 'none' before and
-                // after (付録A A-30). UpdatePortrait draws from the parameter already in effect, and
-                // nothing had put the escalated status's parameter there. ChangePortrait is the
-                // method that does, so the status's own parameter is handed to it. What is drawn is
-                // still entirely the game's: this only delivers the parameter the status carries.
                 if (parameter is null)
                 {
                     portrait.ResetChangePortrait();
@@ -73,13 +72,18 @@ internal static class PortraitRefresh
                     portrait.ChangePortrait(parameter);
                 }
 
+                string changed = SpriteName(portrait);
                 portrait.UpdatePortrait();
                 string after = SpriteName(portrait);
 
                 PleasureRuntime.Probe(
                     $"portrait-refresh-{why}-{after}",
                     $"A-30: the portrait was {(parameter is null ? "reset" : "changed")} for the "
-                    + $"{why}. Its breast art was '{before}' and is now '{after}'.");
+                    + $"{why}. Its breast art was '{before}', became '{changed}' after "
+                    + $"ChangePortrait, and is '{after}' after UpdatePortrait. The portrait is "
+                    + $"'{Describe(portrait.gameObject)}' (active={portrait.isActiveAndEnabled}), "
+                    + $"one of {portraits.Length}. The parameter in effect now holds "
+                    + $"{InEffect(portrait)}.");
             }
         }
         catch (Exception exception)
@@ -106,6 +110,40 @@ internal static class PortraitRefresh
         {
             return null;
         }
+    }
+
+    /// <summary>What the parameter currently in effect carries, which says whether the change stuck.</summary>
+    private static string InEffect(Portrait portrait)
+    {
+        try
+        {
+            PortraitParameter? parameter = portrait.PortraitParameterForChange;
+            if (parameter is null)
+            {
+                return "no parameter at all";
+            }
+
+            Sprite? breast = parameter.m_PortraitSprite_Breast?.m_BaseSprite;
+            return breast is null ? "a parameter with no breast art" : $"breast art '{breast.name}'";
+        }
+        catch (Exception exception)
+        {
+            return $"a parameter that could not be read ({exception.Message})";
+        }
+    }
+
+    /// <summary>The portrait's path, so a second one in the scene is not mistaken for the first.</summary>
+    private static string Describe(GameObject gameObject)
+    {
+        var parts = new List<string>(5);
+        Transform? transform = gameObject.transform;
+        while (transform is not null && parts.Count < 5)
+        {
+            parts.Insert(0, transform.name);
+            transform = transform.parent;
+        }
+
+        return string.Join("/", parts);
     }
 
     private static string SpriteName(Portrait portrait)
