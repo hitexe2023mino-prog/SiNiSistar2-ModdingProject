@@ -74,7 +74,7 @@ internal static class EventPatches
             PleasureRuntime.Log?.LogInfo(
                 $"A-38: a scripted performance is running: '{path}' is a {kind} with "
                 + $"{animators.Length} animator(s) and {directors.Length} director(s) beneath it. "
-                + $"{DescribeDirectors(directors)}");
+                + $"{DescribeDirectors(directors)} {DescribeOrders(host)}");
         }
         catch (Exception)
         {
@@ -118,6 +118,82 @@ internal static class EventPatches
         catch (Exception)
         {
             // A probe that can take the game down is worse than one that misses a swap.
+        }
+    }
+
+    /// <summary>
+    /// Reads the orders an event object carries, rather than intercepting them (SPEC003 付録A A-41).
+    ///
+    /// The postfix on <c>AnimatorTriggerLabel.ExecutionOne</c> never fired, though the step called
+    /// <c>Play Animation</c> plainly ran. The async sibling,
+    /// <c>AnimatorTriggerAsyncLabel.ExecutionOneAsync</c>, returns a <c>UniTask</c>, and DEC-239
+    /// forbids patching that — the last time a postfix went on a struct-returning method the player
+    /// could not move.
+    ///
+    /// So this does not intercept the call at all. The orders are fields on components sitting on
+    /// the event object, and they are there to be read whether or not anyone is executing them.
+    /// Reading them needs no patch, cannot corrupt a return value, and gives the same answer:
+    /// <c>m_PlayName</c> is the name of the thing to play.
+    /// </summary>
+    private static string DescribeOrders(GameObject host)
+    {
+        try
+        {
+            var rows = new List<string>(8);
+            var components = host.GetComponentsInChildren(Il2CppType.Of<Component>(), true);
+            var kinds = new List<string>(components.Length);
+            for (var index = 0; index < components.Length && index < 60; index++)
+            {
+                var component = components[index];
+                if (component is null)
+                {
+                    continue;
+                }
+
+                string kind = component.GetIl2CppType()?.Name ?? "";
+                if (kind.EndsWith("Label", StringComparison.Ordinal))
+                {
+                    kinds.Add(kind);
+                }
+
+                ReadTrigger(component.TryCast<AnimatorTriggerLabel>()?.m_Parameters, rows);
+                ReadTrigger(component.TryCast<AnimatorTriggerAsyncLabel>()?.m_Parameters, rows);
+            }
+
+            string labels = kinds.Count == 0 ? "no labels" : string.Join(", ", kinds);
+            return rows.Count == 0
+                ? $"Its orders ({labels}) name no animation."
+                : $"Its orders ({labels}) name: {string.Join(" | ", rows)}.";
+        }
+        catch (Exception exception)
+        {
+            return $"Its orders could not be read ({exception.Message}).";
+        }
+    }
+
+    /// <summary>One label's parameters, each of which names an animation.</summary>
+    private static void ReadTrigger<T>(Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppArrayBase<T>? parameters, List<string> rows)
+        where T : AnimatorTriggerParameter
+    {
+        if (parameters is null)
+        {
+            return;
+        }
+
+        for (var index = 0; index < parameters.Length && index < 8; index++)
+        {
+            AnimatorTriggerParameter? parameter = parameters[index];
+            if (parameter is null)
+            {
+                continue;
+            }
+
+            Animator? animator = parameter.m_Animator;
+            rows.Add(
+                $"play '{parameter.m_PlayName ?? "(no name)"}' on layer {parameter.m_LayerIndex} "
+                + $"at t={parameter.m_PlayTime:0.00}, found by {parameter.m_SiNiSearchType}, target "
+                + $"{(animator is null ? "resolved at run time"
+                    : $"'{Describe(animator.gameObject)}' on '{animator.runtimeAnimatorController?.name ?? "(none)"}'")}");
         }
     }
 
