@@ -1,4 +1,6 @@
 Name,FileName,StartTime,EndTime,Type,Loop,Description
-Filler Main,filler-main,0,2000,filler,true,Default A10 piston filler
-Filler Breast,filler-breast,0,2000,filler,true,Default synchronized UFO TW filler
-Filler Breast Swollen,filler-breast-swollen,0,2000,filler,true,Stronger breast filler for 膨乳; requires hardware approval
+filler-main,filler-main,0,2000,gallery,true,Default A10 piston filler
+filler-main-parasite,filler-main-parasite,0,3994,gallery,true,Weaker low-frequency A10 piston filler for parasite and egg statuses
+filler-breast,filler-breast,0,2000,gallery,true,Default synchronized UFO TW filler
+filler-breast-swollen,filler-breast-swollen,0,2000,gallery,true,Stronger breast filler for 膨乳; requires hardware approval
+sinisistar2-3c72dc385e33bcb21786,sinisistar2-3c72dc385e33bcb21786,0,816,gallery,true,gallery/GaID_PriestRod_H/Continue

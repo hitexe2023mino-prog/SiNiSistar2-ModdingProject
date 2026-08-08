@@ -1,16 +1,1 @@
-{
-  "version": "1.0",
-  "inverted": true,
-  "range": 100,
-  "actions": [
-    { "at": 0, "pos": 90 },
-    { "at": 250, "pos": 10 },
-    { "at": 500, "pos": 80 },
-    { "at": 750, "pos": 0 },
-    { "at": 1000, "pos": 90 },
-    { "at": 1250, "pos": 10 },
-    { "at": 1500, "pos": 80 },
-    { "at": 1750, "pos": 0 },
-    { "at": 2000, "pos": 90 }
-  ]
-}
+{"version":"1.0","inverted":false,"range":100,"path":"D:\\Indies\\SiNiSistar2-ModdingProject\\Edi\\Gallery\\ufo-right\\filler-breast-swollen.funscript","filename":"filler-breast-swollen","metadata":{"chapters":[{"endTime":"00:00:02.000","name":"filler-breast-swollen","startTime":"00:00:00.000","StartTimeMilis":0,"EndTimeMilis":2000}],"creator":"","description":"","duration":0,"license":"","notes":"","performers":[],"scriptUrl":"","tags":[],"title":"","type":"","videoUrl":""},"actions":[{"pos":90,"at":0},{"pos":10,"at":250},{"pos":80,"at":500},{"pos":0,"at":750},{"pos":90,"at":1000},{"pos":10,"at":1250},{"pos":80,"at":1500},{"pos":0,"at":1750},{"pos":90,"at":2000}]}

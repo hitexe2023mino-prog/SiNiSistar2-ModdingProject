@@ -1,0 +1,534 @@
+2026-08-06 13:45:38.994 +09:00 [DBG] Hosting starting
+2026-08-06 13:45:39.115 +09:00 [INF] Application started. Press Ctrl+C to shut down.
+2026-08-06 13:45:39.115 +09:00 [INF] Hosting environment: Production
+2026-08-06 13:45:39.116 +09:00 [INF] Content root path: D:\Indies\SiNiSistar2-ModdingProject\Edi
+2026-08-06 13:45:39.116 +09:00 [DBG] Hosting started
+2026-08-06 13:45:39.321 +09:00 [INF] ButtplugController initialized.
+2026-08-06 13:45:39.321 +09:00 [INF] ButtplugProvider initialized with repository and device manager.
+2026-08-06 13:45:39.323 +09:00 [INF] EStimProvider initialized with Config: -1
+2026-08-06 13:45:39.324 +09:00 [INF] OutputRecorderProvider initialized with Config: Record=False
+2026-08-06 13:45:39.325 +09:00 [INF] Removing all devices.
+2026-08-06 13:45:39.325 +09:00 [INF] All devices removed.
+2026-08-06 13:45:39.326 +09:00 [INF] Removing all devices.
+2026-08-06 13:45:39.326 +09:00 [INF] Recreating device wrappers while retaining transports.
+2026-08-06 13:45:39.331 +09:00 [INF] Initializing ButtplugProvider...
+2026-08-06 13:45:39.331 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-06 13:45:39.332 +09:00 [INF] Removing all devices.
+2026-08-06 13:45:39.332 +09:00 [INF] All devices removed.
+2026-08-06 13:45:39.332 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-06 13:45:39.350 +09:00 [INF] No Handy connection key is configured; continuing with Bluetooth discovery.
+2026-08-06 13:45:39.350 +09:00 [INF] Removing all devices.
+2026-08-06 13:45:39.350 +09:00 [INF] Recreating device wrappers while retaining transports.
+2026-08-06 13:45:39.350 +09:00 [INF] Starting initialization with 0 device keys.
+2026-08-06 13:45:39.399 +09:00 [INF] Initialization started.
+2026-08-06 13:45:39.399 +09:00 [WRN] DeviceId is set to -1. Initialization will be skipped.
+2026-08-06 13:45:39.400 +09:00 [INF] OutputRecorderProvider initialization started.
+2026-08-06 13:45:39.400 +09:00 [INF] RecorderConfig.Record is false. No device will be loaded.
+2026-08-06 13:45:43.449 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-06 13:45:43.449 +09:00 [INF] ButtplugProvider initialization complete.
+2026-08-06 13:46:03.460 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-06 13:46:03.460 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-06 13:46:03.460 +09:00 [INF] Removing all devices.
+2026-08-06 13:46:03.460 +09:00 [INF] All devices removed.
+2026-08-06 13:46:03.460 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-06 13:46:07.512 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-06 13:47:21.140 +09:00 [DBG] Hosting starting
+2026-08-06 13:47:21.256 +09:00 [INF] Application started. Press Ctrl+C to shut down.
+2026-08-06 13:47:21.257 +09:00 [INF] Hosting environment: Production
+2026-08-06 13:47:21.257 +09:00 [INF] Content root path: D:\Indies\SiNiSistar2-ModdingProject\Edi
+2026-08-06 13:47:21.257 +09:00 [DBG] Hosting started
+2026-08-06 13:47:21.457 +09:00 [INF] ButtplugController initialized.
+2026-08-06 13:47:21.457 +09:00 [INF] ButtplugProvider initialized with repository and device manager.
+2026-08-06 13:47:21.458 +09:00 [INF] EStimProvider initialized with Config: -1
+2026-08-06 13:47:21.459 +09:00 [INF] OutputRecorderProvider initialized with Config: Record=False
+2026-08-06 13:47:21.460 +09:00 [INF] Removing all devices.
+2026-08-06 13:47:21.460 +09:00 [INF] All devices removed.
+2026-08-06 13:47:21.461 +09:00 [INF] Removing all devices.
+2026-08-06 13:47:21.461 +09:00 [INF] Recreating device wrappers while retaining transports.
+2026-08-06 13:47:21.465 +09:00 [INF] Initializing ButtplugProvider...
+2026-08-06 13:47:21.466 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-06 13:47:21.467 +09:00 [INF] Removing all devices.
+2026-08-06 13:47:21.467 +09:00 [INF] All devices removed.
+2026-08-06 13:47:21.467 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-06 13:47:21.483 +09:00 [INF] No Handy connection key is configured; continuing with Bluetooth discovery.
+2026-08-06 13:47:21.483 +09:00 [INF] Removing all devices.
+2026-08-06 13:47:21.483 +09:00 [INF] Recreating device wrappers while retaining transports.
+2026-08-06 13:47:21.483 +09:00 [INF] Starting initialization with 0 device keys.
+2026-08-06 13:47:21.530 +09:00 [INF] Initialization started.
+2026-08-06 13:47:21.530 +09:00 [WRN] DeviceId is set to -1. Initialization will be skipped.
+2026-08-06 13:47:21.530 +09:00 [INF] OutputRecorderProvider initialization started.
+2026-08-06 13:47:21.530 +09:00 [INF] RecorderConfig.Record is false. No device will be loaded.
+2026-08-06 13:47:25.556 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-06 13:47:25.556 +09:00 [INF] ButtplugProvider initialization complete.
+2026-08-06 13:47:45.561 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-06 13:47:45.561 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-06 13:47:45.561 +09:00 [INF] Removing all devices.
+2026-08-06 13:47:45.561 +09:00 [INF] All devices removed.
+2026-08-06 13:47:45.561 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-06 13:47:49.671 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-06 13:48:09.672 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-06 13:48:09.672 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-06 13:48:09.672 +09:00 [INF] Removing all devices.
+2026-08-06 13:48:09.672 +09:00 [INF] All devices removed.
+2026-08-06 13:48:09.672 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-06 13:48:13.754 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-06 13:48:33.769 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-06 13:48:33.769 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-06 13:48:33.769 +09:00 [INF] Removing all devices.
+2026-08-06 13:48:33.769 +09:00 [INF] All devices removed.
+2026-08-06 13:48:33.769 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-06 13:48:37.853 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-06 13:48:57.859 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-06 13:48:57.859 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-06 13:48:57.859 +09:00 [INF] Removing all devices.
+2026-08-06 13:48:57.860 +09:00 [INF] All devices removed.
+2026-08-06 13:48:57.860 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-06 13:49:43.248 +09:00 [DBG] Hosting starting
+2026-08-06 13:49:43.362 +09:00 [INF] Application started. Press Ctrl+C to shut down.
+2026-08-06 13:49:43.363 +09:00 [INF] Hosting environment: Production
+2026-08-06 13:49:43.363 +09:00 [INF] Content root path: D:\Indies\SiNiSistar2-ModdingProject\Edi
+2026-08-06 13:49:43.363 +09:00 [DBG] Hosting started
+2026-08-06 13:49:43.564 +09:00 [INF] ButtplugController initialized.
+2026-08-06 13:49:43.564 +09:00 [INF] ButtplugProvider initialized with repository and device manager.
+2026-08-06 13:49:43.566 +09:00 [INF] EStimProvider initialized with Config: -1
+2026-08-06 13:49:43.567 +09:00 [INF] OutputRecorderProvider initialized with Config: Record=False
+2026-08-06 13:49:43.567 +09:00 [INF] Removing all devices.
+2026-08-06 13:49:43.567 +09:00 [INF] All devices removed.
+2026-08-06 13:49:43.568 +09:00 [INF] Removing all devices.
+2026-08-06 13:49:43.568 +09:00 [INF] Recreating device wrappers while retaining transports.
+2026-08-06 13:49:43.573 +09:00 [INF] Initializing ButtplugProvider...
+2026-08-06 13:49:43.573 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-06 13:49:43.574 +09:00 [INF] Removing all devices.
+2026-08-06 13:49:43.574 +09:00 [INF] All devices removed.
+2026-08-06 13:49:43.574 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-06 13:49:43.590 +09:00 [INF] No Handy connection key is configured; continuing with Bluetooth discovery.
+2026-08-06 13:49:43.591 +09:00 [INF] Removing all devices.
+2026-08-06 13:49:43.591 +09:00 [INF] Recreating device wrappers while retaining transports.
+2026-08-06 13:49:43.591 +09:00 [INF] Starting initialization with 0 device keys.
+2026-08-06 13:49:43.636 +09:00 [INF] Initialization started.
+2026-08-06 13:49:43.636 +09:00 [WRN] DeviceId is set to -1. Initialization will be skipped.
+2026-08-06 13:49:43.637 +09:00 [INF] OutputRecorderProvider initialization started.
+2026-08-06 13:49:43.637 +09:00 [INF] RecorderConfig.Record is false. No device will be loaded.
+2026-08-06 13:49:47.662 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-06 13:49:47.662 +09:00 [INF] ButtplugProvider initialization complete.
+2026-08-06 13:50:07.667 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-06 13:50:07.667 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-06 13:50:07.667 +09:00 [INF] Removing all devices.
+2026-08-06 13:50:07.667 +09:00 [INF] All devices removed.
+2026-08-06 13:50:07.667 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-06 13:50:11.767 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-06 13:50:16.803 +09:00 [DBG] Hosting starting
+2026-08-06 13:50:16.915 +09:00 [INF] Application started. Press Ctrl+C to shut down.
+2026-08-06 13:50:16.915 +09:00 [INF] Hosting environment: Production
+2026-08-06 13:50:16.915 +09:00 [INF] Content root path: D:\Indies\SiNiSistar2-ModdingProject\Edi
+2026-08-06 13:50:16.915 +09:00 [DBG] Hosting started
+2026-08-06 13:50:17.117 +09:00 [INF] ButtplugController initialized.
+2026-08-06 13:50:17.117 +09:00 [INF] ButtplugProvider initialized with repository and device manager.
+2026-08-06 13:50:17.119 +09:00 [INF] EStimProvider initialized with Config: -1
+2026-08-06 13:50:17.120 +09:00 [INF] OutputRecorderProvider initialized with Config: Record=False
+2026-08-06 13:50:17.120 +09:00 [INF] Removing all devices.
+2026-08-06 13:50:17.120 +09:00 [INF] All devices removed.
+2026-08-06 13:50:17.121 +09:00 [INF] Removing all devices.
+2026-08-06 13:50:17.122 +09:00 [INF] Recreating device wrappers while retaining transports.
+2026-08-06 13:50:17.234 +09:00 [INF] Initializing ButtplugProvider...
+2026-08-06 13:50:17.235 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-06 13:50:17.236 +09:00 [INF] Removing all devices.
+2026-08-06 13:50:17.236 +09:00 [INF] All devices removed.
+2026-08-06 13:50:17.236 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-06 13:50:17.253 +09:00 [INF] No Handy connection key is configured; continuing with Bluetooth discovery.
+2026-08-06 13:50:17.253 +09:00 [INF] Removing all devices.
+2026-08-06 13:50:17.253 +09:00 [INF] Recreating device wrappers while retaining transports.
+2026-08-06 13:50:17.254 +09:00 [INF] Starting initialization with 0 device keys.
+2026-08-06 13:50:17.302 +09:00 [INF] Initialization started.
+2026-08-06 13:50:17.302 +09:00 [WRN] DeviceId is set to -1. Initialization will be skipped.
+2026-08-06 13:50:17.302 +09:00 [INF] OutputRecorderProvider initialization started.
+2026-08-06 13:50:17.302 +09:00 [INF] RecorderConfig.Record is false. No device will be loaded.
+2026-08-06 13:50:21.312 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-06 13:50:21.312 +09:00 [INF] ButtplugProvider initialization complete.
+2026-08-06 21:03:03.129 +09:00 [DBG] Hosting starting
+2026-08-06 21:03:03.252 +09:00 [INF] Application started. Press Ctrl+C to shut down.
+2026-08-06 21:03:03.252 +09:00 [INF] Hosting environment: Production
+2026-08-06 21:03:03.253 +09:00 [INF] Content root path: D:\Indies\SiNiSistar2-ModdingProject\Edi
+2026-08-06 21:03:03.253 +09:00 [DBG] Hosting started
+2026-08-06 21:03:03.458 +09:00 [INF] ButtplugController initialized.
+2026-08-06 21:03:03.458 +09:00 [INF] ButtplugProvider initialized with repository and device manager.
+2026-08-06 21:03:03.460 +09:00 [INF] EStimProvider initialized with Config: -1
+2026-08-06 21:03:03.461 +09:00 [INF] OutputRecorderProvider initialized with Config: Record=False
+2026-08-06 21:03:03.462 +09:00 [INF] Removing all devices.
+2026-08-06 21:03:03.462 +09:00 [INF] All devices removed.
+2026-08-06 21:03:03.462 +09:00 [INF] Removing all devices.
+2026-08-06 21:03:03.463 +09:00 [INF] Recreating device wrappers while retaining transports.
+2026-08-06 21:03:03.579 +09:00 [INF] Initializing ButtplugProvider...
+2026-08-06 21:03:03.579 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-06 21:03:03.580 +09:00 [INF] Removing all devices.
+2026-08-06 21:03:03.580 +09:00 [INF] All devices removed.
+2026-08-06 21:03:03.580 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-06 21:03:03.597 +09:00 [INF] No Handy connection key is configured; continuing with Bluetooth discovery.
+2026-08-06 21:03:03.598 +09:00 [INF] Removing all devices.
+2026-08-06 21:03:03.598 +09:00 [INF] Recreating device wrappers while retaining transports.
+2026-08-06 21:03:03.598 +09:00 [INF] Starting initialization with 0 device keys.
+2026-08-06 21:03:03.647 +09:00 [INF] Initialization started.
+2026-08-06 21:03:03.647 +09:00 [WRN] DeviceId is set to -1. Initialization will be skipped.
+2026-08-06 21:03:03.648 +09:00 [INF] OutputRecorderProvider initialization started.
+2026-08-06 21:03:03.648 +09:00 [INF] RecorderConfig.Record is false. No device will be loaded.
+2026-08-06 21:03:07.656 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-06 21:03:07.656 +09:00 [INF] ButtplugProvider initialization complete.
+2026-08-06 21:03:27.655 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-06 21:03:27.656 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-06 21:03:27.656 +09:00 [INF] Removing all devices.
+2026-08-06 21:03:27.656 +09:00 [INF] All devices removed.
+2026-08-06 21:03:27.656 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-06 21:03:31.721 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-06 21:03:51.735 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-06 21:03:51.735 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-06 21:03:51.735 +09:00 [INF] Removing all devices.
+2026-08-06 21:03:51.735 +09:00 [INF] All devices removed.
+2026-08-06 21:03:51.735 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-06 21:03:53.785 +09:00 [INF] Client connected and scanning started.
+2026-08-06 21:03:56.462 +09:00 [INF] Device added: Vorze Piston
+2026-08-06 21:03:56.462 +09:00 [INF] Adding device: Vorze Piston
+2026-08-06 21:03:56.464 +09:00 [INF] RepositoryBase initialized for FunscriptRepository.
+2026-08-06 21:03:56.464 +09:00 [INF] FunscriptRepository initialized.
+2026-08-06 21:03:56.464 +09:00 [INF] Initializing for FunscriptRepository with path: D:\Indies\SiNiSistar2-ModdingProject\Edi\Gallery\.
+2026-08-06 21:03:56.468 +09:00 [INF] Discovered 7 assets in path: D:\Indies\SiNiSistar2-ModdingProject\Edi\Gallery\.
+2026-08-06 21:03:56.477 +09:00 [INF] Updating chapter to FunScript: filler-main, Start: 0, End: 2000
+2026-08-06 21:03:56.479 +09:00 [INF] Gallery added for FunscriptGallery: filler-main, Variant: a10-main.
+2026-08-06 21:03:56.479 +09:00 [INF] Updating chapter to FunScript: filler-main-parasite, Start: 0, End: 3994
+2026-08-06 21:03:56.479 +09:00 [INF] Gallery added for FunscriptGallery: filler-main-parasite, Variant: a10-main.
+2026-08-06 21:03:56.479 +09:00 [INF] Updating chapter to FunScript: filler-breast, Start: 0, End: 2000
+2026-08-06 21:03:56.479 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast, Variant: ufo-left.
+2026-08-06 21:03:56.479 +09:00 [INF] Updating chapter to FunScript: filler-breast, Start: 0, End: 2000
+2026-08-06 21:03:56.479 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast, Variant: ufo-right.
+2026-08-06 21:03:56.479 +09:00 [INF] Updating chapter to FunScript: filler-breast-swollen, Start: 0, End: 2000
+2026-08-06 21:03:56.479 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast-swollen, Variant: ufo-left.
+2026-08-06 21:03:56.480 +09:00 [INF] Updating chapter to FunScript: filler-breast-swollen, Start: 0, End: 2000
+2026-08-06 21:03:56.480 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast-swollen, Variant: ufo-right.
+2026-08-06 21:03:56.480 +09:00 [INF] Updating chapter to FunScript: sinisistar2-3c72dc385e33bcb21786, Start: 0, End: 816
+2026-08-06 21:03:56.480 +09:00 [INF] Gallery added for FunscriptGallery: sinisistar2-3c72dc385e33bcb21786, Variant: a10-main.
+2026-08-06 21:03:56.481 +09:00 [INF] Variants discovered: a10-main, ufo-left, ufo-right, None.
+2026-08-06 21:03:56.481 +09:00 [INF] Finalizing reading process in FunscriptRepository.
+2026-08-06 21:03:56.481 +09:00 [INF] Saving updated FunScript files. Total: 7
+2026-08-06 21:03:56.487 +09:00 [INF] ButtplugDevice initialized with Device: Vorze Piston, Actuator: Position, Channel: 0
+2026-08-06 21:03:56.488 +09:00 [INF] Fetching available variants.
+2026-08-06 21:03:56.493 +09:00 [INF] Device loaded: Vorze Piston
+2026-08-06 21:03:56.493 +09:00 [INF] Stopping gallery playback for Device: Vorze Piston
+2026-08-06 21:03:57.002 +09:00 [INF] Fetching available variants.
+2026-08-06 21:04:05.333 +09:00 [INF] Fetching available variants.
+2026-08-06 21:04:05.358 +09:00 [INF] Fetching gallery with Name: filler-main-parasite, Variant: a10-main.
+2026-08-06 21:04:05.359 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main-parasite, Seek: 0
+2026-08-06 21:04:08.509 +09:00 [WRN] PlayGallery canceled for Device: Vorze Piston
+2026-08-06 21:04:08.509 +09:00 [INF] Stopping gallery playback for Device: Vorze Piston
+2026-08-06 21:04:16.777 +09:00 [INF] Fetching gallery with Name: filler-main-parasite, Variant: a10-main.
+2026-08-06 21:04:16.777 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main-parasite, Seek: 0
+2026-08-06 21:04:17.088 +09:00 [WRN] PlayGallery canceled for Device: Vorze Piston
+2026-08-06 21:04:17.088 +09:00 [INF] Fetching gallery with Name: sinisistar2-3c72dc385e33bcb21786, Variant: a10-main.
+2026-08-06 21:04:17.088 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: sinisistar2-3c72dc385e33bcb21786, Seek: 0
+2026-08-06 21:04:17.906 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:04:17.907 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: sinisistar2-3c72dc385e33bcb21786, Seek: 2
+2026-08-06 21:04:18.731 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:04:18.732 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: sinisistar2-3c72dc385e33bcb21786, Seek: 10
+2026-08-06 21:04:19.544 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:04:19.544 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: sinisistar2-3c72dc385e33bcb21786, Seek: 6
+2026-08-06 21:04:20.369 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:04:20.369 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: sinisistar2-3c72dc385e33bcb21786, Seek: 14
+2026-08-06 21:04:21.178 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:04:21.178 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: sinisistar2-3c72dc385e33bcb21786, Seek: 7
+2026-08-06 21:04:21.932 +09:00 [INF] Fetching gallery with Name: filler-main-parasite, Variant: a10-main.
+2026-08-06 21:04:21.932 +09:00 [WRN] PlayGallery canceled for Device: Vorze Piston
+2026-08-06 21:04:21.932 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main-parasite, Seek: 0
+2026-08-06 21:04:25.933 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:04:25.933 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main-parasite, Seek: 7
+2026-08-06 21:04:29.935 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:04:29.935 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main-parasite, Seek: 14
+2026-08-06 21:04:33.921 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:04:33.921 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main-parasite, Seek: 5
+2026-08-06 21:04:37.923 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:04:37.923 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main-parasite, Seek: 12
+2026-08-06 21:04:41.908 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:04:41.908 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main-parasite, Seek: 3
+2026-08-06 21:04:45.914 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:04:45.914 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main-parasite, Seek: 14
+2026-08-06 21:04:48.147 +09:00 [INF] Fetching gallery with Name: sinisistar2-3c72dc385e33bcb21786, Variant: a10-main.
+2026-08-06 21:04:48.147 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: sinisistar2-3c72dc385e33bcb21786, Seek: 0
+2026-08-06 21:04:48.147 +09:00 [WRN] PlayGallery canceled for Device: Vorze Piston
+2026-08-06 21:04:48.977 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:04:48.977 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: sinisistar2-3c72dc385e33bcb21786, Seek: 14
+2026-08-06 21:04:49.789 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:04:49.789 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: sinisistar2-3c72dc385e33bcb21786, Seek: 9
+2026-08-06 21:04:50.600 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:04:50.600 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: sinisistar2-3c72dc385e33bcb21786, Seek: 3
+2026-08-06 21:04:51.416 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:04:51.416 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: sinisistar2-3c72dc385e33bcb21786, Seek: 3
+2026-08-06 21:04:51.651 +09:00 [INF] Fetching gallery with Name: filler-main-parasite, Variant: a10-main.
+2026-08-06 21:04:51.651 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main-parasite, Seek: 0
+2026-08-06 21:04:51.651 +09:00 [WRN] PlayGallery canceled for Device: Vorze Piston
+2026-08-06 21:04:54.917 +09:00 [INF] Stopping gallery playback for Device: Vorze Piston
+2026-08-06 21:04:54.918 +09:00 [WRN] PlayGallery canceled for Device: Vorze Piston
+2026-08-06 21:04:56.684 +09:00 [INF] Fetching gallery with Name: filler-main-parasite, Variant: a10-main.
+2026-08-06 21:04:56.684 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main-parasite, Seek: 0
+2026-08-06 21:05:00.681 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:05:00.681 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main-parasite, Seek: 2
+2026-08-06 21:05:04.677 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:05:04.677 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main-parasite, Seek: 3
+2026-08-06 21:05:08.680 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:05:08.680 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main-parasite, Seek: 12
+2026-08-06 21:05:12.673 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:05:12.673 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main-parasite, Seek: 11
+2026-08-06 21:05:16.660 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:05:16.661 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main-parasite, Seek: 4
+2026-08-06 21:05:20.557 +09:00 [INF] Fetching gallery with Name: filler-main, Variant: a10-main.
+2026-08-06 21:05:20.557 +09:00 [WRN] PlayGallery canceled for Device: Vorze Piston
+2026-08-06 21:05:20.557 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 0
+2026-08-06 21:05:22.563 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:05:22.563 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 5
+2026-08-06 21:05:24.565 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:05:24.565 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 7
+2026-08-06 21:05:26.563 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:05:26.563 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 4
+2026-08-06 21:05:28.560 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:05:28.560 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 0
+2026-08-06 21:05:30.563 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:05:30.563 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 3
+2026-08-06 21:05:32.564 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:05:32.564 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 3
+2026-08-06 21:05:34.565 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:05:34.565 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 4
+2026-08-06 21:05:34.890 +09:00 [INF] Stopping gallery playback for Device: Vorze Piston
+2026-08-06 21:05:34.890 +09:00 [WRN] PlayGallery canceled for Device: Vorze Piston
+2026-08-06 21:05:42.329 +09:00 [INF] Fetching gallery with Name: filler-main, Variant: a10-main.
+2026-08-06 21:05:42.329 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 0
+2026-08-06 21:05:44.340 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:05:44.341 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 11
+2026-08-06 21:05:46.340 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:05:46.340 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 10
+2026-08-06 21:05:48.331 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:05:48.331 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 0
+2026-08-06 21:05:50.343 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:05:50.344 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 12
+2026-08-06 21:05:52.343 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:05:52.343 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 11
+2026-08-06 21:05:54.340 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:05:54.340 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 8
+2026-08-06 21:05:56.334 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:05:56.334 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 2
+2026-08-06 21:05:58.339 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:05:58.339 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 6
+2026-08-06 21:06:00.338 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:06:00.338 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 5
+2026-08-06 21:06:02.337 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:06:02.337 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 4
+2026-08-06 21:06:02.949 +09:00 [INF] Initializing for FunscriptRepository with path: D:\Indies\SiNiSistar2-ModdingProject\Edi\Gallery\.
+2026-08-06 21:06:02.949 +09:00 [INF] Discovered 7 assets in path: D:\Indies\SiNiSistar2-ModdingProject\Edi\Gallery\.
+2026-08-06 21:06:02.951 +09:00 [INF] Adding new chapter to FunScript: filler-main, Start: 0, End: 2000
+2026-08-06 21:06:02.951 +09:00 [INF] Gallery added for FunscriptGallery: filler-main, Variant: a10-main.
+2026-08-06 21:06:02.951 +09:00 [INF] Updating chapter to FunScript: filler-main-parasite, Start: 0, End: 3994
+2026-08-06 21:06:02.951 +09:00 [INF] Gallery added for FunscriptGallery: filler-main-parasite, Variant: a10-main.
+2026-08-06 21:06:02.951 +09:00 [INF] Updating chapter to FunScript: filler-breast, Start: 0, End: 2000
+2026-08-06 21:06:02.951 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast, Variant: ufo-left.
+2026-08-06 21:06:02.951 +09:00 [INF] Updating chapter to FunScript: filler-breast, Start: 0, End: 2000
+2026-08-06 21:06:02.951 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast, Variant: ufo-right.
+2026-08-06 21:06:02.952 +09:00 [INF] Updating chapter to FunScript: filler-breast-swollen, Start: 0, End: 2000
+2026-08-06 21:06:02.952 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast-swollen, Variant: ufo-left.
+2026-08-06 21:06:02.952 +09:00 [INF] Updating chapter to FunScript: filler-breast-swollen, Start: 0, End: 2000
+2026-08-06 21:06:02.952 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast-swollen, Variant: ufo-right.
+2026-08-06 21:06:02.952 +09:00 [INF] Updating chapter to FunScript: sinisistar2-3c72dc385e33bcb21786, Start: 0, End: 816
+2026-08-06 21:06:02.952 +09:00 [INF] Gallery added for FunscriptGallery: sinisistar2-3c72dc385e33bcb21786, Variant: a10-main.
+2026-08-06 21:06:02.952 +09:00 [INF] Variants discovered: a10-main, ufo-left, ufo-right, None.
+2026-08-06 21:06:02.952 +09:00 [INF] Finalizing reading process in FunscriptRepository.
+2026-08-06 21:06:02.952 +09:00 [INF] Saving updated FunScript files. Total: 7
+2026-08-06 21:06:02.953 +09:00 [INF] Fetching available variants.
+2026-08-06 21:06:04.342 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:06:04.342 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 8
+2026-08-06 21:06:06.349 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:06:06.349 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 15
+2026-08-06 21:06:08.335 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:06:08.335 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 0
+2026-08-06 21:06:10.340 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:06:10.340 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 4
+2026-08-06 21:06:12.340 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:06:12.340 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 4
+2026-08-06 21:06:14.339 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:06:14.340 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 3
+2026-08-06 21:06:16.022 +09:00 [INF] Initializing for FunscriptRepository with path: D:\Indies\SiNiSistar2-ModdingProject\Edi\Gallery\.
+2026-08-06 21:06:16.022 +09:00 [INF] Discovered 7 assets in path: D:\Indies\SiNiSistar2-ModdingProject\Edi\Gallery\.
+2026-08-06 21:06:16.023 +09:00 [INF] Updating chapter to FunScript: filler-main, Start: 0, End: 2000
+2026-08-06 21:06:16.023 +09:00 [INF] Gallery added for FunscriptGallery: filler-main, Variant: a10-main.
+2026-08-06 21:06:16.027 +09:00 [INF] Adding new chapter to FunScript: filler-main-parasite, Start: 0, End: 3994
+2026-08-06 21:06:16.027 +09:00 [INF] Gallery added for FunscriptGallery: filler-main-parasite, Variant: a10-main.
+2026-08-06 21:06:16.027 +09:00 [INF] Updating chapter to FunScript: filler-breast, Start: 0, End: 2000
+2026-08-06 21:06:16.027 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast, Variant: ufo-left.
+2026-08-06 21:06:16.027 +09:00 [INF] Updating chapter to FunScript: filler-breast, Start: 0, End: 2000
+2026-08-06 21:06:16.027 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast, Variant: ufo-right.
+2026-08-06 21:06:16.028 +09:00 [INF] Updating chapter to FunScript: filler-breast-swollen, Start: 0, End: 2000
+2026-08-06 21:06:16.028 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast-swollen, Variant: ufo-left.
+2026-08-06 21:06:16.028 +09:00 [INF] Updating chapter to FunScript: filler-breast-swollen, Start: 0, End: 2000
+2026-08-06 21:06:16.028 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast-swollen, Variant: ufo-right.
+2026-08-06 21:06:16.028 +09:00 [INF] Updating chapter to FunScript: sinisistar2-3c72dc385e33bcb21786, Start: 0, End: 816
+2026-08-06 21:06:16.028 +09:00 [INF] Gallery added for FunscriptGallery: sinisistar2-3c72dc385e33bcb21786, Variant: a10-main.
+2026-08-06 21:06:16.028 +09:00 [INF] Variants discovered: a10-main, ufo-left, ufo-right, None.
+2026-08-06 21:06:16.028 +09:00 [INF] Finalizing reading process in FunscriptRepository.
+2026-08-06 21:06:16.028 +09:00 [INF] Saving updated FunScript files. Total: 7
+2026-08-06 21:06:16.029 +09:00 [INF] Fetching available variants.
+2026-08-06 21:06:16.339 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:06:16.339 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 2
+2026-08-06 21:06:18.349 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:06:18.349 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 12
+2026-08-06 21:06:20.348 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:06:20.348 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 10
+2026-08-06 21:06:22.286 +09:00 [INF] Initializing for FunscriptRepository with path: D:\Indies\SiNiSistar2-ModdingProject\Edi\Gallery\.
+2026-08-06 21:06:22.286 +09:00 [INF] Discovered 7 assets in path: D:\Indies\SiNiSistar2-ModdingProject\Edi\Gallery\.
+2026-08-06 21:06:22.287 +09:00 [INF] Updating chapter to FunScript: filler-main, Start: 0, End: 2000
+2026-08-06 21:06:22.287 +09:00 [INF] Gallery added for FunscriptGallery: filler-main, Variant: a10-main.
+2026-08-06 21:06:22.287 +09:00 [INF] Updating chapter to FunScript: filler-main-parasite, Start: 0, End: 3994
+2026-08-06 21:06:22.287 +09:00 [INF] Gallery added for FunscriptGallery: filler-main-parasite, Variant: a10-main.
+2026-08-06 21:06:22.289 +09:00 [INF] Adding new chapter to FunScript: filler-breast, Start: 0, End: 2000
+2026-08-06 21:06:22.289 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast, Variant: ufo-left.
+2026-08-06 21:06:22.289 +09:00 [INF] Adding new chapter to FunScript: filler-breast, Start: 0, End: 2000
+2026-08-06 21:06:22.289 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast, Variant: ufo-right.
+2026-08-06 21:06:22.289 +09:00 [INF] Updating chapter to FunScript: filler-breast-swollen, Start: 0, End: 2000
+2026-08-06 21:06:22.289 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast-swollen, Variant: ufo-left.
+2026-08-06 21:06:22.289 +09:00 [INF] Updating chapter to FunScript: filler-breast-swollen, Start: 0, End: 2000
+2026-08-06 21:06:22.289 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast-swollen, Variant: ufo-right.
+2026-08-06 21:06:22.289 +09:00 [INF] Updating chapter to FunScript: sinisistar2-3c72dc385e33bcb21786, Start: 0, End: 816
+2026-08-06 21:06:22.289 +09:00 [INF] Gallery added for FunscriptGallery: sinisistar2-3c72dc385e33bcb21786, Variant: a10-main.
+2026-08-06 21:06:22.289 +09:00 [INF] Variants discovered: a10-main, ufo-left, ufo-right, None.
+2026-08-06 21:06:22.289 +09:00 [INF] Finalizing reading process in FunscriptRepository.
+2026-08-06 21:06:22.290 +09:00 [INF] Saving updated FunScript files. Total: 7
+2026-08-06 21:06:22.291 +09:00 [INF] Fetching available variants.
+2026-08-06 21:06:22.346 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:06:22.346 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 8
+2026-08-06 21:06:24.348 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:06:24.348 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 9
+2026-08-06 21:06:26.346 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:06:26.346 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 6
+2026-08-06 21:06:28.340 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 0
+2026-08-06 21:06:28.340 +09:00 [WRN] PlayGallery canceled for Device: Vorze Piston
+2026-08-06 21:06:30.351 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:06:30.351 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 11
+2026-08-06 21:06:32.350 +09:00 [WRN] PlayGallery canceled for Device: Vorze Piston
+2026-08-06 21:06:32.350 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 9
+2026-08-06 21:06:34.339 +09:00 [INF] Initializing for FunscriptRepository with path: D:\Indies\SiNiSistar2-ModdingProject\Edi\Gallery\.
+2026-08-06 21:06:34.339 +09:00 [INF] Discovered 7 assets in path: D:\Indies\SiNiSistar2-ModdingProject\Edi\Gallery\.
+2026-08-06 21:06:34.339 +09:00 [INF] Updating chapter to FunScript: filler-main, Start: 0, End: 2000
+2026-08-06 21:06:34.339 +09:00 [INF] Gallery added for FunscriptGallery: filler-main, Variant: a10-main.
+2026-08-06 21:06:34.340 +09:00 [INF] Updating chapter to FunScript: filler-main-parasite, Start: 0, End: 3994
+2026-08-06 21:06:34.340 +09:00 [INF] Gallery added for FunscriptGallery: filler-main-parasite, Variant: a10-main.
+2026-08-06 21:06:34.340 +09:00 [INF] Updating chapter to FunScript: filler-breast, Start: 0, End: 2000
+2026-08-06 21:06:34.340 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast, Variant: ufo-left.
+2026-08-06 21:06:34.340 +09:00 [INF] Updating chapter to FunScript: filler-breast, Start: 0, End: 2000
+2026-08-06 21:06:34.340 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast, Variant: ufo-right.
+2026-08-06 21:06:34.342 +09:00 [INF] Adding new chapter to FunScript: filler-breast-swollen, Start: 0, End: 2000
+2026-08-06 21:06:34.342 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast-swollen, Variant: ufo-left.
+2026-08-06 21:06:34.343 +09:00 [INF] Adding new chapter to FunScript: filler-breast-swollen, Start: 0, End: 2000
+2026-08-06 21:06:34.343 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast-swollen, Variant: ufo-right.
+2026-08-06 21:06:34.343 +09:00 [INF] Updating chapter to FunScript: sinisistar2-3c72dc385e33bcb21786, Start: 0, End: 816
+2026-08-06 21:06:34.343 +09:00 [INF] Gallery added for FunscriptGallery: sinisistar2-3c72dc385e33bcb21786, Variant: a10-main.
+2026-08-06 21:06:34.343 +09:00 [INF] Variants discovered: a10-main, ufo-left, ufo-right, None.
+2026-08-06 21:06:34.343 +09:00 [INF] Finalizing reading process in FunscriptRepository.
+2026-08-06 21:06:34.343 +09:00 [INF] Saving updated FunScript files. Total: 7
+2026-08-06 21:06:34.344 +09:00 [INF] Fetching available variants.
+2026-08-06 21:06:34.349 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:06:34.349 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 7
+2026-08-06 21:06:36.350 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 8
+2026-08-06 21:06:36.350 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:06:38.350 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:06:38.350 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 8
+2026-08-06 21:06:40.350 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:06:40.350 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 7
+2026-08-06 21:06:41.880 +09:00 [INF] Stopping gallery playback for Device: Vorze Piston
+2026-08-06 21:06:41.880 +09:00 [WRN] PlayGallery canceled for Device: Vorze Piston
+2026-08-06 21:06:43.788 +09:00 [INF] Fetching gallery with Name: filler-main, Variant: a10-main.
+2026-08-06 21:06:43.788 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 0
+2026-08-06 21:06:45.798 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:06:45.798 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 10
+2026-08-06 21:06:46.459 +09:00 [INF] Fetching gallery with Name: filler-main-parasite, Variant: a10-main.
+2026-08-06 21:06:46.459 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main-parasite, Seek: 0
+2026-08-06 21:06:46.459 +09:00 [WRN] PlayGallery canceled for Device: Vorze Piston
+2026-08-06 21:06:49.161 +09:00 [INF] Fetching gallery with Name: filler-breast, Variant: a10-main.
+2026-08-06 21:06:49.161 +09:00 [WRN] PlayGallery canceled for Device: Vorze Piston
+2026-08-06 21:06:49.161 +09:00 [WRN] Gallery 'filler-breast' has no 'a10-main' variant; it has ufo-left, ufo-right. StrictVariantResolution is enabled, so no other variant is substituted and this device will not play.
+2026-08-06 21:06:49.161 +09:00 [INF] Stopping gallery playback for Device: Vorze Piston
+2026-08-06 21:06:53.282 +09:00 [INF] Fetching gallery with Name: filler-breast-swollen, Variant: a10-main.
+2026-08-06 21:06:53.282 +09:00 [WRN] Gallery 'filler-breast-swollen' has no 'a10-main' variant; it has ufo-left, ufo-right. StrictVariantResolution is enabled, so no other variant is substituted and this device will not play.
+2026-08-06 21:06:53.282 +09:00 [INF] Stopping gallery playback for Device: Vorze Piston
+2026-08-06 21:06:55.695 +09:00 [INF] Fetching gallery with Name: sinisistar2-3c72dc385e33bcb21786, Variant: a10-main.
+2026-08-06 21:06:55.695 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: sinisistar2-3c72dc385e33bcb21786, Seek: 0
+2026-08-06 21:06:56.523 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:06:56.523 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: sinisistar2-3c72dc385e33bcb21786, Seek: 12
+2026-08-06 21:06:56.795 +09:00 [INF] Stopping gallery playback for Device: Vorze Piston
+2026-08-06 21:06:56.796 +09:00 [WRN] PlayGallery canceled for Device: Vorze Piston
+2026-08-06 21:06:58.955 +09:00 [INF] Fetching gallery with Name: filler-breast, Variant: a10-main.
+2026-08-06 21:06:58.955 +09:00 [WRN] Gallery 'filler-breast' has no 'a10-main' variant; it has ufo-left, ufo-right. StrictVariantResolution is enabled, so no other variant is substituted and this device will not play.
+2026-08-06 21:06:58.955 +09:00 [INF] Stopping gallery playback for Device: Vorze Piston
+2026-08-06 21:07:01.995 +09:00 [INF] Fetching gallery with Name: filler-main, Variant: a10-main.
+2026-08-06 21:07:01.995 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 0
+2026-08-06 21:07:04.005 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:07:04.005 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 10
+2026-08-06 21:07:05.995 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:07:05.995 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 0
+2026-08-06 21:07:08.010 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:07:08.010 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 14
+2026-08-06 21:07:08.922 +09:00 [INF] Initializing for FunscriptRepository with path: D:\Indies\SiNiSistar2-ModdingProject\Edi\Gallery\.
+2026-08-06 21:07:08.923 +09:00 [INF] Discovered 7 assets in path: D:\Indies\SiNiSistar2-ModdingProject\Edi\Gallery\.
+2026-08-06 21:07:08.926 +09:00 [INF] Adding new chapter to FunScript: filler-main, Start: 0, End: 2000
+2026-08-06 21:07:08.926 +09:00 [INF] Gallery added for FunscriptGallery: filler-main, Variant: a10-main.
+2026-08-06 21:07:08.926 +09:00 [INF] Updating chapter to FunScript: filler-main-parasite, Start: 0, End: 3994
+2026-08-06 21:07:08.926 +09:00 [INF] Gallery added for FunscriptGallery: filler-main-parasite, Variant: a10-main.
+2026-08-06 21:07:08.926 +09:00 [INF] Updating chapter to FunScript: filler-breast, Start: 0, End: 2000
+2026-08-06 21:07:08.926 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast, Variant: ufo-left.
+2026-08-06 21:07:08.927 +09:00 [INF] Updating chapter to FunScript: filler-breast, Start: 0, End: 2000
+2026-08-06 21:07:08.927 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast, Variant: ufo-right.
+2026-08-06 21:07:08.927 +09:00 [INF] Updating chapter to FunScript: filler-breast-swollen, Start: 0, End: 2000
+2026-08-06 21:07:08.927 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast-swollen, Variant: ufo-left.
+2026-08-06 21:07:08.927 +09:00 [INF] Updating chapter to FunScript: filler-breast-swollen, Start: 0, End: 2000
+2026-08-06 21:07:08.927 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast-swollen, Variant: ufo-right.
+2026-08-06 21:07:08.927 +09:00 [INF] Updating chapter to FunScript: sinisistar2-3c72dc385e33bcb21786, Start: 0, End: 816
+2026-08-06 21:07:08.927 +09:00 [INF] Gallery added for FunscriptGallery: sinisistar2-3c72dc385e33bcb21786, Variant: a10-main.
+2026-08-06 21:07:08.927 +09:00 [INF] Variants discovered: a10-main, ufo-left, ufo-right, None.
+2026-08-06 21:07:08.927 +09:00 [INF] Finalizing reading process in FunscriptRepository.
+2026-08-06 21:07:08.927 +09:00 [INF] Saving updated FunScript files. Total: 7
+2026-08-06 21:07:08.928 +09:00 [INF] Fetching available variants.
+2026-08-06 21:07:09.999 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:07:09.999 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 3
+2026-08-06 21:07:10.881 +09:00 [INF] Stopping gallery playback for Device: Vorze Piston
+2026-08-06 21:07:10.881 +09:00 [WRN] PlayGallery canceled for Device: Vorze Piston
+2026-08-06 21:07:11.938 +09:00 [INF] Fetching gallery with Name: filler-main, Variant: a10-main.
+2026-08-06 21:07:11.938 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 0
+2026-08-06 21:07:13.951 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:07:13.951 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 12
+2026-08-06 21:07:15.011 +09:00 [INF] Stopping gallery playback for Device: Vorze Piston
+2026-08-06 21:07:15.011 +09:00 [WRN] PlayGallery canceled for Device: Vorze Piston
+2026-08-06 21:07:22.533 +09:00 [INF] Initializing for FunscriptRepository with path: D:\Indies\SiNiSistar2-ModdingProject\Edi\Gallery\.
+2026-08-06 21:07:22.533 +09:00 [INF] Discovered 7 assets in path: D:\Indies\SiNiSistar2-ModdingProject\Edi\Gallery\.
+2026-08-06 21:07:22.537 +09:00 [INF] Adding new chapter to FunScript: filler-main, Start: 0, End: 2000
+2026-08-06 21:07:22.537 +09:00 [INF] Gallery added for FunscriptGallery: filler-main, Variant: a10-main.
+2026-08-06 21:07:22.537 +09:00 [INF] Updating chapter to FunScript: filler-main-parasite, Start: 0, End: 3994
+2026-08-06 21:07:22.537 +09:00 [INF] Gallery added for FunscriptGallery: filler-main-parasite, Variant: a10-main.
+2026-08-06 21:07:22.537 +09:00 [INF] Updating chapter to FunScript: filler-breast, Start: 0, End: 2000
+2026-08-06 21:07:22.537 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast, Variant: ufo-left.
+2026-08-06 21:07:22.537 +09:00 [INF] Updating chapter to FunScript: filler-breast, Start: 0, End: 2000
+2026-08-06 21:07:22.537 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast, Variant: ufo-right.
+2026-08-06 21:07:22.538 +09:00 [INF] Updating chapter to FunScript: filler-breast-swollen, Start: 0, End: 2000
+2026-08-06 21:07:22.538 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast-swollen, Variant: ufo-left.
+2026-08-06 21:07:22.538 +09:00 [INF] Updating chapter to FunScript: filler-breast-swollen, Start: 0, End: 2000
+2026-08-06 21:07:22.538 +09:00 [INF] Gallery added for FunscriptGallery: filler-breast-swollen, Variant: ufo-right.
+2026-08-06 21:07:22.538 +09:00 [INF] Updating chapter to FunScript: sinisistar2-3c72dc385e33bcb21786, Start: 0, End: 816
+2026-08-06 21:07:22.538 +09:00 [INF] Gallery added for FunscriptGallery: sinisistar2-3c72dc385e33bcb21786, Variant: a10-main.
+2026-08-06 21:07:22.538 +09:00 [INF] Variants discovered: a10-main, ufo-left, ufo-right, None.
+2026-08-06 21:07:22.538 +09:00 [INF] Finalizing reading process in FunscriptRepository.
+2026-08-06 21:07:22.538 +09:00 [INF] Saving updated FunScript files. Total: 7
+2026-08-06 21:07:22.539 +09:00 [INF] Fetching available variants.
+2026-08-06 21:07:23.487 +09:00 [INF] Fetching gallery with Name: filler-main, Variant: a10-main.
+2026-08-06 21:07:23.487 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 0
+2026-08-06 21:07:25.494 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:07:25.494 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 6
+2026-08-06 21:07:27.502 +09:00 [INF] PlayGallery completed for Device: Vorze Piston
+2026-08-06 21:07:27.502 +09:00 [INF] Starting PlayGallery with Device: Vorze Piston, Gallery: filler-main, Seek: 14
+2026-08-06 21:07:27.590 +09:00 [INF] Stopping gallery playback for Device: Vorze Piston
+2026-08-06 21:07:27.590 +09:00 [WRN] PlayGallery canceled for Device: Vorze Piston
+2026-08-06 21:09:50.802 +09:00 [INF] Stopping gallery playback for Device: Vorze Piston
+2026-08-06 21:09:58.022 +09:00 [INF] Stopping gallery playback for Device: Vorze Piston
+2026-08-06 21:09:58.073 +09:00 [DBG] Hosting stopping
+2026-08-06 21:09:58.073 +09:00 [INF] Application is shutting down...
+2026-08-06 21:09:58.074 +09:00 [INF] Apagando Edi...
+2026-08-06 21:09:58.074 +09:00 [DBG] Hosting stopped
