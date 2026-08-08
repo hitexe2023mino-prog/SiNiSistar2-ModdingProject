@@ -353,6 +353,51 @@ def enhance_neural(source: Image.Image, scale: int) -> Image.Image | None:
     return result
 
 
+def inpaint_pale(image: Image.Image, cut: float = 0.40, donor: float = 0.45) -> Image.Image:
+    """Repaints opaque-but-pale pixels from their saturated neighbours.
+
+    A super-resolver can paint a compression halo ON to a stroke, where no background gate can
+    reach it - the pixel is legitimately part of the mark now, it is just the wrong colour. The
+    cut is placed by measurement, not taste: the phantom sits near white-distance 0.30 while the
+    art's own palest lines sit above 0.50, so everything below 0.40 is repainted from pixels above
+    0.45 by normalised-convolution diffusion. Pale pixels no donor ever reaches were isolated
+    specks, and are made transparent instead.
+    """
+    arr = np.asarray(image.convert("RGBA"), np.float32) / 255.0
+    rgb = arr[..., :3].copy()
+    alpha = arr[..., 3]
+    distance = 1.0 - rgb.min(axis=2)
+
+    target = (alpha > 0.5) & (distance < cut)
+    if not target.any():
+        return image
+
+    weight = ((alpha > 0.5) & (distance >= donor)).astype(np.float32)
+    field = rgb * weight[..., None]
+
+    def box(v):
+        out = v.copy()
+        for axis in (0, 1):
+            out = out + np.roll(out, 1, axis) + np.roll(out, -1, axis)
+        return out
+
+    for _ in range(60):
+        num = box(field)
+        den = box(weight)
+        ready = den > 1e-6
+        fill = np.where(ready[..., None], num / np.maximum(den, 1e-6)[..., None], 0.0)
+        grow = target & ready & (weight < 1.0)
+        field[grow] = fill[grow] * 1.0
+        weight[grow] = 1.0
+
+    reached = weight >= 1.0
+    rgb[target & reached] = field[target & reached]
+    alpha[target & ~reached] = 0.0
+
+    out = np.concatenate([np.clip(rgb, 0, 1), alpha[..., None]], axis=2)
+    return Image.fromarray((out * 255).round().astype(np.uint8), "RGBA")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("input")
@@ -371,6 +416,7 @@ def main() -> None:
         engine = f"classical, {args.iters} iterations"
     if args.key_white:
         result = key_white(result, reference=source)
+        result = inpaint_pale(result)
     result.save(args.output)
     print(f"{args.input} {source.size} -> {args.output} {result.size} "
           f"[{engine}{', white keyed' if args.key_white else ''}]")
