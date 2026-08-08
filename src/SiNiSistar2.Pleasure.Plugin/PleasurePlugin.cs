@@ -122,14 +122,33 @@ public sealed class PleasurePlugin : BasePlugin
             AccessTools.Method(typeof(DamageManager), nameof(DamageManager.OneDamage)),
             typeof(DamageProbePatches),
             postfix: nameof(DamageProbePatches.OneDamagePostfix));
+        // All three add paths. Which one an item, an enemy or an authored event reaches is not
+        // visible in the interop metadata, and a status applied by an item must count the same as
+        // one applied by a hold (FR-244). Duplicate reports are collapsed per frame.
         applied += Patch(
-            "breast-escalation",
+            "breast-add-by-type",
             AccessTools.Method(
                 typeof(AbnormalList),
                 nameof(AbnormalList.AddAbnormal),
                 new[] { typeof(AbnormalType), typeof(int), typeof(DamageStack) }),
             typeof(BreastPatches),
-            postfix: nameof(BreastPatches.AddAbnormalPostfix));
+            postfix: nameof(BreastPatches.AddByTypePostfix));
+        applied += Patch(
+            "breast-add-by-data",
+            AccessTools.Method(
+                typeof(AbnormalList),
+                nameof(AbnormalList.AddAbnormal),
+                new[] { typeof(AbnormalData), typeof(int), typeof(DamageStack) }),
+            typeof(BreastPatches),
+            postfix: nameof(BreastPatches.AddByDataPostfix));
+        applied += Patch(
+            "breast-add-or-remove",
+            AccessTools.Method(
+                typeof(AbnormalList),
+                nameof(AbnormalList.AddOrRemoveAbnormal),
+                new[] { typeof(AbnormalType), typeof(bool) }),
+            typeof(BreastPatches),
+            postfix: nameof(BreastPatches.AddOrRemovePostfix));
         applied += Patch(
             "save-point",
             AccessTools.Method(typeof(SavePointAsyncLabel), nameof(SavePointAsyncLabel.ExecutionOneAsync)),
@@ -280,6 +299,13 @@ public sealed class PleasurePlugin : BasePlugin
             "BreastSuperReplacesBreast",
             true,
             "Remove Breast as BreastSuper is applied, so the two do not stack.");
+        ConfigEntry<bool> breastBelowMax = Config.Bind(
+            "BreastSuper",
+            "CountBelowMaxLevel",
+            false,
+            "Count every Breast application rather than only those arriving at the maximum level. "
+            + "A debugging aid: it makes the escalation reachable by using the item that applies "
+            + "swelling a few times, without reaching the ceiling first.");
         ConfigEntry<bool> breastHaanja = Config.Bind(
             "BreastSuper",
             "MakeHaanjaCurable",
@@ -349,6 +375,7 @@ public sealed class PleasurePlugin : BasePlugin
             BreastSuperSensitivityThreshold = breastThreshold.Value,
             BreastSuperReplacesBreast = breastReplaces.Value,
             BreastSuperMakeHaanjaCurable = breastHaanja.Value,
+            BreastSuperCountBelowMaxLevel = breastBelowMax.Value,
             LogTransitions = logTransitions.Value,
             ProbeMeasurements = probe.Value,
             ShowOverlay = showOverlay.Value,

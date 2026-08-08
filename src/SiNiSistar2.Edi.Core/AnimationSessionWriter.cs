@@ -137,7 +137,7 @@ public sealed class AnimationSessionWriter : IAsyncDisposable
                         droppedRecords = droppedBeforeEnd,
                         firstDroppedSequence = Interlocked.Read(ref _firstDroppedSequence),
                         lastDroppedSequence = Interlocked.Read(ref _lastDroppedSequence),
-                        generationAllowed = false,
+                        catalogComplete = false,
                     }),
                 cancellationToken).ConfigureAwait(false);
             Interlocked.Increment(ref _pending);
@@ -233,7 +233,7 @@ public sealed class AnimationSessionWriter : IAsyncDisposable
                 droppedRecords = dropped,
                 firstDroppedSequence = Interlocked.Read(ref _firstDroppedSequence),
                 lastDroppedSequence = Interlocked.Read(ref _lastDroppedSequence),
-                generationAllowed = false,
+                catalogComplete = false,
             });
         if (_channel.Writer.TryWrite(warning))
         {
@@ -256,8 +256,8 @@ public sealed class AnimationSessionWriter : IAsyncDisposable
 
         Interlocked.Exchange(ref _lastDroppedSequence, sequence);
         _logWarning?.Invoke(
-            $"Animation capture queue is full; sequence {sequence} was not saved. "
-            + "This event interval will not be used for funscript generation.");
+            $"Trigger capture queue is full; sequence {sequence} was not saved. "
+            + "The catalog may be missing stages from this interval.");
     }
 
     private static string SanitizeSegment(string value)

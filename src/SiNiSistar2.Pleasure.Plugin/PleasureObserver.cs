@@ -39,6 +39,9 @@ public sealed class PleasureObserver : MonoBehaviour
     private float _lastMaxDurability;
     private readonly EnemyCatalogEditor _enemyEditor = new();
     private bool _cureSurfaceReported;
+    private bool _breastReported;
+    private bool _breastSuperReported;
+    private bool _breastSuperRequested;
 
 
     public PleasureObserver(IntPtr pointer)
@@ -130,6 +133,7 @@ public sealed class PleasureObserver : MonoBehaviour
     {
         Suspend();
         PleasureRuntime.SaveEnemies("shutdown");
+        BreastPatches.Reset();
         PleasureRuntime.Reset();
     }
 
@@ -331,7 +335,7 @@ public sealed class PleasureObserver : MonoBehaviour
     [HideFromIl2Cpp]
     private void ReportBreastCureSurface(PlayerStatusManager status)
     {
-        if (_cureSurfaceReported || !PleasureRuntime.Profile.ProbeMeasurements)
+        if (_cureSurfaceReported)
         {
             return;
         }
@@ -342,35 +346,82 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        _cureSurfaceReported = true;
-        DescribeAbnormal(manager, AbnormalType.Breast);
-        DescribeAbnormal(manager, AbnormalType.BreastSuper);
+        RequestBreastSuperLoad(manager);
+
+        // Retried rather than latched on the first attempt. Statuses are loaded on demand, and the
+        // first attempt found BreastSuper absent and then never looked again — which read as "it
+        // cannot be measured" when it only meant "not yet".
+        bool breast = DescribeAbnormal(manager, AbnormalType.Breast, ref _breastReported);
+        bool super = DescribeAbnormal(manager, AbnormalType.BreastSuper, ref _breastSuperReported);
+        if (breast && super)
+        {
+            _cureSurfaceReported = true;
+        }
+
         ApplyHaanjaCurableOverride(manager);
     }
 
+    /// <summary>
+    /// Asks the game to load <c>BreastSuper</c>.
+    ///
+    /// Not only so it can be measured: a status the game has not loaded cannot be applied either, so
+    /// without this the escalation would have nothing to escalate to. <c>PreloadResist</c> is the
+    /// game's own registration call — the same "resist" spelling as
+    /// <c>MultiSettingValue.ResitValue</c> — and it only adds to the preload list.
+    /// </summary>
     [HideFromIl2Cpp]
-    private static void DescribeAbnormal(AbnormalManager manager, AbnormalType type)
+    private void RequestBreastSuperLoad(AbnormalManager manager)
     {
+        if (_breastSuperRequested || !PleasureRuntime.Profile.BreastSuper.HasEffect)
+        {
+            return;
+        }
+
+        _breastSuperRequested = true;
+        try
+        {
+            manager.PreloadResist(AbnormalType.BreastSuper);
+            PleasureRuntime.Log?.LogInfo("BreastSuper was registered for preloading so it can be applied.");
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Log?.LogWarning(
+                $"BreastSuper could not be registered for preloading: {exception.Message}. The "
+                + "escalation may fail to apply it.");
+        }
+    }
+
+    /// <summary>Returns true once the reading has been taken, so the retry can stop.</summary>
+    [HideFromIl2Cpp]
+    private static bool DescribeAbnormal(AbnormalManager manager, AbnormalType type, ref bool reported)
+    {
+        if (reported)
+        {
+            return true;
+        }
+
         try
         {
             AbnormalData? data = null;
             if (!manager.TryGetData(type, out data) || data is null)
             {
-                PleasureRuntime.Log?.LogInfo(
-                    $"[probe] A-14: {type} is not loaded yet, so its cure surface cannot be read "
-                    + "here. It is loaded on demand; the reading is retried when it appears.");
-                return;
+                return false;
             }
 
+            reported = true;
             PleasureRuntime.Log?.LogInfo(
                 $"[probe] A-14: {type} maxLevel={data.MaxLevel}, haanjaCanCure={data.HaanjaCanCure}, "
                 + $"physicalConditionFlag={data.PhysicalConditionFlag}, "
                 + $"removeWhenChangeScene={data.m_RemoveWhenChangeScene}, deleteTime={data.m_DeleteTime}, "
-                + $"nameID={data.AbnormalNameID}.");
+                + $"nameID={data.AbnormalNameID}. Note that this is the unattached template: the "
+                + "flag and the name are read again once it is actually on the player.");
+            return true;
         }
         catch (Exception exception)
         {
+            reported = true;
             PleasureRuntime.Log?.LogInfo($"[probe] A-14: {type} could not be read: {exception.Message}");
+            return true;
         }
     }
 
@@ -498,9 +549,13 @@ public sealed class PleasureObserver : MonoBehaviour
         }
 
         _selfChecked = true;
+
+        // Durability and HP are BattleMainParameter objects. Printing them directly gave
+        // "durability is SiNiSistar2.Obj.Durability of 100", which answers nothing.
         PleasureRuntime.Log?.LogInfo(
-            $"[probe] A-6: durability is {status.Durability} of {status.m_MaxDurability}; "
-            + $"HP {status.HP} of {status.m_MaxHP}. Climax limit would be "
+            $"[probe] A-6: durability {status.Durability?.Current} of {status.Durability?.Max} "
+            + $"(m_MaxDurability {status.m_MaxDurability}); HP {status.HP?.Current} of "
+            + $"{status.HP?.Max}. Climax limit would be "
             + $"{ClimaxLimit.Compute(PleasureRuntime.Profile.Climax.LimitBase, PleasureRuntime.Profile.Climax.LimitPerDurability, status.m_MaxDurability)}.");
     }
 

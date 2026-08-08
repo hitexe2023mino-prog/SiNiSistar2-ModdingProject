@@ -67,6 +67,13 @@ public sealed record PleasureOptions
     public bool BreastSuperReplacesBreast { get; init; } = true;
 
     /// <summary>
+    /// Counts every <c>Breast</c> application rather than only those at the maximum level. A
+    /// debugging aid: it makes the escalation reachable by using the item that applies swelling a
+    /// few times, without having to reach the ceiling first.
+    /// </summary>
+    public bool BreastSuperCountBelowMaxLevel { get; init; }
+
+    /// <summary>
     /// Whether to mark <c>BreastSuper</c> curable by Haanja, so the game's existing cure event
     /// covers it. Off until the in-game check in 付録A A-14 has been made.
     /// </summary>

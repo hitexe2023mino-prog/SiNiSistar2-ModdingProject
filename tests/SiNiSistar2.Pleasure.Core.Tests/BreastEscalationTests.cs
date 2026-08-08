@@ -81,6 +81,23 @@ public sealed class BreastEscalationTests
         Assert.Equal(BreastOutcome.Escalate, escalation.Record(true, false, 5f));
     }
 
+    /// <summary>
+    /// FR-244: an application from an item counts like any other. The escalation is told only
+    /// whether the ceiling was reached, never where the application came from, which is what lets
+    /// the swelling item drive it for debugging.
+    /// </summary>
+    [Fact]
+    public void TheSourceOfTheApplicationDoesNotMatter()
+    {
+        BreastEscalation escalation = Escalation(after: 3);
+
+        // Measured on the target build: Breast has a maximum level of 1, so every application after
+        // the status exists arrives at the ceiling, whatever applied it.
+        Assert.Equal(BreastOutcome.Counted, escalation.Record(true, false, 0f));
+        Assert.Equal(BreastOutcome.Counted, escalation.Record(true, false, 0f));
+        Assert.Equal(BreastOutcome.Escalate, escalation.Record(true, false, 0f));
+    }
+
     /// <summary>FR-222: the count belongs to the run, so a reload must not hand back a clean slate.</summary>
     [Fact]
     public void TheCountIsRestoredFromASave()

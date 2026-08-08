@@ -19,7 +19,7 @@ Every tuning value still ships at no-change (FR-233), so a fresh install only re
 
 ## Automated coverage
 
-`dotnet test SiNiSistar2.Edi.sln -c Release` → 82 for this MOD, 89 for SPEC002, 143 for SPEC001, 0 failures.
+`dotnet test SiNiSistar2.Edi.sln -c Release` → 83 for this MOD, 89 for SPEC002, 143 for SPEC001, 0 failures.
 
 ## 要件台帳
 
@@ -45,10 +45,12 @@ Every tuning value still ships at no-change (FR-233), so a fresh install only re
 | FR-218 | 絶頂と性的被弾で感度が増える | `PleasureObserver.ConsumeClimax`、`DamageProbePatches` | `SensitivityAndClimaxTests` | Tested / unverified |
 | FR-219 | 感度を減少させる経路を持たない | `SensitivityTrack.Add`（非正を無視） | `SensitivityAndClimaxTests.SensitivityNeverFalls`、AC-215 実機 | Tested |
 | FR-220 | 感度は上限で頭打ち、減少ではない | `SensitivityTrack` | `SensitivityAndClimaxTests.TheCapStopsGrowth...` | Tested |
-| FR-221 | 条件成立で `BreastSuper` へ遷移、正規経路で付与 | `BreastEscalation`、`BreastPatches.AddAbnormalPostfix`、`PleasureObserver.ApplyPendingBreastSuper` | `BreastEscalationTests`（7件）、AC-217 実機 | Tested / unverified |
+| FR-221 | 条件成立で `BreastSuper` へ遷移、正規経路で付与 | `BreastEscalation`、`BreastPatches`、`PleasureObserver.ApplyPendingBreastSuper` | `BreastEscalationTests`（7件）、AC-217 実機 | Tested / unverified |
 | FR-240 | 最大レベルでの付与のみ計数、上限を読めなければ遷移しない | `BreastEscalation.Record`、`BreastPatches.MaxLevel`（読めなければ0） | `BreastEscalationTests.ApplicationsBelowTheMaximum...`、AC-235 実機 | Tested / unverified |
 | FR-241 | 治療手段を新設しない | 治療コードなし。`MakeHaanjaCurable` は `m_HaanjaCanCure` を立てるのみ | 3.8 の A-14、AC-237 実機 | Design-time |
 | FR-242 | `AbnormalData` の変更を記録しアンロードで戻す | `PleasureObserver.ApplyHaanjaCurableOverride`、`InterventionLedger` | AC-237 実機 | Implemented / unverified |
+| FR-244 | 付与経路を問わず計数、二重計上なし | `AbnormalList` の3経路すべてにpostfix、`BreastPatches.ClaimThisFrame`（フレーム単位で1回） | `BreastEscalationTests.TheSourceOfTheApplication...`、AC-238 実機 | Tested / unverified |
+| FR-245 | 適用前に `BreastSuper` の読み込みを要求 | `PleasureObserver.RequestBreastSuperLoad`（`AbnormalManager.PreloadResist`） | AC-217 実機 | Implemented / unverified |
 | FR-222 | 感度と絶頂回数をスロット単位で保存しセーブに同期 | `SidecarStore`、`PleasureRuntime.LoadSlot` / `SaveSlot`、`PleasureObserver.ProbeSaveSlot`、`SavePointPatches` | `SidecarStoreTests`（8件）、`SidecarDocumentTests`、AC-218 実機 | Tested / unverified |
 | FR-223 | 随伴ファイルの書き込みは原子的 | `SidecarStore.Save`（一時ファイル＋置換） | `SidecarStoreTests.SavingLeavesNoTemporaryFile` ほか | Tested |
 | FR-224 | ファイルがなければ初期値 | `SidecarDocument.Parse` | `SidecarDocumentTests` | Tested |
@@ -59,7 +61,7 @@ Every tuning value still ships at no-change (FR-233), so a fresh install only re
 | FR-229 | SPEC002の管理面へ介入しない | 参照なし | AC-223 実機 | Implemented / unverified |
 | FR-230 | メインスレッドで完結、待機しない | `PleasureObserver`（同期処理のみ） | AC-224 実機 | Implemented / unverified |
 | FR-231 | 起動ログに構成を記録 | `PleasurePlugin.Load` | AC-225 実機 | Implemented / unverified |
-| FR-232 | 判定と直列化をゲーム非依存層へ | `SiNiSistar2.Pleasure.Core`（ゲーム参照ゼロ） | 82件がゲーム起動なしで実行 | Tested |
+| FR-232 | 判定と直列化をゲーム非依存層へ | `SiNiSistar2.Pleasure.Core`（ゲーム参照ゼロ） | 83件がゲーム起動なしで実行 | Tested |
 | FR-233 | 未実測の既定は無変更相当、HP0抑止のみ例外 | `PleasureOptions` の既定値 | `PleasureProfileTests.ShippedDefaults...` | Tested |
 | FR-234 | `Enabled=false` でパッチも随伴ファイルもなし | `PleasurePlugin.Load` の早期 return | `PleasureProfileTests.DisablingTheMod...` | Tested |
 | FR-235 | 敵別分類を独立したカタログファイルへ、既存設定を種に | `EnemyAttackCatalogStore`、`EnemyAttackCatalog.SeedFrom`、`PleasurePlugin.LoadEnemyCatalog` | `EnemyAttackCatalogTests.TheOldConfigListsSeed...` ほか、AC-230 実機 | Tested / unverified |

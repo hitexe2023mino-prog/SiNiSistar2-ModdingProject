@@ -60,6 +60,7 @@ public sealed class DiagnosticRecorder : IEventDiagnostics
                 .ThenBy(x => x.ActorId, StringComparer.Ordinal)
                 .ThenBy(x => x.AnimationId, StringComparer.Ordinal)
                 .ThenBy(x => x.Phase, StringComparer.Ordinal)
+                .ThenBy(x => x.StageId, StringComparer.Ordinal)
                 .Select(x => new CoverageEvent(x, _mappings.Classify(x.Key).ToString().ToLowerInvariant()))
                 .ToArray();
 
@@ -89,6 +90,7 @@ public sealed class DiagnosticRecorder : IEventDiagnostics
                     .ThenBy(x => x.ActorId, StringComparer.Ordinal)
                     .ThenBy(x => x.AnimationId, StringComparer.Ordinal)
                     .ThenBy(x => x.Phase, StringComparer.Ordinal)
+                    .ThenBy(x => x.StageId, StringComparer.Ordinal)
                     .Select(ToCandidate)
                     .ToArray(),
                 statusEntries);
@@ -117,9 +119,16 @@ public sealed class DiagnosticRecorder : IEventDiagnostics
             observation.ActorId,
             observation.AnimationId,
             observation.Phase,
+            observation.StageId,
             _mappings.Classify(observation.Key).ToString().ToLowerInvariant(),
-            existing?.Gallery,
-            existing is null ? Array.Empty<string>() : existing.Channels,
+            existing is null
+                ? null
+                : string.Join(
+                    ", ",
+                    existing.Outputs.Select(x => $"{x.Id}={x.Gallery ?? "silent"}")),
+            existing is null
+                ? Array.Empty<string>()
+                : existing.Outputs.Select(x => x.Id).ToArray(),
             existing?.SeekMode,
             existing?.IgnoreReason,
             observation.SceneName,
@@ -159,13 +168,17 @@ public sealed class DiagnosticRecorder : IEventDiagnostics
                     item.GetProperty("context").GetString() ?? string.Empty,
                     item.GetProperty("actorId").GetString() ?? string.Empty,
                     item.GetProperty("animationId").GetString() ?? string.Empty,
-                    item.GetProperty("phase").GetString() ?? string.Empty);
+                    item.GetProperty("phase").GetString() ?? string.Empty,
+                    item.TryGetProperty("stageId", out JsonElement stage)
+                        ? stage.GetString() ?? EventKey.DefaultStageId
+                        : EventKey.DefaultStageId);
                 _events[key] = new ObservedEvent(
                     key,
                     key.Context,
                     key.ActorId,
                     key.AnimationId,
                     key.Phase,
+                    key.StageId,
                     item.GetProperty("sceneName").GetString() ?? string.Empty,
                     item.GetProperty("firstObservedAt").GetDateTimeOffset(),
                     item.GetProperty("lastObservedAt").GetDateTimeOffset(),
@@ -191,7 +204,7 @@ public sealed class DiagnosticRecorder : IEventDiagnostics
 
     private static string CreateCandidateId(EventKey key)
     {
-        string value = $"{key.Context}\n{key.ActorId}\n{key.AnimationId}\n{key.Phase}";
+        string value = $"{key.Context}\n{key.ActorId}\n{key.AnimationId}\n{key.Phase}\n{key.StageId}";
         using var sha256 = System.Security.Cryptography.SHA256.Create();
         string hash = Convert.ToHexString(sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(value)));
         return $"captured-{hash[..16].ToLowerInvariant()}";
@@ -226,6 +239,7 @@ public sealed class DiagnosticRecorder : IEventDiagnostics
         string ActorId,
         string AnimationId,
         string Phase,
+        string StageId,
         string SceneName,
         DateTimeOffset FirstObservedAt,
         DateTimeOffset LastObservedAt,
@@ -238,6 +252,7 @@ public sealed class DiagnosticRecorder : IEventDiagnostics
             observation.Key.ActorId,
             observation.Key.AnimationId,
             observation.Key.Phase,
+            observation.Key.StageId,
             observation.SceneName,
             observation.ObservedAt,
             observation.ObservedAt,
@@ -283,9 +298,10 @@ public sealed class DiagnosticRecorder : IEventDiagnostics
         string ActorId,
         string AnimationId,
         string Phase,
+        string StageId,
         string Classification,
         string? Gallery,
-        IReadOnlyList<string> Channels,
+        IReadOnlyList<string> Outputs,
         string? SeekMode,
         string? IgnoreReason,
         string SceneName,

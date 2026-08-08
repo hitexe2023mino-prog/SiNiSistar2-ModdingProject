@@ -298,7 +298,11 @@ OnAfterSaveMainSaveData  ──> スロットキーを決定 ──> 随伴フ�
 - 遷移時、`BreastSuperReplacesBreast` が真なら `Breast` を除去する。`BreastSuper` の付与を先に行い、除去を後に行う。逆順は両方が存在しないフレームを作り、身体表現と立ち絵が状態異常一覧から駆動されるためである。
 - 付与はゲームの状態異常付与経路（`AbnormalList.AddAbnormal(AbnormalType, int, DamageStack)`）で行い、`AbnormalList.Has` が真を返す実体のある状態として成立させる。偽の状態を報告させてはならない。`AbnormalSaveData` は `m_Type` と `m_Level` を持つため、ゲーム自身のセーブに乗る。MODの随伴ファイルへは書かない。
 - 回数は随伴ファイルへ保存する。ロードで白紙に戻ると、上限付近まで積んだ状態が失われる（FR-222）。
+- 付与の出所は問わない。敵の攻撃、アイテムの使用、author されたイベントのいずれも同じく数える。膨乳を付与するアイテムの多重使用で遷移させられることは、デバッグ手段として必要である（FR-244）。
 - `BreastSuperAfterApplications` の既定は `0` とし、遷移が起こらない状態で出荷する（FR-233）。
+- `BreastSuperCountBelowMaxLevel` を真にすると最大レベル未満の付与も数える。デバッグ専用であり、既定は偽である。
+
+**実測（2026-08-08）。** `Breast` の `MaxLevel` は `1` である。したがって `Breast` は付与された時点で最大レベルにあり、以後の付与はすべて計数対象になる。`BreastSuperAfterApplications = 3` は「膨乳した状態でさらに3回」を意味する。
 
 **治療。** MODは治療手段を新設しない。ゲームが持つ治療経路が `BreastSuper` へ届くかどうかを実測し（付録A A-14）、届かない場合にのみ最小の介入を行う。
 
@@ -364,6 +368,7 @@ BepInEx の `ConfigEntry` として `BepInEx/config/community.sinisistar2.pleasu
 | `BreastSuper` | `BreastSuperSensitivityThreshold` | float | `0` | 遷移に必要な感度。`0` は要求しない。 |
 | `BreastSuper` | `BreastSuperReplacesBreast` | bool | `true` | 遷移時に `Breast` を除去するか。 |
 | `BreastSuper` | `MakeHaanjaCurable` | bool | `false` | `BreastSuper` をハーニャの治療対象として印付けするか。付録A A-14 の実測まで無効。 |
+| `BreastSuper` | `CountBelowMaxLevel` | bool | `false` | 最大レベル未満の付与も数えるか。デバッグ専用。 |
 | `Diagnostics` | `LogTransitions` | bool | `false` | 快楽・絶頂・感度の変化をログへ記録するか。 |
 
 「実測後に確定」と記した既定値は、付録Aの実測を経て確定する。実測前は挙動を変更しない値（上昇量0、増分0）とし、MODを導入しただけではゲームの挙動が変わらないようにする。ただし `SuppressHp0WhileBound` は既定で有効とする。これは撤廃そのものが要求であり、調整値を持たないためである。
@@ -465,6 +470,8 @@ SPEC002 の快楽系集合とは目的が異なるため一致させない。SPE
 | FR-240 | 遷移の計数は、`Breast` が最大レベルにある状態での付与のみを対象としなければならない。最大レベルを読めない場合、遷移を行ってはならない。 | Must | 通常進行との二重計上の防止（5.8） |
 | FR-241 | MODは `BreastSuper` の治療手段を新設してはならない。ゲームの既存の治療経路が届くようにする以上の介入を行ってはならない。 | Must | 治療不能状態の防止、ゲーム進行の保存（DEC-213） |
 | FR-242 | `AbnormalData` の値を変更する場合、MODは変更前の値を記録し、アンロード時に戻さなければならない。 | Must | 巻き戻し（5.10） |
+| FR-244 | 遷移の計数は `Breast` の付与経路を問わず成立しなければならない。敵の攻撃、アイテムの使用、author されたイベントのいずれも同じく数える。同一の付与が複数の経路で観測された場合、二重に数えてはならない。 | Must | アイテムによる検証手段の確保（5.8） |
+| FR-245 | MODは `BreastSuper` を適用する前に、ゲームへその読み込みを要求しなければならない。 | Must | 未読み込みの状態異常は付与できない |
 | FR-222 | MODは感度と絶頂回数をセーブスロット単位の随伴ファイルへ保存し、ゲームのセーブ・ロードに同期しなければならない。 | Must | 永続化（1.2）、DEC-206 |
 | FR-223 | 随伴ファイルの書き込みは原子的でなければならず、部分書き込みを残してはならない。 | Must | 破損データの防止 |
 | FR-224 | 対応する随伴ファイルがない場合、MODは初期値で開始しなければならない。 | Must | 新規プレイと既存セーブの受け入れ |
@@ -559,6 +566,7 @@ SPEC002 の快楽系集合とは目的が異なるため一致させない。SPE
 | AC-217 | FR-221 | Given `BreastSuperAfterApplications` が `2` で `Breast` が最大レベル / When さらに2回 `Breast` を受ける / Then `BreastSuper` が付与され、`AbnormalList.Has(BreastSuper)` が真を返し、SPEC001が当該状態異常を観測できる |
 | AC-235 | FR-240 | Given `Breast` が最大レベル未満 / When 繰り返し `Breast` を受ける / Then レベルのみが上がり遷移しない。Given 最大レベル到達後 / Then そこからの付与が数えられる |
 | AC-236 | FR-221, FR-222 | Given 遷移の手前まで計数が進んだ状態でセーブする / When 再起動して同じスロットをロードする / Then 計数が保存時点から続く |
+| AC-238 | FR-244 | Given `BreastSuperAfterApplications` が `3` / When 膨乳を付与するアイテムを3回使う / Then `BreastSuper` へ遷移する。ログの計数が1回の使用につき1だけ進む |
 | AC-237 | FR-241, FR-242 | Given `MakeHaanjaCurable` を有効にする / When ハーニャの治療を受ける / Then `BreastSuper` が治療される。When MODをアンロードする / Then `m_HaanjaCanCure` が元の値へ戻る |
 | AC-218 | FR-222, FR-224 | Given 感度と絶頂回数が蓄積した状態でセーブする / When ゲームを再起動して同じスロットをロードする / Then 保存時点の値へ戻る。Given 随伴ファイルのないスロット / Then 初期値で開始する |
 | AC-219 | FR-223 | Given 書き込み中に異常終了する / When 次回ロードする / Then 部分書き込みのファイルが読まれず、直前の完全なファイルまたは初期値で開始する |
@@ -678,7 +686,8 @@ SPEC002 の快楽系集合とは目的が異なるため一致させない。SPE
 | A-8 | `SaveData` のセーブ・ロードSubjectの発火順序と、実際のファイル入出力との前後関係 | 5.9、FR-222 |
 | A-9 | `MainSaveData.LoadedFileName` がオートセーブと手動セーブで安定しているか | 5.9のスロットキー |
 | A-10 | `AbnormalType.BreastSuper` を通常付与したときの挙動。演出、UI、セリフ、解除可否 | 5.8、FR-221 |
-| A-14 | `Breast` と `BreastSuper` の `MaxLevel`、`HaanjaCanCure`、`PhysicalConditionFlag`。および `Breast` の治療イベントが `AbnormalCondition` と `PhysicalCondition` のどちらで条件付けられているか | 5.8、FR-241。治療が届くかを決める |
+| A-14 | ~~`Breast` の `MaxLevel`~~ **解消済み（2026-08-08）。`1` である。** 残るのは `BreastSuper` の `MaxLevel`、両者の `HaanjaCanCure` と `PhysicalConditionFlag`（付与済みの実体で読む）、および `Breast` の治療イベントの条件 | 5.8、FR-241。治療が届くかを決める |
+| A-15 | 膨乳を付与するアイテムが `AddAbnormal(AbnormalType)`、`AddAbnormal(AbnormalData)`、`AddOrRemoveAbnormal` のどれを通るか | 5.8、FR-244 |
 | A-13 | 拘束中に編集画面を開いたときの入力の干渉。キー入力とクリックがゲーム側へ同時に届くことによる実害の有無 | 5.11、FR-236 |
 | A-11 | 絶頂演出のオーバーレイがゲームのUIやSPEC001のホールドUIと競合しないか | 5.4、14.3 |
 | A-12 | 快楽の上昇量、減衰量、感度の増分、絶頂限界の基礎値の実用域 | 6章の「実測後に確定」全項目 |

@@ -35,9 +35,10 @@ public sealed record BreastSuperTuning(
     int ApplicationsAtMaxLevel,
     float SensitivityThreshold,
     bool ReplaceBreast,
-    bool MakeHaanjaCurable)
+    bool MakeHaanjaCurable,
+    bool CountBelowMaxLevel)
 {
-    public static BreastSuperTuning Disabled { get; } = new(false, 0, 0f, false, false);
+    public static BreastSuperTuning Disabled { get; } = new(false, 0, 0f, false, false, false);
 
     /// <summary>A count of zero means the escalation can never be reached, which is the shipped state.</summary>
     public bool HasEffect => Enabled && ApplicationsAtMaxLevel > 0;
@@ -141,7 +142,7 @@ public static class PleasureProfileFactory
         PleasureTuning pleasure = BuildPleasure(options, errors);
         ClimaxTuning climax = BuildClimax(options, errors, warnings);
         SensitivityTuning sensitivity = BuildSensitivity(options, errors);
-        BreastSuperTuning breastSuper = BuildBreastSuper(options, errors, warnings);
+        BreastSuperTuning breastSuper = BuildBreastSuper(options, errors, warnings, notices);
         SexualAttackClassifier classifier = BuildClassifier(options, knownAbnormalNames, enemies, notices);
 
         var profile = new PleasureProfile(
@@ -290,7 +291,8 @@ public static class PleasureProfileFactory
     private static BreastSuperTuning BuildBreastSuper(
         PleasureOptions options,
         List<string> errors,
-        List<string> warnings)
+        List<string> warnings,
+        List<string> notices)
     {
         if (options.BreastSuperAfterApplications < 0)
         {
@@ -323,12 +325,21 @@ public static class PleasureProfileFactory
                 + "(SPEC003 付録A A-14).");
         }
 
+        if (options.BreastSuperCountBelowMaxLevel)
+        {
+            notices.Add(
+                "BreastSuper.CountBelowMaxLevel is on: every Breast application counts, including "
+                + "the ones that only raise the level. This is a debugging aid and departs from "
+                + "SPEC003 5.8.");
+        }
+
         return new BreastSuperTuning(
             true,
             options.BreastSuperAfterApplications,
             options.BreastSuperSensitivityThreshold,
             options.BreastSuperReplacesBreast,
-            options.BreastSuperMakeHaanjaCurable);
+            options.BreastSuperMakeHaanjaCurable,
+            options.BreastSuperCountBelowMaxLevel);
     }
 
     private static SexualAttackClassifier BuildClassifier(

@@ -1,39 +1,69 @@
 namespace SiNiSistar2.Edi.Core;
 
+/// <summary>
+/// Reconciles each output towards its latest desired state, and sends one EDI request per group
+/// of outputs that want the identical payload.
+///
+/// Grouping lives here rather than in the coordinator because it is the transport that must not
+/// duplicate: a naive "one worker per output" sink turns a three-device trigger into three
+/// requests, restarting playback on the devices that were already started (SPEC001 4.3, FR-053).
+/// Only the latest state per output is ever sent, so a burst of transitions during an outage
+/// collapses instead of replaying (SPEC001 7.3).
+/// </summary>
 public sealed class AsyncEdiCommandSink : IPlaybackCommandSink
 {
+    private static readonly TimeSpan InitialBackoff = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan MaximumBackoff = TimeSpan.FromSeconds(30);
+
+    private readonly object _sync = new();
     private readonly IEdiClient _client;
+    private readonly IReadOnlyList<string> _outputs;
+    private readonly Dictionary<string, OutputState> _states;
     private readonly CancellationTokenSource _shutdown = new();
-    private readonly Dictionary<string, ChannelWorker> _workers;
+    private readonly SemaphoreSlim _signal = new(0, 1);
+    private readonly Task _worker;
     private readonly Action<string>? _info;
     private readonly Action<string>? _error;
+    private bool _wakePending;
+    private bool _wasUnavailable;
     private int _shutdownStarted;
 
     public AsyncEdiCommandSink(
         IEdiClient client,
+        IReadOnlyList<string> outputs,
         Action<string>? info = null,
         Action<string>? error = null)
     {
         _client = client;
+        _outputs = outputs.ToArray();
+        _states = _outputs.ToDictionary(x => x, _ => new OutputState(), StringComparer.Ordinal);
         _info = info;
         _error = error;
-        _workers = EdiChannels.All.ToDictionary(
-            channel => channel,
-            channel => new ChannelWorker(channel, client, _shutdown.Token, OnAvailable, OnUnavailable),
-            StringComparer.Ordinal);
+        _worker = Task.Run(RunAsync);
     }
 
-    public void Publish(PlaybackCommand command)
+    public void Publish(IReadOnlyList<PlaybackCommand> commands)
     {
-        if (!_workers.TryGetValue(command.Channel, out var worker))
+        if (Volatile.Read(ref _shutdownStarted) != 0 || commands.Count == 0)
         {
-            throw new ArgumentException($"Unknown EDI channel '{command.Channel}'.", nameof(command));
+            return;
         }
 
-        if (Volatile.Read(ref _shutdownStarted) == 0)
+        lock (_sync)
         {
-            worker.Publish(command);
+            foreach (PlaybackCommand command in commands)
+            {
+                if (!_states.TryGetValue(command.Output, out OutputState? state))
+                {
+                    throw new ArgumentException(
+                        $"Unknown EDI output '{command.Output}'.", nameof(commands));
+                }
+
+                state.Desired = command;
+            }
         }
+
+        Wake();
     }
 
     public async Task ShutdownAsync(CancellationToken cancellationToken = default)
@@ -43,145 +73,192 @@ public sealed class AsyncEdiCommandSink : IPlaybackCommandSink
             return;
         }
 
-        foreach (var channel in EdiChannels.All)
+        // Best effort, and in one request: every output is meant to end up stopped (FR-019).
+        try
         {
-            try
-            {
-                await _client.ExecuteAsync(PlaybackCommand.Stop(channel), cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
-            {
-                _error?.Invoke($"Best-effort Stop failed for channel '{channel}': {exception.Message}");
-            }
+            await _client
+                .ExecuteAsync(new PlaybackRequest(PlaybackCommandKind.Stop, _outputs), cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            _error?.Invoke($"Best-effort Stop failed for {string.Join(", ", _outputs)}: {exception.Message}");
         }
 
         _shutdown.Cancel();
-        await Task.WhenAll(_workers.Values.Select(x => x.Completion)).ConfigureAwait(false);
+        await _worker.ConfigureAwait(false);
     }
 
     public async ValueTask DisposeAsync()
     {
         await ShutdownAsync().ConfigureAwait(false);
         _shutdown.Dispose();
+        _signal.Dispose();
     }
 
-    private void OnAvailable(string channel) =>
-        _info?.Invoke($"EDI channel '{channel}' is available; latest desired state applied.");
-
-    private void OnUnavailable(string channel, Exception exception) =>
-        _error?.Invoke($"EDI channel '{channel}' is unavailable: {exception.Message}");
-
-    private sealed class ChannelWorker
+    private void Wake()
     {
-        private readonly object _sync = new();
-        private readonly string _channel;
-        private readonly IEdiClient _client;
-        private readonly CancellationToken _shutdown;
-        private readonly Action<string> _onAvailable;
-        private readonly Action<string, Exception> _onUnavailable;
-        private readonly SemaphoreSlim _signal = new(0, 1);
-        private PlaybackCommand? _latest;
-        private bool _wakePending;
-        private bool _wasUnavailable;
-
-        public ChannelWorker(
-            string channel,
-            IEdiClient client,
-            CancellationToken shutdown,
-            Action<string> onAvailable,
-            Action<string, Exception> onUnavailable)
+        lock (_sync)
         {
-            _channel = channel;
-            _client = client;
-            _shutdown = shutdown;
-            _onAvailable = onAvailable;
-            _onUnavailable = onUnavailable;
-            Completion = RunAsync();
-        }
-
-        public Task Completion { get; }
-
-        public void Publish(PlaybackCommand command)
-        {
-            lock (_sync)
+            if (_wakePending)
             {
-                _latest = command;
-                if (!_wakePending)
-                {
-                    _wakePending = true;
-                    _signal.Release();
-                }
+                return;
             }
+
+            _wakePending = true;
         }
 
-        private async Task RunAsync()
+        try
+        {
+            _signal.Release();
+        }
+        catch (SemaphoreFullException)
+        {
+            // Another publisher won the race; the worker is already about to run.
+        }
+    }
+
+    private async Task RunAsync()
+    {
+        CancellationToken token = _shutdown.Token;
+        TimeSpan backoff = InitialBackoff;
+
+        while (!token.IsCancellationRequested)
         {
             try
             {
-                while (true)
-                {
-                    await _signal.WaitAsync(_shutdown).ConfigureAwait(false);
-                    PlaybackCommand? command;
-                    lock (_sync)
-                    {
-                        _wakePending = false;
-                        command = _latest;
-                        _latest = null;
-                    }
+                await _signal.WaitAsync(token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
 
-                    if (command is not null)
+            lock (_sync)
+            {
+                _wakePending = false;
+            }
+
+            while (!token.IsCancellationRequested)
+            {
+                IReadOnlyList<PlaybackRequest> pending = TakePending();
+                if (pending.Count == 0)
+                {
+                    break;
+                }
+
+                var failed = false;
+                foreach (PlaybackRequest request in pending)
+                {
+                    try
                     {
-                        await ExecuteLatestAsync(command).ConfigureAwait(false);
+                        await _client.ExecuteAsync(request, token).ConfigureAwait(false);
+                        Commit(request);
+                        if (_wasUnavailable)
+                        {
+                            _wasUnavailable = false;
+                            _info?.Invoke("EDI is available again; the latest desired state was applied.");
+                        }
+
+                        backoff = InitialBackoff;
+                    }
+                    catch (OperationCanceledException) when (token.IsCancellationRequested)
+                    {
+                        return;
+                    }
+                    catch (Exception exception) when (
+                        exception is HttpRequestException or TaskCanceledException or InvalidOperationException)
+                    {
+                        if (!_wasUnavailable)
+                        {
+                            _wasUnavailable = true;
+                            _error?.Invoke(
+                                $"EDI is unavailable; the latest desired state is retained and will be "
+                                + $"re-sent: {exception.Message}");
+                        }
+
+                        failed = true;
+                        break;
                     }
                 }
-            }
-            catch (OperationCanceledException) when (_shutdown.IsCancellationRequested)
-            {
-                // Normal shutdown.
-            }
-            finally
-            {
-                _signal.Dispose();
-            }
-        }
 
-        private async Task ExecuteLatestAsync(PlaybackCommand command)
-        {
-            var backoff = TimeSpan.FromSeconds(1);
-            while (!_shutdown.IsCancellationRequested)
-            {
-                lock (_sync)
+                if (!failed)
                 {
-                    if (_latest is not null)
-                    {
-                        command = _latest;
-                        _latest = null;
-                    }
+                    continue;
                 }
 
                 try
                 {
-                    await _client.ExecuteAsync(command, _shutdown).ConfigureAwait(false);
-                    if (_wasUnavailable)
-                    {
-                        _wasUnavailable = false;
-                        _onAvailable(_channel);
-                    }
-
+                    await Task.Delay(backoff, token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
                     return;
                 }
-                catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
-                {
-                    if (!_wasUnavailable)
-                    {
-                        _wasUnavailable = true;
-                        _onUnavailable(_channel, exception);
-                    }
 
-                    await Task.Delay(backoff, _shutdown).ConfigureAwait(false);
-                    backoff = TimeSpan.FromSeconds(Math.Min(backoff.TotalSeconds * 2, 30));
+                backoff = TimeSpan.FromSeconds(Math.Min(backoff.TotalSeconds * 2, MaximumBackoff.TotalSeconds));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Snapshots the outputs whose desired state has not been sent and groups the ones that share
+    /// a payload. Grouping is by value, so it works whether the coordinator published them in one
+    /// batch or the reconciler happened to catch them in the same pass.
+    /// </summary>
+    private IReadOnlyList<PlaybackRequest> TakePending()
+    {
+        lock (_sync)
+        {
+            var groups = new Dictionary<(PlaybackCommandKind, string?, long, bool), List<string>>();
+            var order = new List<(PlaybackCommandKind, string?, long, bool)>();
+
+            // Roster order keeps the emitted `channels` list stable and the logs comparable.
+            foreach (string output in _outputs)
+            {
+                OutputState state = _states[output];
+                if (state.Desired is null || state.Desired == state.Sent)
+                {
+                    continue;
+                }
+
+                var payload = state.Desired.Payload;
+                if (!groups.TryGetValue(payload, out List<string>? members))
+                {
+                    members = new List<string>();
+                    groups[payload] = members;
+                    order.Add(payload);
+                }
+
+                members.Add(output);
+            }
+
+            return order
+                .Select(payload => new PlaybackRequest(
+                    payload.Item1, groups[payload], payload.Item2, payload.Item3, payload.Item4))
+                .ToArray();
+        }
+    }
+
+    private void Commit(PlaybackRequest request)
+    {
+        lock (_sync)
+        {
+            foreach (string output in request.Outputs)
+            {
+                OutputState state = _states[output];
+                if (state.Desired is { } desired && desired.Payload == (
+                        request.Kind, request.Gallery, request.SeekMilliseconds, request.UntilResume))
+                {
+                    state.Sent = desired;
                 }
             }
         }
+    }
+
+    private sealed class OutputState
+    {
+        public PlaybackCommand? Desired { get; set; }
+        public PlaybackCommand? Sent { get; set; }
     }
 }

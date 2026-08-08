@@ -12,7 +12,7 @@
 
 ## 1. 現在の到達点
 
-自動テストは82件が通っている。快楽の増減、絶頂の一回性、感度の単調性、限界算出、性的攻撃の判別順序、随伴ファイルのスキーマ処理は、ゲームを起動せずに検証済みである。
+自動テストは83件が通っている。快楽の増減、絶頂の一回性、感度の単調性、限界算出、性的攻撃の判別順序、随伴ファイルのスキーマ処理は、ゲームを起動せずに検証済みである。
 
 **このビルドはプローブ段階である。** 挙動として変わるのは拘束中のHP0抑止だけで、快楽・絶頂・感度・`BreastSuper` はすべて無変更相当の既定値で停止している。プローブは付録Aの各項目を1回ずつログへ記録する。
 
@@ -169,7 +169,11 @@ IMGUI のイベント消費は IMGUI の内部にとどまり、ゲームは独�
 
 ### 3.8 A-14／AC-217、AC-235〜237 — `BreastSuper` への遷移と治療
 
-**A-14 は最優先である。** 治療が届かない状態異常を通常プレイへ出すと、進行を阻害する。起動して少し遊ぶと、プローブが次を1回だけ出す。
+**確定済み（2026-08-08 実測）。** `Breast` の `MaxLevel` は `1` である。付与された時点で最大レベルにあるため、以後の付与はすべて計数対象になる。`BreastSuperAfterApplications = 3` は「膨乳した状態でさらに3回」を意味する。
+
+初回の読みは `physicalConditionFlag=Base`、`nameID=None` を返したが、これは**未装着のテンプレート**の値である。付与済みの実体での値は `[probe] A-14: Breast while attached at level ...` が出す。
+
+**A-14 は最優先である。** 治療が届かない状態異常を通常プレイへ出すと、進行を阻害する。起動して少し遊ぶと、プローブが次を出す。
 
 ```
 [probe] A-14: Breast maxLevel=?, haanjaCanCure=?, physicalConditionFlag=?, ...
@@ -183,6 +187,23 @@ IMGUI のイベント消費は IMGUI の内部にとどまり、ゲームは独�
 | `BreastSuper` の `physicalConditionFlag` が `Breast` と同じ | 治療イベントが `PhysicalCondition` で書かれていれば、**介入なしで既存の治療が届く** | 実機で治療選択肢が出るか確認する。出れば FR-241 は完了 |
 | `BreastSuper` の `haanjaCanCure` が既に真 | ハーニャの治療対象として既に登録されている | 同上。確認のみ |
 | どちらも否 | 既存の治療は届かない | `MakeHaanjaCurable = true` で再確認する |
+
+**AC-238 — アイテムによる遷移（デバッグ）**
+
+膨乳を付与するアイテムでも遷移する。付与経路は問わない。
+
+1. `BreastSuperAfterApplications = 3` を設定して起動する。
+2. アイテムを1回使う。ログに次が出ることを確認する。
+
+```
+Breast applied at level 1/1 via AddAbnormal(AbnormalType): 1 counted, 2 more before BreastSuper.
+```
+
+3. **1回の使用につき計数が1だけ進むこと**を確認する。3つの経路すべてにpostfixを当てているため、同じ付与が複数回報告される可能性があるが、フレーム単位で1回に畳んである。2以上進む場合は畳み込みが効いていない。
+4. 3回目で `Breast escalated to BreastSuper` が出ることを確認する。
+5. `[probe] A-15: Breast reached the MOD through ...` で、アイテムがどの経路を通ったかを記録する。
+
+最大レベルへ達する手間を省きたい場合は `CountBelowMaxLevel = true` にする。デバッグ専用で、仕様の 5.8 から外れる。
 
 **AC-217／AC-235 — 遷移**
 
@@ -218,11 +239,13 @@ IMGUI のイベント消費は IMGUI の内部にとどまり、ゲームは独�
 | A-3 状態異常を伴う攻撃の割合 | **一部のみ。**同一の敵が `[Defilement]` を伴う攻撃と、`m_AbnormalTypes` が空の攻撃の両方を持つ（2026-08-08 実測） | 状態異常だけでは同一の敵が Sexual/NonSexual に割れる。敵ID の固定が必要 |
 | 性的な敵の ID | `GaID_PictureFrameBig`（絵画）を確認 | `SexualEnemyIds` の既定へ追加済み |
 | 捕食・暴力の敵の ID | 未測定 | `NonSexualEnemyIds` |
-| A-6 耐久の最大値の値域 | 未測定 | `ClimaxLimitPerDurability` |
+| A-6 耐久の最大値の値域 | **`m_MaxDurability` は 100（2026-08-08 実測）。** 現在値の読みは表示の誤りで再測定が必要 | `ClimaxLimitPerDurability` |
 | 1回の拘束あたりの被弾数 | 未測定 | `PleasureGainPerHit` |
 | A-9 スロットキーの安定性 | 未測定 | — |
 | A-13 拘束中の編集画面の入力干渉 | 未測定 | — |
-| A-14 `Breast` / `BreastSuper` の `MaxLevel` | 未測定 | `BreastSuperAfterApplications` の目安 |
+| A-14 `Breast` の `MaxLevel` | **`1`（2026-08-08 実測）** | 付与時点で最大。以後の付与はすべて数える |
+| A-14 `BreastSuper` の `MaxLevel` | 未測定 | — |
+| A-15 アイテムが通る付与経路 | 未測定 | — |
 | A-14 `BreastSuper` の `PhysicalConditionFlag` と `HaanjaCanCure` | 未測定 | `MakeHaanjaCurable` の要否 |
 
 `PleasureGainPerHit` は「1回の拘束で何発受けるか」から逆算する。1回の拘束でおよそ1回絶頂させたいなら `1 / 被弾数` が目安になる。

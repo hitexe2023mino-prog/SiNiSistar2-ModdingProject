@@ -88,35 +88,87 @@ public sealed class DiagnosticsAndRecoveryTests
     public async Task RecoverySendsLatestDesiredStateInsteadOfHistory()
     {
         var client = new RecoveringClient();
-        await using var sink = new AsyncEdiCommandSink(client);
-        sink.Publish(PlaybackCommand.Play("old", 0, EdiChannels.Main));
+        await using var sink = new AsyncEdiCommandSink(client, Outputs);
+        sink.Publish(PlaybackCommand.Play("old", 0, TestMappings.Main));
         await client.FirstFailure.Task.WaitAsync(TimeSpan.FromSeconds(2));
-        sink.Publish(PlaybackCommand.Play("latest", 0, EdiChannels.Main));
+        sink.Publish(PlaybackCommand.Play("latest", 0, TestMappings.Main));
         client.Available = true;
 
         await WaitUntilAsync(
             () => client.Successes.Any(x => x.Kind == PlaybackCommandKind.Play),
             TimeSpan.FromSeconds(4));
 
-        PlaybackCommand played = Assert.Single(client.Successes, x => x.Kind == PlaybackCommandKind.Play);
+        PlaybackRequest played = Assert.Single(client.Successes, x => x.Kind == PlaybackCommandKind.Play);
         Assert.Equal("latest", played.Gallery);
     }
 
     [Fact]
-    public async Task ShutdownAttemptsStopForEveryKnownChannel()
+    public async Task ShutdownAttemptsStopForEveryKnownOutput()
     {
         var client = new RecoveringClient { Available = true };
-        await using var sink = new AsyncEdiCommandSink(client);
+        await using var sink = new AsyncEdiCommandSink(client, Outputs);
 
         await sink.ShutdownAsync();
 
-        PlaybackCommand[] stops = client.Successes
-            .Where(x => x.Kind == PlaybackCommandKind.Stop)
-            .OrderBy(x => x.Channel, StringComparer.Ordinal)
-            .ToArray();
-        Assert.Equal(2, stops.Length);
-        Assert.Equal(new[] { EdiChannels.Breast, EdiChannels.Main }, stops.Select(x => x.Channel));
+        // One request that names every output: the shutdown stop is a group, not three calls.
+        PlaybackRequest stop = Assert.Single(
+            client.Successes, x => x.Kind == PlaybackCommandKind.Stop);
+        Assert.Equal(Outputs, stop.Outputs);
     }
+
+    /// <summary>
+    /// Outputs that want the identical payload are sent as one request, so several devices start
+    /// together and none of them is restarted by a second call (FR-046, FR-053, AC-044).
+    /// </summary>
+    [Fact]
+    public async Task OutputsSharingAPayloadAreSentAsOneRequest()
+    {
+        var client = new RecoveringClient { Available = true };
+        await using var sink = new AsyncEdiCommandSink(client, Outputs);
+
+        sink.Publish(Outputs.Select(output => PlaybackCommand.Play("shared", 250, output)).ToArray());
+
+        await WaitUntilAsync(
+            () => client.Successes.Any(x => x.Kind == PlaybackCommandKind.Play),
+            TimeSpan.FromSeconds(4));
+
+        PlaybackRequest played = Assert.Single(
+            client.Successes, x => x.Kind == PlaybackCommandKind.Play);
+        Assert.Equal(Outputs, played.Outputs);
+        Assert.Equal(250, played.SeekMilliseconds);
+    }
+
+    /// <summary>Different payloads still go out separately, one request per distinct payload.</summary>
+    [Fact]
+    public async Task OutputsWithDifferentPayloadsAreSentSeparately()
+    {
+        var client = new RecoveringClient { Available = true };
+        await using var sink = new AsyncEdiCommandSink(client, Outputs);
+
+        sink.Publish(new[]
+        {
+            PlaybackCommand.Play("piston", 0, TestMappings.Main),
+            PlaybackCommand.Play("breast", 0, TestMappings.BreastLeft),
+            PlaybackCommand.Stop(TestMappings.BreastRight),
+        });
+
+        await WaitUntilAsync(() => client.Successes.Count >= 3, TimeSpan.FromSeconds(4));
+
+        Assert.Equal(
+            new[] { TestMappings.Main },
+            Assert.Single(client.Successes, x => x.Gallery == "piston").Outputs);
+        Assert.Equal(
+            new[] { TestMappings.BreastLeft },
+            Assert.Single(client.Successes, x => x.Gallery == "breast").Outputs);
+        Assert.Equal(
+            new[] { TestMappings.BreastRight },
+            Assert.Single(client.Successes, x => x.Kind == PlaybackCommandKind.Stop).Outputs);
+    }
+
+    private static readonly string[] Outputs =
+    {
+        TestMappings.Main, TestMappings.BreastLeft, TestMappings.BreastRight,
+    };
 
     private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
     {
@@ -141,12 +193,20 @@ public sealed class DiagnosticsAndRecoveryTests
     {
         public volatile bool Available;
         public TaskCompletionSource FirstFailure { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public ConcurrentQueue<PlaybackCommand> Successes { get; } = new();
+        public ConcurrentQueue<PlaybackRequest> Successes { get; } = new();
 
         public Task<IReadOnlyList<string>> GetChannelsAsync(CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<string>>(new[] { EdiChannels.Main, EdiChannels.Breast });
+            Task.FromResult<IReadOnlyList<string>>(Outputs);
 
-        public Task ExecuteAsync(PlaybackCommand command, CancellationToken cancellationToken)
+        public Task<IReadOnlyList<EdiDevice>> GetDevicesAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<EdiDevice>>(Array.Empty<EdiDevice>());
+
+        public Task<EdiCapabilities?> GetInfoAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<EdiCapabilities?>(new EdiCapabilities("test", true, true, "unassigned"));
+
+        public Task ReloadAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task ExecuteAsync(PlaybackRequest request, CancellationToken cancellationToken)
         {
             if (!Available)
             {
@@ -154,7 +214,7 @@ public sealed class DiagnosticsAndRecoveryTests
                 throw new HttpRequestException("offline");
             }
 
-            Successes.Enqueue(command);
+            Successes.Enqueue(request);
             return Task.CompletedTask;
         }
     }

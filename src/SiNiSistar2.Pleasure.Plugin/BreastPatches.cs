@@ -1,32 +1,76 @@
 using SiNiSistar2.Obj;
 using SiNiSistar2.Pleasure.Core;
+using UnityEngine;
 
 namespace SiNiSistar2.Pleasure.Plugin;
 
 /// <summary>
 /// Watches <c>Breast</c> being applied and escalates it to <c>BreastSuper</c> (SPEC003 5.8).
 ///
-/// The count is of applications that arrive when <c>Breast</c> is already at its maximum level.
-/// Below the maximum the game has its own escalation — the level rises — and pre-empting it would
-/// make the ceiling arrive while the ordinary progression was still running.
+/// Every way the game has of adding a status is watched, not just the one an enemy attack uses. A
+/// status arrives from an enemy, from an item, and from an authored event
+/// (<c>AbnormalConditionLabel</c>), and which overload each of those reaches is not visible in the
+/// interop metadata — the bodies are native. Watching all of them and de-duplicating is the only way
+/// to be sure the item that applies swelling counts the same as a hold (FR-244).
 ///
-/// Nothing is applied from inside this postfix. <c>AddAbnormal</c> is the game's own add path and
+/// Nothing is applied from inside these postfixes. <c>AddAbnormal</c> is the game's own add path and
 /// calling it again from within itself is re-entry into a method that is mid-update; the decision is
 /// handed to the observer's frame instead, exactly as the climax is.
 /// </summary>
 internal static class BreastPatches
 {
-    internal static void AddAbnormalPostfix(AbnormalList __instance, AbnormalType abnormalType)
+    private static int _lastCountedFrame = int.MinValue;
+    private static IntPtr _lastCountedList = IntPtr.Zero;
+
+    /// <summary><c>AbnormalList.AddAbnormal(AbnormalType, int, DamageStack)</c>.</summary>
+    internal static void AddByTypePostfix(AbnormalList __instance, AbnormalType __0) =>
+        Observe(__instance, __0, "AddAbnormal(AbnormalType)");
+
+    /// <summary><c>AbnormalList.AddAbnormal(AbnormalData, int, DamageStack)</c>.</summary>
+    internal static void AddByDataPostfix(AbnormalList __instance, AbnormalData __0)
+    {
+        AbnormalType type;
+        try
+        {
+            type = __0?.AbnormalType ?? AbnormalType.None;
+        }
+        catch (Exception)
+        {
+            return;
+        }
+
+        Observe(__instance, type, "AddAbnormal(AbnormalData)");
+    }
+
+    /// <summary><c>AbnormalList.AddOrRemoveAbnormal(AbnormalType, bool)</c>, the event-label path.</summary>
+    internal static void AddOrRemovePostfix(AbnormalList __instance, AbnormalType __0, bool __1)
+    {
+        if (__1)
+        {
+            Observe(__instance, __0, "AddOrRemoveAbnormal");
+        }
+    }
+
+    private static void Observe(AbnormalList? list, AbnormalType type, string entryPoint)
     {
         try
         {
-            if (abnormalType != AbnormalType.Breast || !PleasureRuntime.Profile.BreastSuper.HasEffect)
+            if (list is null || type != AbnormalType.Breast)
             {
                 return;
             }
 
             // Enemies have status lists too. Only the player's escalates.
-            if (!ReferenceEquals(__instance, PleasureRuntime.PlayerAbnormals))
+            if (!ReferenceEquals(list, PleasureRuntime.PlayerAbnormals))
+            {
+                return;
+            }
+
+            PleasureRuntime.Probe(
+                $"breast-entry-{entryPoint}",
+                $"A-15: Breast reached the MOD through {entryPoint}.");
+
+            if (!PleasureRuntime.Profile.BreastSuper.HasEffect || !ClaimThisFrame(list))
             {
                 return;
             }
@@ -37,37 +81,96 @@ internal static class BreastPatches
                 return;
             }
 
-            int level = __instance.GetAbnormalLevel(AbnormalType.Breast);
-            int maxLevel = MaxLevel(__instance, AbnormalType.Breast);
+            int level = list.GetAbnormalLevel(AbnormalType.Breast);
+            int maxLevel = MaxLevel(list, AbnormalType.Breast);
             bool atMax = maxLevel > 0 && level >= maxLevel;
-            bool alreadySuper = __instance.Has(AbnormalType.BreastSuper);
+            bool alreadySuper = list.Has(AbnormalType.BreastSuper);
 
-            PleasureRuntime.Probe(
-                "breast-applied",
-                $"A-10: Breast applied; level {level} of {(maxLevel > 0 ? maxLevel.ToString() : "unknown")}, "
-                + $"BreastSuper already present: {alreadySuper}.");
+            ReportAttachedData(list);
 
             BreastOutcome outcome = escalation.Record(
-                atMax,
+                atMax || PleasureRuntime.Profile.BreastSuper.CountBelowMaxLevel,
                 alreadySuper,
                 PleasureRuntime.Sensitivity?.Value ?? 0f);
 
             switch (outcome)
             {
                 case BreastOutcome.Counted:
-                    PleasureRuntime.LogTransition(
-                        $"Breast is at its maximum and took another application: {escalation.Count} "
-                        + $"so far, {escalation.Remaining} more before BreastSuper.");
+                    // At Info rather than behind LogTransitions: this is what the escalation is
+                    // counted by, and there is no way to tell "not counting" from "counting slowly"
+                    // without seeing it. It only advances at the maximum level, so it is not chatty.
+                    PleasureRuntime.Log?.LogInfo(
+                        $"Breast applied at level {level}/{maxLevel} via {entryPoint}: "
+                        + $"{escalation.Count} counted, {escalation.Remaining} more before BreastSuper.");
                     break;
 
                 case BreastOutcome.Escalate:
                     PleasureRuntime.PendingBreastSuper = true;
+                    break;
+
+                case BreastOutcome.None when !atMax:
+                    PleasureRuntime.LogTransition(
+                        $"Breast applied at level {level}/{maxLevel} via {entryPoint}; below the "
+                        + "maximum, so it raises the level rather than counting towards BreastSuper.");
                     break;
             }
         }
         catch (Exception exception)
         {
             PleasureRuntime.Log?.LogWarning($"Breast escalation failed for this application: {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Counts one application per frame per status list.
+    ///
+    /// The overloads call one another — an add by type resolves the data and adds by data — so all
+    /// three postfixes can fire for a single application. De-duplicating on the frame rather than
+    /// with a re-entry counter means an exception thrown inside the game's add path cannot leave the
+    /// guard stuck closed.
+    /// </summary>
+    private static bool ClaimThisFrame(AbnormalList list)
+    {
+        int frame = Time.frameCount;
+        IntPtr handle = list.Pointer;
+        if (frame == _lastCountedFrame && handle == _lastCountedList)
+        {
+            return false;
+        }
+
+        _lastCountedFrame = frame;
+        _lastCountedList = handle;
+        return true;
+    }
+
+    /// <summary>
+    /// Reports the attached <c>Breast</c>, which is the only reading that means anything.
+    ///
+    /// The first attempt read the manager's template instead and reported
+    /// <c>physicalConditionFlag=Base</c> and <c>nameID=None</c> — the values a status has at level 0,
+    /// before it is attached to anyone. What decides whether the existing cure can see
+    /// <c>BreastSuper</c> is what the status carries once it is actually on the player.
+    /// </summary>
+    private static void ReportAttachedData(AbnormalList list)
+    {
+        try
+        {
+            AbnormalData? data = list.GetAbnormalData(AbnormalType.Breast);
+            if (data is null)
+            {
+                return;
+            }
+
+            PleasureRuntime.Probe(
+                "breast-attached",
+                $"A-14: Breast while attached at level {data.Level}: "
+                + $"physicalConditionFlag={data.PhysicalConditionFlag}, nameID={data.AbnormalNameID}, "
+                + $"haanjaCanCure={data.HaanjaCanCure}. The list now reports "
+                + $"PhysicalConditionFlag={list.PhysicalConditionFlag}.");
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Probe("breast-attached", $"A-14: the attached Breast could not be read: {exception.Message}");
         }
     }
 
@@ -86,5 +189,11 @@ internal static class BreastPatches
         {
             return 0;
         }
+    }
+
+    internal static void Reset()
+    {
+        _lastCountedFrame = int.MinValue;
+        _lastCountedList = IntPtr.Zero;
     }
 }
