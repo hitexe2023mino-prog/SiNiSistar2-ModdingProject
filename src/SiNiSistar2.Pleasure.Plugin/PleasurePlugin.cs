@@ -168,6 +168,11 @@ public sealed class PleasurePlugin : BasePlugin
             typeof(ItemUsePatches),
             postfix: nameof(ItemUsePatches.PlayItemEventPostfix));
         applied += Patch(
+            "item-usable",
+            FindMethod(typeof(ItemData), nameof(ItemData.IsUsable)),
+            typeof(ItemUsePatches),
+            postfix: nameof(ItemUsePatches.IsUsablePostfix));
+        applied += Patch(
             "item-consumed",
             FindMethod(typeof(InventoryHandler), nameof(InventoryHandler.RemoveItem), typeof(ItemID)),
             typeof(ItemUsePatches),

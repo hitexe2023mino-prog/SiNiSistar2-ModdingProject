@@ -700,6 +700,7 @@ SPEC002 の快楽系集合とは目的が異なるため一致させない。SPE
 | A-15 | 膨乳を付与するアイテムが `AddAbnormal(AbnormalType)`、`AddAbnormal(AbnormalData)`、`AddOrRemoveAbnormal`、`AbnormalConditionLabel.ExecutionOne` のどれを通るか。およびアイテムが実際に付与する状態異常 | 5.8、FR-244 |
 | A-16 | アイテム画面など、ゲームが停止している間の `Time.timeScale` の値と、その間の状態異常付与の有無 | 5.8、FR-246 |
 | A-17 | 状態異常の追加経路が受け取るリストが、`PlayerStatus.AbnormalList`・`Lelia.AbnormalList`・`list.Target` のどれと一致するか。**解消済み（2026-08-08）。`PlayerStatus.AbnormalList` と一致する。ロード時は `Lelia` がまだ存在しない** | 5.8、FR-247 |
+| A-20 | 膨乳状態で `エネヌトの体液` が使用可能と判定されるか。`Inventory.Item.m_ConditionChecker` により使用可否は author された条件で決まる。使用できないなら「膨乳状態での多重使用」はゲームが許さない操作であり、計数の契機にできない | 5.8、FR-244 |
 | A-19 | 既に `Breast` を持つ状態でアイテムを使ったとき、`AddAbnormal` と `OnTryAddedOverMax` のどちらが走るか。どちらも走らない場合、ゲームは再付与そのものを行っていない | 5.8、FR-250 |
 | A-18 | `エネヌトの体液` の使用が `InventoryHandler.PlayItemEvent` / `RemoveItem` に到達するか。到達する場合、そのあとに何の状態異常が付与されるか。**実測（2026-08-08）: 通常プレイ中に3回使用しても、`AbnormalList` の3経路と `AbnormalConditionLabel.ExecutionOne` のいずれにも状態異常の追加が現れなかった** | 5.8、FR-244 |
 | A-13 | 拘束中に編集画面を開いたときの入力の干渉。キー入力とクリックがゲーム側へ同時に届くことによる実害の有無 | 5.11、FR-236 |

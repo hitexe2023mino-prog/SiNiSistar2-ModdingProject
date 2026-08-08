@@ -27,6 +27,38 @@ internal static class ItemUsePatches
     }
 
     /// <summary>
+    /// Whether the game considers an item usable right now (SPEC003 付録A A-20).
+    ///
+    /// <c>Inventory.Item</c> carries an <c>m_ConditionChecker</c>, so usability is gated by an
+    /// authored condition rather than by stock alone. If the swelling item is refused while the
+    /// player is already swollen, then "use it again while swollen" is not something the game
+    /// permits, and no amount of watching the status paths will ever see it — which is the one
+    /// explanation left for a use that produces no log at all.
+    ///
+    /// Recorded once per item and answer, so the menu redrawing every frame does not fill the log.
+    /// </summary>
+    internal static void IsUsablePostfix(ItemData __instance, bool __result)
+    {
+        try
+        {
+            if (__instance is null)
+            {
+                return;
+            }
+
+            ItemID id = __instance.ItemID;
+            PleasureRuntime.Probe(
+                $"usable-{id}-{__result}",
+                $"A-20: the game reports {id} as {(__result ? "usable" : "NOT usable")} "
+                + $"(count {__instance.Count}).");
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Log?.LogWarning($"Item usability could not be observed: {exception.Message}");
+        }
+    }
+
+    /// <summary>
     /// The item leaving the inventory, watched as well as the event that plays it.
     ///
     /// Two witnesses, because either one alone is ambiguous. <c>PlayItemEvent</c> returns a UniTask,
