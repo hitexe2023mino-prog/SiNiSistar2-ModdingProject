@@ -195,6 +195,7 @@ public sealed class PleasureObserver : MonoBehaviour
         ReportSelfCheck(status);
         ReportBreastCureSurface(status);
         ApplyPendingBreastSuper(status);
+        EnforceSingleSwelling(status);
         UpdateHp0Suppression(lelia, bound);
         ConsumeClimax(status);
         DecayWhenFree(bound);
@@ -385,6 +386,56 @@ public sealed class PleasureObserver : MonoBehaviour
         if (seconds > 0f)
         {
             PleasureRuntime.TransitionFadeUntil = Time.timeAsDouble + seconds;
+        }
+    }
+
+    /// <summary>
+    /// Keeps <c>Breast</c> and <c>BreastSuper</c> from being worn at once (SPEC003 FR-263).
+    ///
+    /// The MOD removes <c>Breast</c> as it escalates, but nothing stops the game putting it back:
+    /// the item and the events that apply swelling do not know the escalated status exists, so they
+    /// add the ordinary one on top of it. That leaves two body overrides describing the same body,
+    /// a state nothing in the game was authored for.
+    ///
+    /// Enforced as a standing invariant rather than at each place that could break it, because the
+    /// places that can break it are the game's, not the MOD's, and there is no list of them.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void EnforceSingleSwelling(PlayerStatusManager status)
+    {
+        if (!PleasureRuntime.Profile.BreastSuper.ReplaceBreast)
+        {
+            return;
+        }
+
+        // Never inside an event or a hold. Taking a status away while something else holds the
+        // screen is what froze the game once already.
+        if (Time.timeScale <= 0f || PleasureRuntime.IsBound || BreastPatches.IsGalleryActive())
+        {
+            return;
+        }
+
+        AbnormalList? abnormals = status.AbnormalList;
+        if (abnormals is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (!abnormals.Has(AbnormalType.BreastSuper) || !abnormals.Has(AbnormalType.Breast))
+            {
+                return;
+            }
+
+            abnormals.RemoveAbnormal(AbnormalType.Breast);
+            PleasureRuntime.Log?.LogInfo(
+                "Breast was re-applied while BreastSuper is worn; the ordinary swelling is removed "
+                + "so the two do not overlap.");
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Log?.LogWarning($"The swellings could not be separated: {exception.Message}");
         }
     }
 
