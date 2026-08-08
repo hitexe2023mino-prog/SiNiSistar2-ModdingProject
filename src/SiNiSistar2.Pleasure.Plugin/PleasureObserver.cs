@@ -981,12 +981,39 @@ public sealed class PleasureObserver : MonoBehaviour
 
         try
         {
+            // Through the AbnormalData overload, like everything else that adds a status here. The
+            // one that takes a type has to resolve the data itself and returns quietly when it
+            // cannot, which is the failure that already cost a round trip on BreastSuper. Using it
+            // here meant F11 could add nothing, silently, and the count never moved.
+            AbnormalManager? manager = ManagerList.Abnormal;
+            AbnormalData? data = null;
+            if (manager is null || !manager.TryGetData(AbnormalType.Breast, out data) || data is null)
+            {
+                PleasureRuntime.Log?.LogWarning(
+                    "F11: the Breast status data is not loaded, so nothing can be applied yet.");
+                return;
+            }
+
             int before = PleasureRuntime.Breasts?.Count ?? 0;
-            abnormals.AddAbnormal(AbnormalType.Breast, 1, null);
+            abnormals.AddAbnormal(data, 1, null);
+
+            // Reported as fact rather than as intent. "Applied" without saying whether it took is
+            // how the escalation looked healthy for three rounds while nothing was happening.
+            bool present = abnormals.Has(AbnormalType.Breast);
+            bool super = abnormals.Has(AbnormalType.BreastSuper);
             PleasureRuntime.Log?.LogInfo(
-                $"F11: Breast applied for debugging. Count was {before}, is now "
+                $"F11: Breast={present}, BreastSuper={super}, level="
+                + $"{abnormals.GetAbnormalLevel(AbnormalType.Breast)}. Count was {before}, is now "
                 + $"{PleasureRuntime.Breasts?.Count ?? 0}; "
-                + $"{PleasureRuntime.Breasts?.Remaining ?? 0} more before BreastSuper.");
+                + $"{PleasureRuntime.Breasts?.Remaining ?? 0} more before BreastSuper. "
+                + $"Milk {PleasureRuntime.Milk?.Fill ?? 0f:P0}.");
+
+            if (!present && !super)
+            {
+                PleasureRuntime.Log?.LogWarning(
+                    "F11: the status did not attach. AbnormalList.Has reports it absent right after "
+                    + "the add, so the escalation has nothing to count.");
+            }
         }
         catch (Exception exception)
         {
