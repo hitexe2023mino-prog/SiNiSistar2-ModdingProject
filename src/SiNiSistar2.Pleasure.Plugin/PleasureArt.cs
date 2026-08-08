@@ -70,9 +70,12 @@ internal static class PleasureArt
                     continue;
                 }
 
-                // The outline, drawn as a band about the circle rather than a filled edge, so both
-                // lobes keep their shape when the liquid is high.
-                bool outline = nearest > radius - (stroke * 0.5f);
+                // Only the underside is drawn. The reference is a pair of open curves, not closed
+                // circles, and the top line is what made this read as two balls rather than as a
+                // vessel: a cup is recognised by its bottom, and leaving the rim off is what lets
+                // the milk look like it is sitting in something.
+                bool outline = nearest > radius - stroke
+                    && y > (x < size * 0.5f ? centreY : centreY) - (radius * 0.15f);
                 if (outline)
                 {
                     pixels[index] = new Color32(248, 236, 242, 235);
