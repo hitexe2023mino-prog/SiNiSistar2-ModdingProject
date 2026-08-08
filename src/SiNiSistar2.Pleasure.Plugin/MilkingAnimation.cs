@@ -40,8 +40,7 @@ internal static class MilkingAnimation
     private static bool _reportedFound;
     private static readonly HashSet<string> _galleryClips = new(StringComparer.Ordinal);
     private static readonly HashSet<string> _eventClips = new(StringComparer.Ordinal);
-    private static readonly List<(string Name, Animator Animator)> _eventCast = new();
-    private static int _castRetries;
+    private static double _lastCastRead;
     private static bool _reportedPaths;
     private static double _lastRequest;
     private static int _sweeps;
@@ -208,8 +207,7 @@ internal static class MilkingAnimation
     /// </summary>
     internal static void ProbeEventObjects(string scene)
     {
-        _eventCast.Clear();
-        bool repeat = _castRetries > 0;
+        bool repeat = false;
         try
         {
             GameObject? root = GameObject.Find("Root/Event");
@@ -234,17 +232,9 @@ internal static class MilkingAnimation
                 var found = child.gameObject.GetComponentsInChildren(Il2CppType.Of<Animator>(), true);
                 names.Add($"{child.name} ({found.Length} animator(s) beneath it)");
 
-                for (var slot = 0; slot < found.Length && _eventCast.Count < 24; slot++)
-                {
-                    var animator = found[slot]?.TryCast<Animator>();
-                    if (animator is not null)
-                    {
-                        _eventCast.Add((Describe(animator.gameObject), animator));
-                    }
-                }
             }
 
-            if (!repeat || _eventCast.Count > 0)
+            if (!repeat)
             {
                 PleasureRuntime.Log?.LogInfo(
                     $"A-33: an event {(repeat ? "is running" : "started")} in '{scene}'. "
@@ -258,29 +248,60 @@ internal static class MilkingAnimation
         }
     }
 
-    /// <summary>Reads the event's own cast while it plays. At most eight objects, none of them searched for.</summary>
+    /// <summary>
+    /// Reads whichever event objects are actually running (SPEC003 付録A A-27).
+    ///
+    /// The first version cached every animator under <c>Root/Event</c> at the moment an event
+    /// started and then reported each one every frame. Most of them belong to events that are
+    /// present in the scene but switched off, so the log filled with thousands of lines saying
+    /// nothing could be read — which is not a finding, it is noise, and it drowned the one line
+    /// that would have been. Only objects that are switched on are looked at now, and only a clip
+    /// that is genuinely playing is written, once per object and clip.
+    /// </summary>
     internal static void ProbeEventCast(string scene)
     {
-        // The event's objects are built as it runs, so an empty cast at the first frame is not an
-        // answer. Looked for again until something is there.
-        if (_eventCast.Count == 0 && _castRetries < 40)
+        double now = Time.unscaledTimeAsDouble;
+        if (now - _lastCastRead < 0.2d)
         {
-            _castRetries++;
-            ProbeEventObjects(scene);
+            return;
         }
 
-        for (var index = 0; index < _eventCast.Count; index++)
+        _lastCastRead = now;
+
+        try
         {
-            (string name, Animator animator) = _eventCast[index];
-            Report(animator, scene, $"the event object '{name}'");
+            GameObject? root = GameObject.Find("Root/Event");
+            if (root is null)
+            {
+                return;
+            }
+
+            Transform parent = root.transform;
+            int count = parent.childCount;
+            for (var index = 0; index < count && index < 30; index++)
+            {
+                Transform child = parent.GetChild(index);
+                if (!child.gameObject.activeInHierarchy)
+                {
+                    continue;
+                }
+
+                var animators = child.gameObject.GetComponentsInChildren(Il2CppType.Of<Animator>(), false);
+                for (var slot = 0; slot < animators.Length && slot < 16; slot++)
+                {
+                    Report(animators[slot]?.TryCast<Animator>(), scene, child.name);
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // A probe that can take the observer down is worse than one that misses a frame.
         }
     }
 
-    /// <summary>Forgets the cast when the event ends, so a stale animator is never read.</summary>
+    /// <summary>Nothing is cached between events any more, so ending one needs no cleanup.</summary>
     internal static void ForgetEventCast()
     {
-        _eventCast.Clear();
-        _castRetries = 0;
     }
 
     /// <summary>
@@ -341,19 +362,18 @@ internal static class MilkingAnimation
     /// Asking an unbound animator what it is playing is the one thing in the old scene walk that
     /// could plausibly have hung it, and there is no reason to do it here either.
     /// </summary>
-    private static void Report(Animator? animator, string takeName, string who)
+    private static void Report(Animator? animator, string scene, string who)
     {
         try
         {
             if (animator is null || !animator.isActiveAndEnabled || !animator.isInitialized
                 || animator.runtimeAnimatorController is null || animator.layerCount == 0)
             {
-                PleasureRuntime.Log?.LogInfo($"A-27: during '{takeName}', {who} has nothing to read.");
                 return;
             }
 
-            // Every layer. Layer 0 is where ordinary movement lives, so a performance driven on
-            // an upper layer reads as "standing still" if only layer 0 is asked.
+            // Every layer. Layer 0 is where ordinary movement lives, so a performance driven on an
+            // upper layer reads as "standing still" if only layer 0 is asked.
             AnimationClip? clip = null;
             var layer = 0;
             for (; layer < animator.layerCount; layer++)
@@ -369,26 +389,23 @@ internal static class MilkingAnimation
             string? name = clip?.name;
             if (clip is null || string.IsNullOrEmpty(name))
             {
-                PleasureRuntime.Log?.LogInfo(
-                    $"A-27: during '{takeName}', {who} is on controller "
-                    + $"'{animator.runtimeAnimatorController.name}' with no clip on any of its "
-                    + $"{animator.layerCount} layer(s).");
                 return;
             }
 
-            if (!_galleryClips.Add($"{takeName}|{who}|{name}"))
+            string path = Describe(animator.gameObject);
+            if (_galleryClips.Count > 200 || !_galleryClips.Add($"{scene}|{path}|{name}"))
             {
                 return;
             }
 
             PleasureRuntime.Log?.LogInfo(
-                $"A-27: during '{takeName}', {who} is playing the clip '{name}' "
-                + $"({clip.length:0.00}s, looping={clip.isLooping}) on layer {layer} of controller "
-                + $"'{animator.runtimeAnimatorController.name}'.");
+                $"A-27: in '{scene}', the running event '{who}' has '{path}' playing the clip "
+                + $"'{name}' ({clip.length:0.00}s, looping={clip.isLooping}) on layer {layer} of "
+                + $"controller '{animator.runtimeAnimatorController.name}'.");
         }
-        catch (Exception exception)
+        catch (Exception)
         {
-            PleasureRuntime.Log?.LogWarning($"A-27: {who} could not be read: {exception.Message}");
+            // Reading an animator must never be able to stop the observer.
         }
     }
 
