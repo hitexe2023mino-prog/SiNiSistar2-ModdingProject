@@ -31,11 +31,16 @@ internal static class PleasureArt
     /// <summary>
     /// The milk reservoir: a pair of breasts in outline, filling with white from below.
     ///
-    /// Two, drawn as strokes with the nipples marked, rather than the single filled lobe this used
-    /// to be. The single lobe read as an abstract blob at gauge size — it needed a legend to say
-    /// what it was, which is exactly what a HUD element must not need. A pair in outline is
-    /// recognised immediately and leaves its interior free for the liquid, so the reading and the
-    /// subject are the same shape.
+    /// Built from a signed distance field rather than from thresholded circles. Two thresholded
+    /// circles meet in a cusp and step along every diagonal, which is what made this read as
+    /// angular — and a breast is the one shape that cannot afford to. The field unions the pair
+    /// smoothly, so the cleft between them is a soft valley, and the edge is anti-aliased from the
+    /// distance itself. Each lobe is flattened above its centre and left full below it, which is
+    /// the difference between a ball and a breast.
+    ///
+    /// Only the underside is stroked, at the pleasure gauge's weight, and the milk stops at the
+    /// mouth rather than at the top of the silhouette: liquid standing well above the rim of a
+    /// vessel is not a level, it is a spill.
     /// </summary>
     internal static Texture2D MilkVessel(int size, float fill, float phase)
     {
@@ -43,71 +48,89 @@ internal static class PleasureArt
         var pixels = new Color32[size * size];
         float clamped = Math.Clamp(fill, 0f, 1f);
 
-        // Row 0 is the top of the drawn rectangle, so the surface descends as it fills.
-        float surface = size * (1f - clamped);
-
-        float radius = size * 0.26f;
-        float centreY = size * 0.46f;
+        float radius = size * 0.27f;
+        float centreY = size * 0.44f;
         float leftX = size * 0.27f;
         float rightX = size * 0.73f;
-        float stroke = Math.Max(1.6f, size * 0.055f);
-        float nippleR = Math.Max(1.5f, size * 0.055f);
-        float nippleY = centreY + (radius * 0.62f);
+
+        // The pleasure gauge's rim weight. The heavier line this used to carry turned the pair
+        // into inked balloons; at gauge size the outline should describe the shape and then get
+        // out of the way of what it contains.
+        float stroke = Math.Max(1.5f, size * 0.03f);
+        float feather = Math.Max(1f, size * 0.022f);
+
+        // Row 0 is the top of the drawn rectangle. Empty rests on the floor of the shape, full
+        // reaches the mouth — not the crown, which is why the milk used to climb out of the top.
+        // The mouth sits high enough that the shoulders of both lobes still stand clear of a full
+        // gauge: if the milk went to the crown, full would be a slab with no shape left in it.
+        float mouth = centreY - (radius * 0.55f);
+        float floorY = centreY + (radius * 1.02f);
+        float surface = floorY + ((mouth - floorY) * clamped);
 
         for (var y = 0; y < size; y++)
         {
             for (var x = 0; x < size; x++)
             {
                 int index = (y * size) + x;
+                float px = x + 0.5f;
+                float py = y + 0.5f;
 
-                float left = Distance(x, y, leftX, centreY);
-                float right = Distance(x, y, rightX, centreY);
-                float nearest = Math.Min(left, right);
+                float distance = SmoothUnion(
+                    Lobe(px, py, leftX, centreY, radius),
+                    Lobe(px, py, rightX, centreY, radius),
+                    radius * 0.20f);
 
-                if (nearest > radius + (stroke * 0.5f))
+                if (distance > (stroke * 0.5f) + feather)
                 {
                     pixels[index] = new Color32(0, 0, 0, 0);
                     continue;
                 }
 
-                // Only the underside is drawn. The reference is a pair of open curves, not closed
-                // circles, and the top line is what made this read as two balls rather than as a
-                // vessel: a cup is recognised by its bottom, and leaving the rim off is what lets
-                // the milk look like it is sitting in something.
-                bool outline = nearest > radius - stroke
-                    && y > (x < size * 0.5f ? centreY : centreY) - (radius * 0.15f);
-                if (outline)
+                float wave = (float)Math.Sin((px / (double)size * 6.28318) + phase) * size * 0.009f;
+                float local = surface + wave;
+
+                // Well inside the silhouette, and below the surface. Both edges are coverage
+                // rather than tests, so neither the shape nor the waterline stairsteps.
+                float inside = Math.Clamp((-distance - (stroke * 0.3f)) / feather, 0f, 1f);
+                float submerged = Math.Clamp((py - local) / feather, 0f, 1f);
+                float liquid = inside * submerged * (clamped > 0f ? 1f : 0f);
+
+                float red = 0f;
+                float green = 0f;
+                float blue = 0f;
+                float alpha = 0f;
+
+                if (liquid > 0f)
                 {
-                    pixels[index] = new Color32(248, 236, 242, 235);
-                    continue;
+                    // Nearly opaque. Milk is not a tint over the scenery behind it, and the
+                    // translucent version of this read as grey rather than as white.
+                    float depth = Math.Clamp((py - local) / Math.Max(1f, size * 0.45f), 0f, 1f);
+                    bool meniscus = py - local < size * 0.028f;
+                    red = meniscus ? 255f : 252f;
+                    green = meniscus ? 255f : 251f - (depth * 4f);
+                    blue = meniscus ? 255f : 247f - (depth * 7f);
+                    alpha = liquid * (meniscus ? 0.98f : 0.92f + (depth * 0.06f));
                 }
 
-                float nipple = Math.Min(
-                    Distance(x, y, leftX, nippleY),
-                    Distance(x, y, rightX, nippleY));
-                if (nipple < nippleR)
+                // The stroke fades in below the mouth instead of stopping at a line, so the two
+                // open curves end the way a drawn stroke ends rather than the way a mask does.
+                float gate = Math.Clamp((py - mouth) / Math.Max(1f, radius * 0.5f), 0f, 1f);
+                float edge = Math.Clamp(((stroke * 0.5f) - Math.Abs(distance)) / feather, 0f, 1f)
+                    * gate * gate;
+                if (edge > 0f)
                 {
-                    pixels[index] = new Color32(242, 186, 208, 245);
-                    continue;
+                    float line = edge * 0.9f;
+                    red = (246f * line) + (red * (1f - line));
+                    green = (222f * line) + (green * (1f - line));
+                    blue = (230f * line) + (blue * (1f - line));
+                    alpha = line + (alpha * (1f - line));
                 }
 
-                float wave = (float)Math.Sin((x / (double)size * 6.28318) + phase) * size * 0.012f;
-                float localSurface = surface + wave;
-                if (y < localSurface)
-                {
-                    pixels[index] = new Color32(0, 0, 0, 0);
-                    continue;
-                }
-
-                float depth = Math.Clamp((y - localSurface) / Math.Max(1f, size * 0.5f), 0f, 1f);
-                bool meniscus = y - localSurface < size * 0.03f;
-                pixels[index] = meniscus
-                    ? new Color32(255, 255, 255, 248)
-                    : new Color32(
-                        252,
-                        (byte)(248 - (depth * 10f)),
-                        (byte)(240 - (depth * 20f)),
-                        (byte)(205 + (depth * 45f)));
+                pixels[index] = new Color32(
+                    (byte)Math.Clamp(red, 0f, 255f),
+                    (byte)Math.Clamp(green, 0f, 255f),
+                    (byte)Math.Clamp(blue, 0f, 255f),
+                    (byte)Math.Clamp(alpha * 255f, 0f, 255f));
             }
         }
 
@@ -115,11 +138,27 @@ internal static class PleasureArt
         return texture;
     }
 
-    private static float Distance(int x, int y, float cx, float cy)
+    /// <summary>
+    /// One breast as a signed distance: negative inside, and in pixels so a stroke width means the
+    /// same thing everywhere on the curve. Squashing only the half above the centre gives the
+    /// shallow slope of the chest above and the deep curve underneath.
+    /// </summary>
+    private static float Lobe(float x, float y, float cx, float cy, float radius)
     {
-        float dx = x - cx + 0.5f;
-        float dy = y - cy + 0.5f;
-        return (float)Math.Sqrt((dx * dx) + (dy * dy));
+        float dx = (x - cx) / radius;
+        float dy = (y - cy) / radius;
+        dy *= dy < 0f ? 1.15f : 0.98f;
+        return ((float)Math.Sqrt((dx * dx) + (dy * dy)) - 1f) * radius;
+    }
+
+    /// <summary>
+    /// Union of two fields with the seam rounded off over <paramref name="k"/> pixels. A plain
+    /// minimum leaves a cusp where the two curves cross, and a cusp is a corner.
+    /// </summary>
+    private static float SmoothUnion(float a, float b, float k)
+    {
+        float h = Math.Clamp(0.5f + (0.5f * (b - a) / k), 0f, 1f);
+        return (b + ((a - b) * h)) - (k * h * (1f - h));
     }
 
     internal static Texture2D LiquidDisc(int size, float fill, float phase)
