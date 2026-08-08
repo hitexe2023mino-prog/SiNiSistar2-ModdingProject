@@ -352,7 +352,7 @@ public sealed class PleasureObserver : MonoBehaviour
         }
 
         PleasureRuntime.SuperTimer?.Start();
-        BeginTransition(abnormals);
+        BeginTransition();
 
         PleasureRuntime.Log?.LogInfo(
             $"Breast escalated to BreastSuper (Breast "
@@ -361,31 +361,23 @@ public sealed class PleasureObserver : MonoBehaviour
     }
 
     /// <summary>
-    /// Rebuilds the body and portrait after a status transition, and covers the moment with black.
+    /// Covers the moment the status changes with black.
     ///
-    /// <c>AbnormalList.AllObjectSetUp</c> is the game's own "set everything up from the current
-    /// status list" call, which is what makes the change visible without reloading the scene. That
-    /// matters more than the black does: reloading to see a debuff land would move the player, and
-    /// the requirement was explicitly to stay where they are.
+    /// It does not rebuild anything. An earlier version called
+    /// <c>AbnormalList.AllObjectSetUp</c> here, on the reasoning that the game's own "set everything
+    /// up from the current status list" would refresh the body without a scene reload. It froze the
+    /// game on the next conversation: the cure runs inside a drama, so the rebuild was being driven
+    /// synchronously while an event held the screen. Adding and removing a status is something the
+    /// game does constantly and refreshes on its own; forcing the rebuild was never established as
+    /// necessary and is now known to be harmful (DEC-221).
     /// </summary>
     [HideFromIl2Cpp]
-    private void BeginTransition(AbnormalList abnormals)
+    private void BeginTransition()
     {
         float seconds = PleasureRuntime.Profile.BreastSuper.FadeSeconds;
         if (seconds > 0f)
         {
             PleasureRuntime.TransitionFadeUntil = Time.timeAsDouble + seconds;
-        }
-
-        try
-        {
-            abnormals.AllObjectSetUp();
-        }
-        catch (Exception exception)
-        {
-            PleasureRuntime.Log?.LogWarning(
-                $"The body could not be rebuilt after the transition: {exception.Message}. The "
-                + "status is applied; its appearance may not update until the next scene change.");
         }
     }
 
@@ -414,13 +406,20 @@ public sealed class PleasureObserver : MonoBehaviour
 
         if (PleasureRuntime.PendingBreastSuperCure)
         {
+            // Held until the game is running normally again. The cure happens inside a drama, and
+            // taking a status away while an event holds the screen is what took the game down.
+            if (Time.timeScale <= 0f || PleasureRuntime.IsBound)
+            {
+                return;
+            }
+
             PleasureRuntime.PendingBreastSuperCure = false;
             PleasureRuntime.Breasts?.Reset();
             if (present)
             {
                 abnormals.RemoveAbnormal(AbnormalType.BreastSuper);
                 PleasureRuntime.SuperTimer?.Stop();
-                BeginTransition(abnormals);
+                BeginTransition();
                 PleasureRuntime.Log?.LogInfo(
                     "BreastSuper was removed along with Breast by the game's own cure.");
             }
@@ -456,7 +455,7 @@ public sealed class PleasureObserver : MonoBehaviour
             abnormals.AddAbnormal(data, 1, null);
         }
 
-        BeginTransition(abnormals);
+        BeginTransition();
         PleasureRuntime.Log?.LogInfo("BreastSuper subsided back to Breast after its duration.");
     }
 
@@ -915,26 +914,45 @@ public sealed class PleasureObserver : MonoBehaviour
 
         try
         {
-            GameObject? cure = GameObject.Find("Root/Event/BreastCure") ?? GameObject.Find("BreastCure");
-            if (cure is null)
+            // Every trigger in the scene, named. "Root/Event/BreastCure" was a path seen in the log
+            // while the cure was running, which is the one thing it cannot be looked up by: the
+            // object is created for the event and is not there beforehand. What is there beforehand
+            // is whatever the player walks up to, so that is what gets listed (A-22).
+            var triggers = UnityEngine.Object.FindObjectsOfType<InteractiveEventTrigger>();
+            if (triggers is null || triggers.Length == 0)
             {
-                PleasureRuntime.Log?.LogInfo(
-                    "C: no BreastCure event is present in this scene, so there is nothing to start "
-                    + "here. The cure exists where the game placed it.");
+                PleasureRuntime.Log?.LogInfo("C: this scene has no interactive triggers at all.");
                 return;
             }
 
-            var trigger = cure.GetComponentInChildren<InteractiveEventTrigger>(true);
-            if (trigger is null)
+            InteractiveEventTrigger? match = null;
+            var names = new List<string>(triggers.Length);
+            for (var index = 0; index < triggers.Length; index++)
+            {
+                InteractiveEventTrigger candidate = triggers[index];
+                string name = candidate.gameObject.name;
+                names.Add(name);
+                if (match is null
+                    && (name.Contains("Breast", StringComparison.OrdinalIgnoreCase)
+                        || name.Contains("Cure", StringComparison.OrdinalIgnoreCase)))
+                {
+                    match = candidate;
+                }
+            }
+
+            PleasureRuntime.Log?.LogInfo(
+                $"C: {triggers.Length} interactive trigger(s) here: {string.Join(", ", names)}.");
+
+            if (match is null)
             {
                 PleasureRuntime.Log?.LogInfo(
-                    $"C: '{cure.name}' was found but carries no InteractiveEventTrigger, so the MOD "
-                    + "has no way to start it.");
+                    "C: none of them is named for the cure. If one of the names above is the milking "
+                    + "cure, say so and it will be matched by name.");
                 return;
             }
 
-            trigger.OnStartInteractive();
-            PleasureRuntime.Log?.LogInfo($"C: started the BreastCure event on '{cure.name}'.");
+            match.OnStartInteractive();
+            PleasureRuntime.Log?.LogInfo($"C: started '{match.gameObject.name}'.");
         }
         catch (Exception exception)
         {
