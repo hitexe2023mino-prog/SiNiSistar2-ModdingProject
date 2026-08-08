@@ -330,26 +330,51 @@ internal static class BreastPatches
     /// before it is attached to anyone. What decides whether the existing cure can see
     /// <c>BreastSuper</c> is what the status carries once it is actually on the player.
     /// </summary>
-    private static void ReportAttachedData(AbnormalList list)
+    private static void ReportAttachedData(AbnormalList list) =>
+        ReportAttachedData(list, AbnormalType.Breast);
+
+    /// <summary>
+    /// Reports what an attached status carries, including everything the portrait is chosen from
+    /// (SPEC003 付録A A-14, A-28).
+    ///
+    /// The portrait went back to the unswollen art under <c>BreastSuper</c>, which is a body state
+    /// the player is not in. Four things could each cause that on their own, so all four are
+    /// printed together: the physical condition flag (which has no <c>BreastSuper</c> member — only
+    /// Base, Breast, Pregnant and Semen), the portrait priority that decides which status wins, and
+    /// the portrait type and parameter the winning status carries. Printing one at a time would
+    /// have meant four rounds of asking.
+    /// </summary>
+    internal static void ReportAttachedData(AbnormalList list, AbnormalType type)
     {
         try
         {
-            AbnormalData? data = list.GetAbnormalData(AbnormalType.Breast);
+            AbnormalData? data = list.GetAbnormalData(type);
             if (data is null)
             {
+                PleasureRuntime.Probe(
+                    $"attached-{type}",
+                    $"A-28: {type} is not on the list, so nothing could be read from it.");
                 return;
             }
 
+            AbnormalOne? one = data.AbnormalOne;
+            string portrait = one is null
+                ? "abnormalOne=(null)"
+                : $"portraitType={one.m_AbnormalPortraitType}, "
+                  + $"portraitParameter={(one.m_PortraitParameter is null ? "(null)" : "set")}";
+
             PleasureRuntime.Probe(
-                "breast-attached",
-                $"A-14: Breast while attached at level {data.Level}: "
+                $"attached-{type}",
+                $"A-28: {type} while attached at level {data.Level}: "
                 + $"physicalConditionFlag={data.PhysicalConditionFlag}, nameID={data.AbnormalNameID}, "
-                + $"haanjaCanCure={data.HaanjaCanCure}. The list now reports "
-                + $"PhysicalConditionFlag={list.PhysicalConditionFlag}.");
+                + $"haanjaCanCure={data.HaanjaCanCure}, portraitPriority={data.PortraitPriority}, "
+                + $"{portrait}. The list now reports PhysicalConditionFlag={list.PhysicalConditionFlag}.");
         }
         catch (Exception exception)
         {
-            PleasureRuntime.Probe("breast-attached", $"A-14: the attached Breast could not be read: {exception.Message}");
+            PleasureRuntime.Probe(
+                $"attached-{type}",
+                $"A-28: the attached {type} could not be read: {exception.Message}");
         }
     }
 

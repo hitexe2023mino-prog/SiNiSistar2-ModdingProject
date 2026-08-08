@@ -399,9 +399,20 @@ public sealed class PleasureObserver : MonoBehaviour
         }
 
         PleasureRuntime.PendingBreastSuper = false;
+
+        // Read before Breast is taken off, and again after, so the portrait's inputs are on record
+        // both ways round. The unswollen portrait under BreastSuper could be the escalated status
+        // carrying no portrait of its own, or it could be the swelling's portrait having been the
+        // one doing the work all along (付録A A-28).
+        BreastPatches.ReportAttachedData(abnormals, AbnormalType.BreastSuper);
+
         if (PleasureRuntime.Profile.BreastSuper.ReplaceBreast)
         {
             abnormals.RemoveAbnormal(AbnormalType.Breast);
+            PleasureRuntime.Probe(
+                "portrait-after-removing-breast",
+                "A-28: with Breast removed and BreastSuper worn, the list reports "
+                + $"PhysicalConditionFlag={SafeFlag(abnormals)}.");
         }
 
         // Full from the moment it lands. The escalation is the body having more than it can hold,
@@ -416,6 +427,20 @@ public sealed class PleasureObserver : MonoBehaviour
             $"Breast escalated to BreastSuper (Breast "
             + $"{(PleasureRuntime.Profile.BreastSuper.ReplaceBreast ? "removed" : "kept")}). "
             + $"Sensitivity {PleasureRuntime.Sensitivity?.Value ?? 0f:F2}.");
+    }
+
+    /// <summary>The list's condition flag, or why it could not be read.</summary>
+    [HideFromIl2Cpp]
+    private static string SafeFlag(AbnormalList list)
+    {
+        try
+        {
+            return list.PhysicalConditionFlag.ToString();
+        }
+        catch (Exception exception)
+        {
+            return $"(unreadable: {exception.Message})";
+        }
     }
 
     /// <summary>
