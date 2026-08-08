@@ -46,6 +46,9 @@ public sealed class PleasureObserver : MonoBehaviour
     private int _milkingReturnState;
     private KeyCode _milkingKey = KeyCode.None;
     private double _swellingOverlapSince;
+    private double _breastSuperLoadAsked;
+    private double _breastSuperWaitLogged;
+    private bool _interactionLocked;
     private Texture2D? _milkVessel;
     private float _milkFill = -1f;
     private float _milkPhase;
@@ -194,6 +197,7 @@ public sealed class PleasureObserver : MonoBehaviour
         _gameplayActive = true;
         PleasureRuntime.GameplayStarted = true;
         PleasureRuntime.IsSwollen = IsSwollen(status);
+        ReportInteractionLock(status);
         ReportSelfCheck(status);
         ReportBreastCureSurface(status);
         ApplyPendingBreastSuper(status);
@@ -333,10 +337,7 @@ public sealed class PleasureObserver : MonoBehaviour
         {
             // The flag is deliberately left standing. Loading is asynchronous, so "not yet" must not
             // become "never" — the escalation was earned and has to land once the data arrives.
-            PleasureRuntime.Probe(
-                "breastsuper-not-loaded",
-                "The BreastSuper escalation is waiting for its data to finish loading. It will be "
-                + "applied as soon as the game has it.");
+            RequestBreastSuperData(manager);
             return;
         }
 
@@ -389,6 +390,63 @@ public sealed class PleasureObserver : MonoBehaviour
         {
             PleasureRuntime.TransitionFadeUntil = Time.timeAsDouble + seconds;
         }
+    }
+
+    /// <summary>
+    /// Reports the game's own "interaction is disabled" answer as it changes (SPEC003 付録A A-24).
+    ///
+    /// <c>AbnormalManager.IsDisableInteract</c> is the game's rule, not the MOD's: some statuses
+    /// stop the player using things. If a save point stops responding while swollen, this says
+    /// whether the game decided that or the MOD broke it — a distinction no amount of reading the
+    /// MOD's own code can settle.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void ReportInteractionLock(PlayerStatusManager status)
+    {
+        bool locked;
+        try
+        {
+            locked = AbnormalManager.IsDisableInteract();
+        }
+        catch (Exception)
+        {
+            return;
+        }
+
+        if (locked == _interactionLocked)
+        {
+            return;
+        }
+
+        _interactionLocked = locked;
+        var names = new List<string>();
+        try
+        {
+            AbnormalList? abnormals = status.AbnormalList;
+            if (abnormals is not null)
+            {
+                foreach (AbnormalType type in new[]
+                         {
+                             AbnormalType.Breast, AbnormalType.BreastSuper, AbnormalType.Milk,
+                             AbnormalType.Parasite, AbnormalType.Blessing_Lost,
+                         })
+                {
+                    if (abnormals.Has(type))
+                    {
+                        names.Add(type.ToString());
+                    }
+                }
+            }
+        }
+        catch (Exception)
+        {
+            names.Add("(statuses unreadable)");
+        }
+
+        PleasureRuntime.Log?.LogInfo(
+            $"[probe] A-24: AbnormalManager.IsDisableInteract is now {locked}. Statuses: "
+            + $"{(names.Count == 0 ? "none of the watched ones" : string.Join(", ", names))}. "
+            + "This is the game's own rule about whether things can be used.");
     }
 
     [HideFromIl2Cpp]
@@ -601,6 +659,59 @@ public sealed class PleasureObserver : MonoBehaviour
         }
 
         ApplyHaanjaCurableOverride(manager);
+    }
+
+    /// <summary>
+    /// Makes the game load <c>BreastSuper</c>, and says so while it has not (SPEC003 FR-252).
+    ///
+    /// <c>PreloadResist</c> only registers a wish: it puts the status on a list the game consults at
+    /// its own loading points. Measured on this build, a run whose save never carried the status
+    /// never loaded it, and the escalation sat pending for ever while the log said "waiting" exactly
+    /// once. Earlier runs looked fine only because their saves already had it.
+    ///
+    /// <c>LoadAbnormalData</c> is the game's own loader. It is started and not awaited; the retry
+    /// that brought us here is the wait.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void RequestBreastSuperData(AbnormalManager? manager)
+    {
+        double now = Time.unscaledTimeAsDouble;
+        bool report = now - _breastSuperWaitLogged > 5d;
+        if (report)
+        {
+            _breastSuperWaitLogged = now;
+        }
+
+        if (manager is null)
+        {
+            return;
+        }
+
+        if (now - _breastSuperLoadAsked > 2d)
+        {
+            _breastSuperLoadAsked = now;
+            try
+            {
+                manager.LoadAbnormalData(AbnormalType.BreastSuper, ManagerList.RootTokenSource.Token);
+            }
+            catch (Exception exception)
+            {
+                if (report)
+                {
+                    PleasureRuntime.Log?.LogWarning(
+                        $"BreastSuper could not be loaded on request: {exception.Message}");
+                }
+
+                return;
+            }
+        }
+
+        if (report)
+        {
+            PleasureRuntime.Log?.LogInfo(
+                "The BreastSuper escalation is waiting for its data; the game has been asked to "
+                + "load it. This repeats until it arrives.");
+        }
     }
 
     /// <summary>

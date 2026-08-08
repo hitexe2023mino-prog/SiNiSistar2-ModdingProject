@@ -23,6 +23,7 @@
     <Reference Include="Il2Cppmscorlib" HintPath="$(BepInExRoot)\interop\Il2Cppmscorlib.dll" Private="false" />
     <Reference Include="Il2CppSystem" HintPath="$(BepInExRoot)\interop\Il2CppSystem.dll" Private="false" />
     <Reference Include="SiNiSistar2" HintPath="$(BepInExRoot)\interop\SiNiSistar2.dll" Private="false" />
+    <Reference Include="UniTask" HintPath="$(BepInExRoot)\interop\UniTask.dll" Private="false" />
     <Reference Include="UniRx" HintPath="$(BepInExRoot)\interop\UniRx.dll" Private="false" />
     <Reference Include="UnityEngine.AnimationModule" HintPath="$(BepInExRoot)\interop\UnityEngine.AnimationModule.dll" Private="false" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(BepInExRoot)\interop\UnityEngine.CoreModule.dll" Private="false" />

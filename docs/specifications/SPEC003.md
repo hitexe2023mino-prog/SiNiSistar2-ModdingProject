@@ -724,6 +724,7 @@ SPEC002 の快楽系集合とは目的が異なるため一致させない。SPE
 | A-16 | アイテム画面など、ゲームが停止している間の `Time.timeScale` の値と、その間の状態異常付与の有無 | 5.8、FR-246 |
 | A-17 | 状態異常の追加経路が受け取るリストが、`PlayerStatus.AbnormalList`・`Lelia.AbnormalList`・`list.Target` のどれと一致するか。**解消済み（2026-08-08）。`PlayerStatus.AbnormalList` と一致する。ロード時は `Lelia` がまだ存在しない** | 5.8、FR-247 |
 | A-20 | ~~膨乳状態で `エネヌトの体液` が使用可能と判定されるか~~ **解消済み（2026-08-08）。膨乳状態では `NOT usable`。使用可否を偽って通しても、アイテムのイベント自身が独立に拒否し、状態異常は付かず在庫も減らない。二重に拒否されている** | 5.8、FR-244、DEC-229 |
+| A-24 | 膨乳・更なる膨乳を着ている間、`AbnormalManager.IsDisableInteract` が真になるか。真なら聖なる像が反応しないのはゲーム自身の規則であり、MODの不具合ではない | 5.8 |
 | A-23 | ~~搾乳のアニメーションtake名~~ **解消済み（2026-08-08）。`ResumeBreast` はプレイヤーの実地コントローラに存在しない。** `Breast2_AnimatorOverride` の82クリップは `Breast2_*` 系のみで、搾乳takeはギャラリー側（`GaID_VillagerMiddleMale_A_Pig`）にある。フィールドでは再生できない | 5.8、FR-258 |
 | A-22 | 搾乳治療を開始する `InteractiveEventTrigger` の名前。`Root/Event/BreastCure` はイベント実行中に生成される オブジェクト であり、開始前には存在しない | 5.8、FR-255 |
 | A-21 | 膨乳状態で `エネヌトの体液` が使用可能と判定されるか。`Inventory.Item.m_ConditionChecker` により使用可否は author された条件で決まる。使用できないなら「膨乳状態での多重使用」はゲームが許さない操作であり、計数の契機にできない | 5.8、FR-244 |
