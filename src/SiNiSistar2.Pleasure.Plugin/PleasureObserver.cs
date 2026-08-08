@@ -1121,6 +1121,12 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
+        // One sweep per press, never on its own (付録A A-27).
+        if (current.type == EventType.KeyDown && current.keyCode == MilkingAnimation.SweepKey)
+        {
+            MilkingAnimation.RequestSweep();
+        }
+
         if (current.type == EventType.KeyDown
             && current.keyCode == MilkingKey()
             && !_enemyEditor.IsOpen

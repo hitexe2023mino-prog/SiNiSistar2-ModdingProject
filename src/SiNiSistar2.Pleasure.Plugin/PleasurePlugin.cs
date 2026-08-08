@@ -208,6 +208,11 @@ public sealed class PleasurePlugin : BasePlugin
             "Press F11 in game to apply Breast to the player, for checking the escalation. "
             + $"Press {profile.BreastSuper.MilkingKey} while BreastSuper is active to milk: it "
             + "empties the milk gauge, works anywhere, and being hit wastes it.");
+        Log.LogInfo(
+            $"Press {MilkingAnimation.SweepKey} while the gallery plays a take to record every "
+            + "animator in the scene and the clip it is playing, which is how the milking "
+            + "performer is identified (SPEC003 付録A A-27). One sweep per press; it never runs "
+            + "on its own.");
 
         if (profile.ShowOverlay)
         {

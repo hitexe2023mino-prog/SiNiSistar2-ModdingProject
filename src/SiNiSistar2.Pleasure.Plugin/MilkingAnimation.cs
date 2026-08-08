@@ -40,7 +40,15 @@ internal static class MilkingAnimation
     private static readonly HashSet<string> _galleryClips = new(StringComparer.Ordinal);
     private static bool _reportedPaths;
     private static double _lastRequest;
-    private static double _lastSweep;
+    private static int _sweeps;
+
+    /// <summary>Pressed to sweep the scene once for the milking actor (SPEC003 付録A A-27).</summary>
+    internal const KeyCode SweepKey = KeyCode.F7;
+
+    private static bool _sweepAsked;
+
+    /// <summary>Asks for one sweep. Keys arrive through IMGUI here, so this is a press, not a hold.</summary>
+    internal static void RequestSweep() => _sweepAsked = true;
     private static AnimationClip? _clip;
 
     /// <summary>Starts the animation, or starts waiting for the clip that plays it.</summary>
@@ -135,13 +143,23 @@ internal static class MilkingAnimation
     /// </summary>
     private static void SweepActors(string takeName)
     {
-        double now = Time.unscaledTimeAsDouble;
-        if (now - _lastSweep < 0.25d || _galleryClips.Count > 120)
+        // Asked for, not automatic. The game froze while a gallery take was being played, and this
+        // walk of every object in the scene was the newest thing running in exactly that place. It
+        // is not proven to be the cause — but a measurement that only has to happen when someone is
+        // looking has no business running on its own, and leaving it automatic would mean the next
+        // freeze could not be told apart from this one either.
+        if (!_sweepAsked)
         {
             return;
         }
 
-        _lastSweep = now;
+        _sweepAsked = false;
+        if (_sweeps >= 40 || _galleryClips.Count > 120)
+        {
+            return;
+        }
+
+        _sweeps++;
 
         var animators = UnityEngine.Object.FindObjectsOfType(Il2CppType.Of<Animator>());
         for (var index = 0; index < animators.Length; index++)
