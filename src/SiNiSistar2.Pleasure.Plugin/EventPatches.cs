@@ -32,12 +32,25 @@ internal static class EventPatches
     private static readonly HashSet<string> _played = new(StringComparer.Ordinal);
     private static readonly HashSet<string> _swapped = new(StringComparer.Ordinal);
 
-    /// <summary>Names a scripted performance as it starts (SPEC003 付録A A-38).</summary>
-    internal static void PlayPlayerPostfix(EventPlayerBase __instance)
+    /// <summary>
+    /// Names a scripted performance while it runs (SPEC003 付録A A-38, A-39).
+    ///
+    /// This hangs off <c>Update</c> rather than <c>PlayPlayer</c>. <c>PlayPlayer</c> returns a
+    /// <c>UniTask</c> — a struct returned by value — and a postfix on it left the player unable to
+    /// move when the event fired: the performance began and its completion never arrived, so the
+    /// game waited for it forever. The game stayed running, which made it worse rather than better;
+    /// a probe that quietly makes the game unplayable is not a probe.
+    ///
+    /// <c>Update</c> returns void, so a postfix on it can carry nothing away, and
+    /// <c>IsPlaying</c> is the game's own answer to the same question. It is still the one door
+    /// every subclass goes through, which is the whole point.
+    /// </summary>
+    internal static void UpdatePostfix(EventPlayerBase __instance)
     {
         try
         {
-            if (!PleasureRuntime.Profile.ProbeMeasurements || __instance is null)
+            if (!PleasureRuntime.Profile.ProbeMeasurements || __instance is null
+                || !__instance.IsPlaying)
             {
                 return;
             }
@@ -56,7 +69,7 @@ internal static class EventPatches
             var directors = host.GetComponentsInChildren(Il2CppType.Of<PlayableDirector>(), true);
 
             PleasureRuntime.Log?.LogInfo(
-                $"A-38: a scripted performance started: '{path}' is a {kind} with "
+                $"A-38: a scripted performance is running: '{path}' is a {kind} with "
                 + $"{animators.Length} animator(s) and {directors.Length} director(s) beneath it. "
                 + $"{DescribeDirectors(directors)}");
         }

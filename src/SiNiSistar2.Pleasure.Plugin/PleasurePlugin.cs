@@ -188,11 +188,17 @@ public sealed class PleasurePlugin : BasePlugin
         // Every scripted performance goes through this one door, whichever subclass runs it and
         // wherever the object lives. Four rounds of polling for the milking scene each looked in a
         // place chosen by guess, and a wrong guess is indistinguishable from an absence (付録A A-38).
+        // Update, not PlayPlayer. PlayPlayer returns a UniTask — a struct, by value — and a postfix
+        // on it left the player unable to move at the event: the performance started and its
+        // completion never came back, so the game went on waiting for it. A probe that stops the
+        // game being playable is not a probe (DEC-236 again, in a new place). Update returns void
+        // and cannot carry anything away with it, and IsPlaying is the game's own flag for the same
+        // fact (付録A A-39).
         applied += Patch(
             "event-player",
-            FindMethod(typeof(EventPlayerBase), nameof(EventPlayerBase.PlayPlayer)),
+            FindMethod(typeof(EventPlayerBase), "Update"),
             typeof(EventPatches),
-            postfix: nameof(EventPatches.PlayPlayerPostfix));
+            postfix: nameof(EventPatches.UpdatePostfix));
         applied += Patch(
             "animator-swap",
             FindMethod(typeof(Lelia), nameof(Lelia.ReplaceRuntimeAnimatorController)),
