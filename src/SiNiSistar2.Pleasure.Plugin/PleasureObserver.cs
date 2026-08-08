@@ -43,6 +43,7 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _breastReported;
     private bool _breastSuperReported;
     private bool _breastSuperRequested;
+    private int _milkingReturnState;
 
 
     public PleasureObserver(IntPtr pointer)
@@ -940,6 +941,7 @@ public sealed class PleasureObserver : MonoBehaviour
         if (milking.TryStart())
         {
             PleasureRuntime.MilkingWasHit = false;
+            StartMilkingAnimation();
             PleasureRuntime.Log?.LogInfo(
                 $"Milking started; it will take a moment and being hit will waste it. "
                 + $"{(super ? "BreastSuper will subside to Breast." : "Breast will be cleared.")}");
@@ -969,6 +971,7 @@ public sealed class PleasureObserver : MonoBehaviour
             PleasureRuntime.MilkingWasHit = false;
             if (milking.Interrupt())
             {
+                StopMilkingAnimation();
                 PleasureRuntime.Log?.LogInfo("Milking was interrupted; nothing was cured.");
             }
 
@@ -1002,7 +1005,92 @@ public sealed class PleasureObserver : MonoBehaviour
         }
 
         PleasureRuntime.Breasts?.Reset();
+        StopMilkingAnimation();
         BeginTransition();
+    }
+
+    /// <summary>
+    /// Plays the game's own milking take on the player (SPEC003 5.8, FR-258).
+    ///
+    /// This is the one place the MOD drives the animator, and the reason FR-228 was amended rather
+    /// than ignored. What that requirement protects is the honesty of what an observer reads: SPEC001
+    /// identifies what is happening from the take name, so a name must never be played over something
+    /// it does not describe. Playing the real milking take while the player is really milking does
+    /// not break that — it is the same name meaning the same thing. Inventing a name, or borrowing
+    /// one from a situation that is not occurring, still would.
+    ///
+    /// The state played is checked for first. Asking an animator for a state it does not have is
+    /// silent, and a silent nothing here would read as "the animation does not work" rather than
+    /// "this build calls it something else".
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void StartMilkingAnimation()
+    {
+        _milkingReturnState = 0;
+        string state = PleasureRuntime.Profile.BreastSuper.MilkingAnimationState;
+        if (state.Length == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            Animator? animator = ManagerList.Object?.Lelia?.m_Animator;
+            if (animator is null)
+            {
+                return;
+            }
+
+            int hash = Animator.StringToHash(state);
+            if (!animator.HasState(0, hash))
+            {
+                PleasureRuntime.Probe(
+                    $"milking-state-missing-{state}",
+                    $"A-23: the player's animator has no state '{state}' on layer 0, so milking has "
+                    + $"no animation. Its controller is "
+                    + $"'{animator.runtimeAnimatorController?.name ?? "(none)"}'. Set "
+                    + "BreastSuper.MilkingAnimationState to the name this build uses, or empty to "
+                    + "leave the animator alone.");
+                return;
+            }
+
+            // Remembered so the player is put back rather than left standing in a pose. The state
+            // machine would normally drive out of it on the next input, but "normally" is not a
+            // guarantee worth leaving a player stuck on.
+            _milkingReturnState = animator.GetCurrentAnimatorStateInfo(0).fullPathHash;
+            animator.Play(hash, 0, 0f);
+            PleasureRuntime.Probe(
+                $"milking-state-played-{state}",
+                $"A-23: milking plays the animator state '{state}'. SPEC001 will see it as an "
+                + "ordinary take and stay fail-closed until a funscript is authored for it.");
+        }
+        catch (Exception exception)
+        {
+            _milkingReturnState = 0;
+            PleasureRuntime.Log?.LogWarning($"The milking animation could not be started: {exception.Message}");
+        }
+    }
+
+    /// <summary>Puts the player back into whatever they were doing before milking.</summary>
+    [HideFromIl2Cpp]
+    private void StopMilkingAnimation()
+    {
+        if (_milkingReturnState == 0)
+        {
+            return;
+        }
+
+        int state = _milkingReturnState;
+        _milkingReturnState = 0;
+        try
+        {
+            ManagerList.Object?.Lelia?.m_Animator?.Play(state, 0, 0f);
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Log?.LogWarning(
+                $"The player could not be returned to their previous animation: {exception.Message}");
+        }
     }
 
     /// <summary>

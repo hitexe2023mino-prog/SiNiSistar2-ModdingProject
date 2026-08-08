@@ -91,6 +91,15 @@ public sealed record PleasureOptions
     public float SelfMilkingSeconds { get; init; } = 6f;
 
     /// <summary>
+    /// The animator state played while milking. Empty leaves the animator alone.
+    ///
+    /// It is the game's own take name, played in the situation the game plays it in, so what any
+    /// observer sees is true: milking really is happening. Naming it in the config rather than
+    /// hard-coding it means a build that calls it something else is a config edit, not a rebuild.
+    /// </summary>
+    public string MilkingAnimationState { get; init; } = "ResumeBreast";
+
+    /// <summary>
     /// Counts every <c>Breast</c> application rather than only those at the maximum level. A
     /// debugging aid: it makes the escalation reachable by using the item that applies swelling a
     /// few times, without having to reach the ceiling first.

@@ -40,10 +40,11 @@ public sealed record BreastSuperTuning(
     float Seconds,
     bool CuredWithBreast,
     float FadeSeconds,
-    float MilkingSeconds)
+    float MilkingSeconds,
+    string MilkingAnimationState)
 {
     public static BreastSuperTuning Disabled { get; } =
-        new(false, 0, 0f, false, false, false, 0f, false, 0f, 0f);
+        new(false, 0, 0f, false, false, false, 0f, false, 0f, 0f, "");
 
     /// <summary>A count of zero means the escalation can never be reached, which is the shipped state.</summary>
     public bool HasEffect => Enabled && ApplicationsAtMaxLevel > 0;
@@ -372,7 +373,8 @@ public static class PleasureProfileFactory
             Math.Max(0f, options.BreastSuperSeconds),
             options.BreastSuperCuredWithBreast,
             Math.Max(0f, options.BreastSuperFadeSeconds),
-            Math.Max(0f, options.SelfMilkingSeconds));
+            Math.Max(0f, options.SelfMilkingSeconds),
+            (options.MilkingAnimationState ?? string.Empty).Trim());
     }
 
     private static SexualAttackClassifier BuildClassifier(

@@ -369,6 +369,13 @@ public sealed class PleasurePlugin : BasePlugin
             "Seconds of self-milking, on the C key, before the swelling steps down. 0 switches the "
             + "key off. It works anywhere: a safe place is not an area the game marks, it is any "
             + "moment nothing is attacking. Being hit wastes the attempt.");
+        ConfigEntry<string> milkingState = Config.Bind(
+            "BreastSuper",
+            "MilkingAnimationState",
+            "ResumeBreast",
+            "Animator state played while milking. Empty leaves the animator alone. It is the game's "
+            + "own take name played in the situation the game plays it in, so EDI sees a true "
+            + "reading; an unauthored funscript for it simply stays fail-closed.");
         ConfigEntry<bool> breastBelowMax = Config.Bind(
             "BreastSuper",
             "CountBelowMaxLevel",
@@ -470,6 +477,7 @@ public sealed class PleasurePlugin : BasePlugin
             BreastSuperCuredWithBreast = breastCured.Value,
             BreastSuperFadeSeconds = breastFade.Value,
             SelfMilkingSeconds = milkingSeconds.Value,
+            MilkingAnimationState = milkingState.Value,
             BreastSuperMakeHaanjaCurable = breastHaanja.Value,
             BreastSuperCountBelowMaxLevel = breastBelowMax.Value,
             LogTransitions = logTransitions.Value,
