@@ -36,6 +36,8 @@ internal static class MilkingAnimation
     private static bool _playing;
     private static bool _wanted;
     private static bool _reportedMissing;
+    private static bool _reportedFound;
+    private static readonly HashSet<string> _galleryClips = new(StringComparer.Ordinal);
     private static bool _reportedPaths;
     private static double _lastRequest;
     private static AnimationClip? _clip;
@@ -62,6 +64,60 @@ internal static class MilkingAnimation
         if (_wanted && !_playing)
         {
             TryPlay(clipName, slotName);
+        }
+    }
+
+    /// <summary>
+    /// Records what the player's own animator is playing while the gallery runs a take
+    /// (SPEC003 付録A A-27).
+    ///
+    /// The milking take is an <c>EventPlayer</c> take: a scripted performance, which is why the
+    /// gallery reports it with no clip and a length of zero, and why no clip is named after it. So
+    /// the only way to learn which clips it plays is to watch the player while it runs. Guessing at
+    /// a plausible neighbour instead is exactly the substitute DEC-224 forbids, and the reason this
+    /// probe exists rather than a default that looks right.
+    ///
+    /// Read-only, one line per distinct take-and-clip pair, and only in the gallery.
+    /// </summary>
+    internal static void ProbeGallery(string takeName)
+    {
+        try
+        {
+            Animator? animator = ManagerList.Object?.Lelia?.m_Animator;
+            if (animator is null || !animator.isActiveAndEnabled || animator.layerCount == 0)
+            {
+                return;
+            }
+
+            var clips = animator.GetCurrentAnimatorClipInfo(0);
+            if (clips.Length == 0)
+            {
+                return;
+            }
+
+            AnimationClip? clip = clips[0].clip;
+            string? name = clip?.name;
+            if (clip is null || string.IsNullOrEmpty(name))
+            {
+                return;
+            }
+
+            string key = $"{takeName}\n{name}";
+            if (!_galleryClips.Add(key))
+            {
+                return;
+            }
+
+            RuntimeAnimatorController? controller = animator.runtimeAnimatorController;
+            PleasureRuntime.Log?.LogInfo(
+                $"A-27: the gallery take '{takeName}' has the player playing the clip '{name}' "
+                + $"({clip.length:0.00}s, looping={clip.isLooping}) on controller "
+                + $"'{controller?.name ?? "(none)"}'. Put that name in "
+                + "BreastSuper.MilkingAnimationState if this is the milking take.");
+        }
+        catch (Exception)
+        {
+            // A probe that can take the observer down is worse than one that misses a frame.
         }
     }
 
@@ -257,6 +313,14 @@ internal static class MilkingAnimation
                 if (string.Equals(name, clipName, StringComparison.Ordinal))
                 {
                     _clip = clip;
+                    if (!_reportedFound)
+                    {
+                        _reportedFound = true;
+                        PleasureRuntime.Log?.LogInfo(
+                            $"A-25: the milking clip '{clipName}' is loaded ({clip.length:0.00}s, "
+                            + $"looping={clip.isLooping}).");
+                    }
+
                     return clip;
                 }
 
@@ -333,7 +397,7 @@ internal static class MilkingAnimation
                 _reportedPaths = true;
                 PleasureRuntime.Log?.LogInfo(
                     $"A-26: bundle paths related to milking: {(seen.Count == 0 ? "(none)" : string.Join(", ", seen))}. "
-                    + $"Asking for: {(candidates.Count == 0 ? "(nothing)" : string.Join(", ", candidates))}.");
+                    + $"Asking for: {(candidates.Count == 0 ? "(nothing loadable)" : string.Join(", ", candidates))}.");
             }
 
             // Two at most. Each one is a file read and a chunk of memory, and if the clip is in
@@ -388,9 +452,19 @@ internal static class MilkingAnimation
                 continue;
             }
 
+            // A scene bundle holds a serialised scene and nothing loose, so LoadAsset cannot take a
+            // clip out of one; opening it would also put a second copy of files the game loads
+            // itself into memory. Recorded, because knowing the clip's neighbourhood is worth
+            // something, but never opened.
+            bool scene = path.EndsWith(".unity", StringComparison.OrdinalIgnoreCase);
             if (seen.Count < 40)
             {
-                seen.Add($"{type}:{path}");
+                seen.Add(scene ? $"{type}:{path} (scene, not opened)" : $"{type}:{path}");
+            }
+
+            if (scene)
+            {
+                continue;
             }
 
             if (named)

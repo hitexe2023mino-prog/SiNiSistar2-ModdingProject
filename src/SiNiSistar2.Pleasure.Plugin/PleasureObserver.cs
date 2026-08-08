@@ -1,5 +1,6 @@
 using Il2CppInterop.Runtime.Attributes;
 using SiNiSistar2.Manager;
+using SiNiSistar2.Manager.Gallery;
 using SiNiSistar2.Drama;
 using SiNiSistar2.Obj;
 using SiNiSistar2.Pleasure.Core;
@@ -63,6 +64,7 @@ public sealed class PleasureObserver : MonoBehaviour
     {
         try
         {
+            ProbeGalleryTake();
             Poll();
             _faultLogged = false;
         }
@@ -75,6 +77,40 @@ public sealed class PleasureObserver : MonoBehaviour
                 PleasureRuntime.Log?.LogWarning(
                     $"Pleasure observation failed and backed out; it will retry: {exception}");
             }
+        }
+    }
+
+    /// <summary>
+    /// Watches what the player plays while the gallery runs a take (SPEC003 付録A A-27).
+    ///
+    /// Outside <see cref="Poll"/> because it has to run in the gallery, where the rest of the
+    /// observer deliberately does not: the gallery forces statuses onto the player's list, and
+    /// counting those once left the escalation applied outside it. Reading an animator does none
+    /// of that.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private static void ProbeGalleryTake()
+    {
+        if (!PleasureRuntime.Profile.ProbeMeasurements)
+        {
+            return;
+        }
+
+        try
+        {
+            GaTakePlayer? player = ManagerList.Gallery?.CurrentTakePlayer;
+            AnimationTakeData? take = player?.PlayingTakeData;
+            if (take is null)
+            {
+                return;
+            }
+
+            string name = take.m_TakeName;
+            MilkingAnimation.ProbeGallery(string.IsNullOrEmpty(name) ? "(unnamed)" : name);
+        }
+        catch (Exception)
+        {
+            // The gallery is absent for most of a session, and that is not a fault.
         }
     }
 

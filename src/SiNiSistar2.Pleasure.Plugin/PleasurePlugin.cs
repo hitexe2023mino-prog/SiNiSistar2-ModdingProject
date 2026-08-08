@@ -384,10 +384,12 @@ public sealed class PleasurePlugin : BasePlugin
         ConfigEntry<string> milkingState = Config.Bind(
             "BreastSuper",
             "MilkingAnimationState",
-            "ResumeBreast",
-            "Animator state played while milking. Empty leaves the animator alone. It is the game's "
-            + "own take name played in the situation the game plays it in, so EDI sees a true "
-            + "reading; an unauthored funscript for it simply stays fail-closed.");
+            "",
+            "Animation clip played while milking. Empty leaves the animator alone, which is the "
+            + "shipped state until the clip the milking performance actually uses has been measured "
+            + "(SPEC003 付録A A-27). ResumeBreast is not a clip: it is the name of a scripted "
+            + "performance. No clip may be put here on a guess — playing the wrong one would tell "
+            + "EDI that something else is happening (DEC-224).");
         ConfigEntry<string> milkingSlot = Config.Bind(
             "BreastSuper",
             "MilkingAnimationSlot",

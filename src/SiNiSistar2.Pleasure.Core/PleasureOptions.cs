@@ -106,13 +106,19 @@ public sealed record PleasureOptions
     public string MilkingKey { get; init; } = "F8";
 
     /// <summary>
-    /// The animator state played while milking. Empty leaves the animator alone.
+    /// The animation clip played while milking. Empty leaves the animator alone.
     ///
-    /// It is the game's own take name, played in the situation the game plays it in, so what any
+    /// It is the game's own milking clip, played in the situation the game plays it in, so what any
     /// observer sees is true: milking really is happening. Naming it in the config rather than
     /// hard-coding it means a build that calls it something else is a config edit, not a rebuild.
+    ///
+    /// Empty until the clip is known. <c>ResumeBreast</c> is not a clip at all: the gallery
+    /// records it with a length of zero, which is the reading for a take played by an EventPlayer
+    /// — a scripted performance rather than an animator state (付録A A-25). Nothing may be put here
+    /// on a guess. A neighbouring clip that happens to be loaded nearby is exactly the substitute
+    /// DEC-224 forbids, and it would make an observer read the wrong event.
     /// </summary>
-    public string MilkingAnimationState { get; init; } = "ResumeBreast";
+    public string MilkingAnimationState { get; init; } = "";
 
     /// <summary>
     /// The animator state whose clip is replaced by the milking clip while milking.
