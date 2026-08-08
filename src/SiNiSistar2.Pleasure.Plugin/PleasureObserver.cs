@@ -185,7 +185,16 @@ public sealed class PleasureObserver : MonoBehaviour
         // does. Two frequencies rather than one, so it reads as a shudder instead of a buzz, and
         // the vertical is the smaller of the two because a horizontal camera is easier to read.
         var t = (float)Math.Clamp(remaining / climax.ShakeSeconds, 0d, 1d);
-        float amount = climax.ShakeStrength * t * t;
+
+        // Measured against the camera rather than in world units. World units mean nothing without
+        // knowing how much of the world is on screen, and the first version was set in them: 0.09
+        // against an orthographic half-height of several units is under a percent of the frame,
+        // which is a number that reads as "nothing happened". As a fraction of what is visible it
+        // means the same thing at any zoom.
+        float span = camera.orthographic
+            ? camera.orthographicSize
+            : Math.Abs(transform.position.z) * 0.2f;
+        float amount = climax.ShakeStrength * Math.Max(0.5f, span) * t * t;
         double now = Time.unscaledTimeAsDouble;
         _shakeOffset = new Vector3(
             (float)Math.Sin(now * 43d) * amount,
@@ -1270,6 +1279,25 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
+        // F7 fires a climax and F8 adds one step of corruption. Neither is a shortcut around the
+        // mechanism: F7 sets the same pending flag a full gauge sets, and F8 goes through the same
+        // gain path a sexual hit does, crest multiplier and all. What they save is the play needed
+        // to reach the state, which for corruption is measured in tens of climaxes — long enough
+        // that "I cannot tell whether this works" is the likely outcome of asking for it in play.
+        if (current.type == EventType.KeyDown && current.keyCode == KeyCode.F7)
+        {
+            ClimaxForDebugging();
+            current.Use();
+            return;
+        }
+
+        if (current.type == EventType.KeyDown && current.keyCode == KeyCode.F8)
+        {
+            CorruptForDebugging();
+            current.Use();
+            return;
+        }
+
         if (current.type == EventType.KeyDown && current.keyCode == KeyCode.F10)
         {
             // Closing the layout editor first, so the two are never taking the same keys.
@@ -1287,6 +1315,48 @@ public sealed class PleasureObserver : MonoBehaviour
         {
             current.Use();
         }
+    }
+
+    /// <summary>
+    /// Fires a climax on demand, so the climax performance can be judged without earning one.
+    ///
+    /// The same pending flag a full gauge sets, so everything downstream runs: the count, the
+    /// corruption gain, the haze and the shake. A separate path that only played the effect would
+    /// prove the effect and nothing else.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void ClimaxForDebugging()
+    {
+        PleasureRuntime.PendingClimax = true;
+        PleasureRuntime.Log?.LogInfo("F7: a climax was forced, for checking the performance.");
+    }
+
+    /// <summary>
+    /// Adds one crest part's worth of corruption, so the mark can be watched filling in.
+    ///
+    /// Through the same gain path a sexual hit uses, so the crest multiplier applies and the crest
+    /// lands at its threshold exactly as it would in play. At the shipped tuning the mark takes
+    /// tens of climaxes to complete, which is far too long to sit through to find out whether a
+    /// curve is drawn correctly.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void CorruptForDebugging()
+    {
+        CorruptionTrack? corruption = PleasureRuntime.Corruption;
+        if (corruption is null || corruption.Cap <= 0f)
+        {
+            PleasureRuntime.Log?.LogInfo("F8: corruption is switched off, so there is nothing to add.");
+            return;
+        }
+
+        float step = corruption.Cap / LustCrestArt.PartCount;
+        PleasureRuntime.GainCorruption(step);
+
+        var parts = (int)Math.Floor((corruption.Value / corruption.Cap) * LustCrestArt.PartCount);
+        PleasureRuntime.Log?.LogInfo(
+            $"F8: corruption is {corruption.Value:0.##} of {corruption.Cap:0.##}; the crest shows "
+            + $"{Math.Clamp(parts, 0, LustCrestArt.PartCount)} of {LustCrestArt.PartCount} parts. "
+            + $"The lust crest is {(PleasureRuntime.IsCrestWorn ? "worn" : "not worn")}.");
     }
 
     /// <summary>
@@ -1831,6 +1901,19 @@ public sealed class PleasureObserver : MonoBehaviour
             new Color(0f, 0f, 0f, Math.Clamp(alpha, 0f, 1f)));
     }
 
+    /// <summary>
+    /// The pink haze itself.
+    ///
+    /// Measured against the first version, which was reported as not happening at all. It was
+    /// happening: twelve bands over the outer 30% of the frame, the strongest at alpha 0.18, none
+    /// of them overlapping. That is a tint the eye discards, and a climax is not a tint — it is the
+    /// thing the whole gauge has been counting towards.
+    ///
+    /// So the bands now overlap deliberately: each is drawn full-width from the edge inwards rather
+    /// than as its own slice, so the alpha accumulates towards the edge and falls off smoothly
+    /// without IMGUI having a gradient. A wash over the whole frame carries the peak, because a
+    /// climax should reach the middle of the screen even though it lives at the edges.
+    /// </summary>
     [HideFromIl2Cpp]
     private void DrawVignette(float strength)
     {
@@ -1841,27 +1924,37 @@ public sealed class PleasureObserver : MonoBehaviour
 
         float width = Screen.width;
         float height = Screen.height;
-        const int bands = 12;
-        float step = height * 0.30f / bands;
+
+        // The whole frame, faintly. This is what makes the moment arrive rather than creep in from
+        // the corners, and it is kept low enough to read the game through.
+        OverlayPainter.Draw(
+            new Rect(0f, 0f, width, height),
+            OverlayPainter.Solid,
+            new Color(1f, 0.45f, 0.72f, strength * 0.16f));
+
+        const int bands = 14;
+        float reach = height * 0.42f;
+        float step = reach / bands;
 
         for (var index = 0; index < bands; index++)
         {
+            // Drawn from the edge inwards, each band shorter than the last, so they stack. The
+            // outermost pixel gets every band's contribution and the innermost gets one.
             float t = 1f - (index / (float)bands);
-            float alpha = strength * t * t * 0.18f;
+            float alpha = strength * t * t * 0.085f;
             if (alpha <= 0.002f)
             {
                 continue;
             }
 
-            var tint = new Color(1f, 0.42f, 0.70f, alpha);
-            float offset = index * step;
-            OverlayPainter.Draw(new Rect(0f, offset, width, step + 1f), OverlayPainter.Solid, tint);
-            OverlayPainter.Draw(new Rect(0f, height - offset - step - 1f, width, step + 1f), OverlayPainter.Solid, tint);
-            OverlayPainter.Draw(new Rect(offset, 0f, step + 1f, height), OverlayPainter.Solid, tint);
-            OverlayPainter.Draw(new Rect(width - offset - step - 1f, 0f, step + 1f, height), OverlayPainter.Solid, tint);
+            var tint = new Color(1f, 0.38f, 0.68f, alpha);
+            float depth = reach - (index * step);
+            OverlayPainter.Draw(new Rect(0f, 0f, width, depth), OverlayPainter.Solid, tint);
+            OverlayPainter.Draw(new Rect(0f, height - depth, width, depth), OverlayPainter.Solid, tint);
+            OverlayPainter.Draw(new Rect(0f, 0f, depth, height), OverlayPainter.Solid, tint);
+            OverlayPainter.Draw(new Rect(width - depth, 0f, depth, height), OverlayPainter.Solid, tint);
         }
     }
-
 
     [HideFromIl2Cpp]
     private static string? ResolveBinderId(Lelia lelia)

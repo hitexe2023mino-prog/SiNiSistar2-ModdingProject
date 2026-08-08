@@ -210,6 +210,11 @@ public sealed class PleasurePlugin : BasePlugin
                 : string.Empty));
 
         Log.LogInfo(
+            "Press F7 to fire a climax and F8 to add one crest part's worth of corruption, for "
+            + "checking the climax performance and the lust crest without playing to them. Both go "
+            + "through the real paths, so what they exercise is the mechanism rather than a "
+            + "shortcut around it.");
+        Log.LogInfo(
             "Press F11 in game to apply Breast to the player, for checking the escalation. "
             + "BreastSuper has no key: it is endured. The milk gauge falls "
             + $"{profile.BreastSuper.MilkDrainPerSecond:P1} a second and BreastSuper subsides to "
@@ -355,9 +360,11 @@ public sealed class PleasurePlugin : BasePlugin
         ConfigEntry<float> shakeStrength = Config.Bind(
             "Climax",
             "ClimaxShakeStrength",
-            0.09f,
-            "How far the camera moves at the height of the shake, in world units. Small: the game "
-            + "still has to be readable while it happens.");
+            0.035f,
+            "How far the camera moves at the height of the shake, as a fraction of what is on "
+            + "screen. A fraction rather than world units, which mean nothing without knowing how "
+            + "much of the world is visible. Small: the game still has to be readable while it "
+            + "happens.");
         ConfigEntry<float> crestAt = Config.Bind(
             "Corruption",
             "CorruptionCrestAtFraction",
