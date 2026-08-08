@@ -33,7 +33,7 @@ internal static class PleasureRuntime
     /// <summary>Writes the layout back to the config file. Supplied by the plugin at load.</summary>
     internal static Action<PleasureOverlayLayout>? SaveOverlay { get; set; }
 
-    /// <summary>Carries sensitivity and the climax count alongside the game's save slots.</summary>
+    /// <summary>Carries corruption and the climax count alongside the game's save slots.</summary>
     internal static SidecarStore? Sidecar { get; set; }
 
     /// <summary>
@@ -51,7 +51,7 @@ internal static class PleasureRuntime
 
     internal static PleasureMeter? Meter { get; set; }
 
-    internal static SensitivityTrack? Sensitivity { get; set; }
+    internal static CorruptionTrack? Corruption { get; set; }
 
     internal static ClimaxLedger Climaxes { get; } = new();
 
@@ -203,7 +203,7 @@ internal static class PleasureRuntime
     /// <summary>
     /// Points the run at a save slot and restores whatever that slot holds.
     ///
-    /// The climax count and sensitivity belong to a save, not to the process. Without this a retry
+    /// The climax count and corruption belong to a save, not to the process. Without this a retry
     /// after a game over came back still at the limit and the next hold killed the player at once.
     /// Restoring rather than clearing is what makes loading an earlier save mean what it says: the
     /// values go back to where that save left them (SPEC003 4.4, FR-222).
@@ -216,14 +216,14 @@ internal static class PleasureRuntime
         SidecarDocument? stored = load.Document;
         if (stored is not null)
         {
-            Sensitivity?.LoadFrom(stored.Sensitivity);
+            Corruption?.LoadFrom(stored.Corruption);
             Climaxes.LoadFrom(stored.ClimaxCount);
             Breasts?.LoadFrom(stored.BreastAtMaxCount);
             Milk?.LoadFrom(stored.Milk);
         }
         else
         {
-            Sensitivity?.LoadFrom(0f);
+            Corruption?.LoadFrom(0f);
             Climaxes.ResetCount();
             Breasts?.Reset();
             Milk?.Reset();
@@ -235,7 +235,7 @@ internal static class PleasureRuntime
         ClimaxFlashUntil = 0d;
 
         string state = stored is not null
-            ? $"restored climaxes {Climaxes.Count}, sensitivity {Sensitivity?.Value ?? 0f:F2}, "
+            ? $"restored climaxes {Climaxes.Count}, corruption {Corruption?.Value ?? 0f:F2}, "
               + $"breast applications {Breasts?.Count ?? 0} "
               + $"({Breasts?.Remaining ?? 0} more before BreastSuper), milk {Milk?.Fill ?? 0f:P0}"
             : "no sidecar yet, starting from zero";
@@ -270,7 +270,7 @@ internal static class PleasureRuntime
 
         string? failure = Sidecar.Save(
             CurrentSlotKey,
-            Sensitivity?.Value ?? 0f,
+            Corruption?.Value ?? 0f,
             Climaxes.Count,
             Breasts?.Count ?? 0,
             Milk?.Fill ?? 0f);
@@ -282,7 +282,7 @@ internal static class PleasureRuntime
 
         Log?.LogInfo(
             $"Slot '{CurrentSlotKey}' saved ({reason}): climaxes {Climaxes.Count}, "
-            + $"sensitivity {Sensitivity?.Value ?? 0f:F2}.");
+            + $"corruption {Corruption?.Value ?? 0f:F2}.");
     }
 
     /// <summary>

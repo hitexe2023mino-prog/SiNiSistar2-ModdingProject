@@ -22,7 +22,7 @@ public sealed class PleasureProfileTests
         Assert.Empty(result.Errors);
         Assert.True(result.Profile.SuppressHp0WhileBound);
         Assert.False(result.Profile.Pleasure.HasEffect);
-        Assert.False(result.Profile.Sensitivity.HasEffect);
+        Assert.False(result.Profile.Corruption.HasEffect);
         Assert.False(result.Profile.BreastSuper.HasEffect);
         Assert.False(result.Profile.Climax.GameOverEnabled);
         Assert.Contains(result.Notices, x => x.Contains("PleasureGainPerHit", StringComparison.Ordinal));
@@ -50,26 +50,26 @@ public sealed class PleasureProfileTests
         PleasureValidation result = Validate(new PleasureOptions
         {
             PleasureGainPerHit = -1f,
-            SensitivityPerClimax = 0.5f,
+            CorruptionPerClimax = 0.5f,
         });
 
         Assert.Contains(result.Errors, x => x.Contains("PleasureGainPerHit", StringComparison.Ordinal));
         Assert.False(result.Profile.Pleasure.Enabled);
-        Assert.True(result.Profile.Sensitivity.HasEffect);
+        Assert.True(result.Profile.Corruption.HasEffect);
         Assert.True(result.Profile.SuppressHp0WhileBound);
     }
 
     /// <summary>
-    /// Sensitivity must never fall, so a negative increment is a configuration error rather than
+    /// Corruption must never fall, so a negative increment is a configuration error rather than
     /// something to silently clamp.
     /// </summary>
     [Fact]
-    public void ANegativeSensitivityIncrementIsRefused()
+    public void ANegativeCorruptionIncrementIsRefused()
     {
-        PleasureValidation result = Validate(new PleasureOptions { SensitivityPerClimax = -1f });
+        PleasureValidation result = Validate(new PleasureOptions { CorruptionPerClimax = -1f });
 
         Assert.Contains(result.Errors, x => x.Contains("never do", StringComparison.Ordinal));
-        Assert.False(result.Profile.Sensitivity.Enabled);
+        Assert.False(result.Profile.Corruption.Enabled);
     }
 
     /// <summary>A game over that can never trigger is a configuration mistake worth saying aloud.</summary>

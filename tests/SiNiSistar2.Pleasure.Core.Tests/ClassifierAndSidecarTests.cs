@@ -129,14 +129,14 @@ public sealed class SidecarDocumentTests
         var original = new SidecarDocument
         {
             GameBuildId = "b869-a562",
-            Sensitivity = 4.25f,
+            Corruption = 4.25f,
             ClimaxCount = 7,
         };
 
         SidecarParse parsed = SidecarDocument.Parse(original.Serialize());
 
         Assert.True(parsed.IsLoaded);
-        Assert.Equal(4.25f, parsed.Document!.Sensitivity, 5);
+        Assert.Equal(4.25f, parsed.Document!.Corruption, 5);
         Assert.Equal(7, parsed.Document.ClimaxCount);
         Assert.Equal("b869-a562", parsed.Document.GameBuildId);
     }
@@ -145,7 +145,7 @@ public sealed class SidecarDocumentTests
     [Fact]
     public void AnUnsupportedSchemaIsRefusedAndFlagged()
     {
-        string json = new SidecarDocument { SchemaVersion = 99, Sensitivity = 3f }.Serialize();
+        string json = new SidecarDocument { SchemaVersion = 99, Corruption = 3f }.Serialize();
 
         SidecarParse parsed = SidecarDocument.Parse(json);
 
@@ -173,12 +173,12 @@ public sealed class SidecarDocumentTests
     [Fact]
     public void NegativeValuesAreClampedOnRead()
     {
-        string json = new SidecarDocument { Sensitivity = -3f, ClimaxCount = -9 }.Serialize();
+        string json = new SidecarDocument { Corruption = -3f, ClimaxCount = -9 }.Serialize();
 
         SidecarParse parsed = SidecarDocument.Parse(json);
 
         Assert.True(parsed.IsLoaded);
-        Assert.Equal(0f, parsed.Document!.Sensitivity, 5);
+        Assert.Equal(0f, parsed.Document!.Corruption, 5);
         Assert.Equal(0, parsed.Document.ClimaxCount);
     }
 

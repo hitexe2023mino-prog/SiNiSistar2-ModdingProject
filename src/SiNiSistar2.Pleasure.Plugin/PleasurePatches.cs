@@ -58,7 +58,7 @@ internal static class DamageProbePatches
                 return;
             }
 
-            SensitivityTrack? sensitivity = PleasureRuntime.Sensitivity;
+            CorruptionTrack? corruption = PleasureRuntime.Corruption;
             PleasureMeter? meter = PleasureRuntime.Meter;
             if (meter is null)
             {
@@ -66,8 +66,8 @@ internal static class DamageProbePatches
             }
 
             float before = meter.Value;
-            sensitivity?.Add(PleasureRuntime.Profile.Sensitivity.PerSexualHit);
-            if (meter.AddSexualHit(sensitivity?.Value ?? 0f))
+            corruption?.Add(PleasureRuntime.Profile.Corruption.PerSexualHit);
+            if (meter.AddSexualHit(corruption?.Value ?? 0f))
             {
                 PleasureRuntime.PendingClimax = true;
             }
@@ -85,7 +85,7 @@ internal static class DamageProbePatches
             RecordMilkFromHit();
 
             PleasureRuntime.LogTransition(
-                $"Pleasure {meter.Value:F2} (sensitivity {sensitivity?.Value ?? 0f:F2}).");
+                $"Pleasure {meter.Value:F2} (corruption {corruption?.Value ?? 0f:F2}).");
         }
         catch (Exception exception)
         {
@@ -211,12 +211,12 @@ internal static class SavePointPatches
                 return;
             }
 
-            // Sensitivity is deliberately untouched: it is the one-way track, and the reset point
+            // Corruption is deliberately untouched: it is the one-way track, and the reset point
             // is not a way down (SPEC003 FR-219).
             PleasureRuntime.Log?.LogInfo(
                 $"Climax count reset from {before} to 0 at a "
-                + $"{(isObelisk ? "obelisk" : "save point")}. Sensitivity is unchanged at "
-                + $"{PleasureRuntime.Sensitivity?.Value ?? 0f:F2}.");
+                + $"{(isObelisk ? "obelisk" : "save point")}. Corruption is unchanged at "
+                + $"{PleasureRuntime.Corruption?.Value ?? 0f:F2}.");
         }
         catch (Exception exception)
         {

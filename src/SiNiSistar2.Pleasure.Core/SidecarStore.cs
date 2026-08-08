@@ -7,7 +7,7 @@ public sealed record SidecarLoad(SidecarDocument? Document, string? Notice, bool
 }
 
 /// <summary>
-/// Reads and writes the file that carries sensitivity and the climax count alongside one of the
+/// Reads and writes the file that carries corruption and the climax count alongside one of the
 /// game's save slots (SPEC003 5.9).
 ///
 /// It is a file of the MOD's own rather than anything inside the game's save. The game's
@@ -82,7 +82,7 @@ public sealed class SidecarStore
     /// </summary>
     public string? Save(
         string slotKey,
-        float sensitivity,
+        float corruption,
         int climaxCount,
         int breastAtMaxCount = 0,
         float milk = 0f)
@@ -95,7 +95,7 @@ public sealed class SidecarStore
         var document = new SidecarDocument
         {
             GameBuildId = _gameBuildId,
-            Sensitivity = Math.Max(0f, sensitivity),
+            Corruption = Math.Max(0f, corruption),
             ClimaxCount = Math.Max(0, climaxCount),
             BreastAtMaxCount = Math.Max(0, breastAtMaxCount),
             Milk = Math.Clamp(milk, 0f, 1f),

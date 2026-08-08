@@ -28,12 +28,12 @@ public enum BreastOutcome
 public sealed class BreastEscalation
 {
     private readonly int _applications;
-    private readonly float _sensitivityThreshold;
+    private readonly float _corruptionThreshold;
 
-    public BreastEscalation(int applicationsAtMaxLevel, float sensitivityThreshold)
+    public BreastEscalation(int applicationsAtMaxLevel, float corruptionThreshold)
     {
         _applications = Math.Max(0, applicationsAtMaxLevel);
-        _sensitivityThreshold = Math.Max(0f, sensitivityThreshold);
+        _corruptionThreshold = Math.Max(0f, corruptionThreshold);
     }
 
     /// <summary>How many qualifying applications have been seen since the last escalation.</summary>
@@ -44,8 +44,8 @@ public sealed class BreastEscalation
     /// </summary>
     /// <param name="atMaxLevel">Whether <c>Breast</c> was already at its maximum level.</param>
     /// <param name="alreadySuper">Whether <c>BreastSuper</c> is already present.</param>
-    /// <param name="sensitivity">The player's current sensitivity.</param>
-    public BreastOutcome Record(bool atMaxLevel, bool alreadySuper, float sensitivity)
+    /// <param name="corruption">The player's current corruption.</param>
+    public BreastOutcome Record(bool atMaxLevel, bool alreadySuper, float corruption)
     {
         if (_applications <= 0)
         {
@@ -66,7 +66,7 @@ public sealed class BreastEscalation
         }
 
         Count++;
-        if (Count < _applications || sensitivity < _sensitivityThreshold)
+        if (Count < _applications || corruption < _corruptionThreshold)
         {
             return BreastOutcome.Counted;
         }

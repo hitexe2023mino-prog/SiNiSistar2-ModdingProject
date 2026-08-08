@@ -12,7 +12,7 @@ using SiNiSistar2.UI.Gallery;
 namespace SiNiSistar2.Pleasure.Plugin;
 
 /// <summary>
-/// Replaces the HP-based defeat inside a hold with pleasure, climaxes and sensitivity.
+/// Replaces the HP-based defeat inside a hold with pleasure, climaxes and corruption.
 /// Implements SPEC003.
 ///
 /// This build ships in its measuring state: the HP0 defeat is removed, and everything else records
@@ -98,15 +98,15 @@ public sealed class PleasurePlugin : BasePlugin
 
         PleasureRuntime.Meter = new PleasureMeter(
             profile.Pleasure.GainPerHit,
-            profile.Pleasure.SensitivityScale,
+            profile.Pleasure.CorruptionScale,
             profile.Pleasure.DecayPerSecond);
-        PleasureRuntime.Sensitivity = new SensitivityTrack(profile.Sensitivity.Cap);
+        PleasureRuntime.Corruption = new CorruptionTrack(profile.Corruption.Cap);
         PleasureRuntime.Milk = new MilkReservoir(
             profile.BreastSuper.MilkPerSexualHit,
             profile.BreastSuper.MilkDrainPerSecond);
         PleasureRuntime.Breasts = new BreastEscalation(
             profile.BreastSuper.ApplicationsAtMaxLevel,
-            profile.BreastSuper.SensitivityThreshold);
+            profile.BreastSuper.CorruptionThreshold);
         PleasureRuntime.ContributionKey = new Il2CppSystem.Object();
         PleasureRuntime.Sidecar = new SidecarStore(
             Path.Combine(Paths.BepInExRootPath, "data", PluginGuid),
@@ -194,7 +194,7 @@ public sealed class PleasurePlugin : BasePlugin
         Log.LogInfo(
             $"{PluginName} {PluginVersion} loaded; suppressHp0={profile.SuppressHp0WhileBound}, "
             + $"gauge={(profile.Pleasure.HasEffect ? "on" : "off")}, "
-            + $"sensitivity={(profile.Sensitivity.HasEffect ? "on" : "off")}, "
+            + $"corruption={(profile.Corruption.HasEffect ? "on" : "off")}, "
             + $"climaxGameOver={profile.Climax.GameOverEnabled}, "
             + $"breastSuper={(profile.BreastSuper.HasEffect ? "on" : "off")}, "
             + $"probe={profile.ProbeMeasurements}, patches={applied}."
@@ -320,11 +320,24 @@ public sealed class PleasurePlugin : BasePlugin
             false,
             "Reset the climax count only at obelisks rather than at any save point.");
 
-        ConfigEntry<float> perClimax = Config.Bind("Sensitivity", "SensitivityPerClimax", 0f, "");
-        ConfigEntry<float> perHit = Config.Bind("Sensitivity", "SensitivityPerSexualHit", 0f, "");
+        // Corruption is what used to be called sensitivity. Same axis, same one-way rule, same
+        // effect on pleasure gain — a name that says what it is rather than what it does. A sidecar
+        // written under the old name is still read (SPEC003 5.7, FR-265).
+        ConfigEntry<float> perClimax = Config.Bind(
+            "Corruption",
+            "CorruptionPerClimax",
+            0f,
+            "Corruption gained from one climax. It never falls: nothing cures it, and the cap is a "
+            + "ceiling on growth rather than a way down.");
+        ConfigEntry<float> perHit = Config.Bind(
+            "Corruption",
+            "CorruptionPerSexualHit",
+            0f,
+            "Corruption gained from one sexual hit taken.");
         ConfigEntry<float> gainScale = Config.Bind(
-            "Sensitivity", "SensitivityGainScale", 0f, "How much sensitivity multiplies pleasure gain.");
-        ConfigEntry<float> cap = Config.Bind("Sensitivity", "SensitivityCap", 10f, "");
+            "Corruption", "CorruptionGainScale", 0f, "How much corruption multiplies pleasure gain.");
+        ConfigEntry<float> cap = Config.Bind(
+            "Corruption", "CorruptionCap", 10f, "The most corruption that can be accumulated.");
 
         ConfigEntry<int> breastAfter = Config.Bind(
             "BreastSuper",
@@ -336,9 +349,9 @@ public sealed class PleasurePlugin : BasePlugin
             + "game's own escalation.");
         ConfigEntry<float> breastThreshold = Config.Bind(
             "BreastSuper",
-            "BreastSuperSensitivityThreshold",
+            "BreastSuperCorruptionThreshold",
             0f,
-            "Sensitivity required before the escalation may happen. 0 means no requirement.");
+            "Corruption required before the escalation may happen. 0 means no requirement.");
         ConfigEntry<bool> breastReplaces = Config.Bind(
             "BreastSuper",
             "BreastSuperReplacesBreast",
@@ -409,7 +422,7 @@ public sealed class PleasurePlugin : BasePlugin
             "Diagnostics",
             "ShowOverlay",
             true,
-            "Draw the pleasure gauge, sensitivity and climax count on screen.");
+            "Draw the pleasure gauge, corruption and climax count on screen.");
         _gaugeX = Config.Bind(
             "Overlay",
             "GaugeCentreX",
@@ -458,12 +471,12 @@ public sealed class PleasurePlugin : BasePlugin
             ClimaxLimitPerDurability = limitPerDurability.Value,
             EnableClimaxGameOver = gameOver.Value,
             ResetAtObeliskOnly = obeliskOnly.Value,
-            SensitivityPerClimax = perClimax.Value,
-            SensitivityPerSexualHit = perHit.Value,
-            SensitivityGainScale = gainScale.Value,
-            SensitivityCap = cap.Value,
+            CorruptionPerClimax = perClimax.Value,
+            CorruptionPerSexualHit = perHit.Value,
+            CorruptionGainScale = gainScale.Value,
+            CorruptionCap = cap.Value,
             BreastSuperAfterApplications = breastAfter.Value,
-            BreastSuperSensitivityThreshold = breastThreshold.Value,
+            BreastSuperCorruptionThreshold = breastThreshold.Value,
             BreastSuperReplacesBreast = breastReplaces.Value,
             BreastSuperCuredWithBreast = breastCured.Value,
             BreastSuperFadeSeconds = breastFade.Value,

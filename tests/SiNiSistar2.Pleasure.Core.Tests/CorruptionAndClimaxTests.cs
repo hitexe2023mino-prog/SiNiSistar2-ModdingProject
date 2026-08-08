@@ -1,17 +1,17 @@
 namespace SiNiSistar2.Pleasure.Core.Tests;
 
 /// <summary>
-/// Sensitivity is required to be one-way, and the climax count is the thing that actually decides
+/// Corruption is required to be one-way, and the climax count is the thing that actually decides
 /// defeat. Both are persisted, so a mistake here follows the player across sessions
 /// (SPEC003 5.7, 5.4, 5.5).
 /// </summary>
-public sealed class SensitivityAndClimaxTests
+public sealed class CorruptionAndClimaxTests
 {
-    /// <summary>AC-215: nothing the player can do lowers sensitivity.</summary>
+    /// <summary>AC-215: nothing the player can do lowers corruption.</summary>
     [Fact]
-    public void SensitivityNeverFalls()
+    public void CorruptionNeverFalls()
     {
-        var track = new SensitivityTrack(cap: 10f);
+        var track = new CorruptionTrack(cap: 10f);
         track.Add(3f);
 
         track.Add(-5f);
@@ -24,7 +24,7 @@ public sealed class SensitivityAndClimaxTests
     [Fact]
     public void TheCapStopsGrowthWithoutReducing()
     {
-        var track = new SensitivityTrack(cap: 5f);
+        var track = new CorruptionTrack(cap: 5f);
         track.Add(4f);
         track.Add(4f);
 
@@ -42,7 +42,7 @@ public sealed class SensitivityAndClimaxTests
     [Fact]
     public void LoadingASaveSetsTheValueEvenIfItIsLower()
     {
-        var track = new SensitivityTrack(cap: 10f);
+        var track = new CorruptionTrack(cap: 10f);
         track.Add(8f);
 
         track.LoadFrom(2f);
@@ -53,7 +53,7 @@ public sealed class SensitivityAndClimaxTests
     [Fact]
     public void LoadingClampsOutOfRangeValuesFromADamagedFile()
     {
-        var track = new SensitivityTrack(cap: 10f);
+        var track = new CorruptionTrack(cap: 10f);
 
         track.LoadFrom(-4f);
         Assert.Equal(0f, track.Value, 5);
@@ -62,12 +62,12 @@ public sealed class SensitivityAndClimaxTests
         Assert.Equal(10f, track.Value, 5);
     }
 
-    /// <summary>AC-214: resetting the count leaves sensitivity alone. They are separate tracks.</summary>
+    /// <summary>AC-214: resetting the count leaves corruption alone. They are separate tracks.</summary>
     [Fact]
-    public void ResettingTheCountDoesNotTouchSensitivity()
+    public void ResettingTheCountDoesNotTouchCorruption()
     {
         var ledger = new ClimaxLedger();
-        var track = new SensitivityTrack(cap: 10f);
+        var track = new CorruptionTrack(cap: 10f);
         ledger.Record();
         ledger.Record();
         track.Add(2f);

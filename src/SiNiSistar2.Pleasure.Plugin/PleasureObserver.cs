@@ -122,7 +122,7 @@ public sealed class PleasureObserver : MonoBehaviour
     }
 
     /// <summary>
-    /// Draws the gauge, sensitivity and climax count.
+    /// Draws the gauge, corruption and climax count.
     ///
     /// Immediate-mode GUI rather than a Canvas: it needs no prefab, no game asset and no scene
     /// object, which is what FR-212 asks for, and it cannot disturb the game's own UI hierarchy or
@@ -429,7 +429,7 @@ public sealed class PleasureObserver : MonoBehaviour
         PleasureRuntime.Log?.LogInfo(
             $"Breast escalated to BreastSuper (Breast "
             + $"{(PleasureRuntime.Profile.BreastSuper.ReplaceBreast ? "removed" : "kept")}). "
-            + $"Sensitivity {PleasureRuntime.Sensitivity?.Value ?? 0f:F2}.");
+            + $"Corruption {PleasureRuntime.Corruption?.Value ?? 0f:F2}.");
     }
 
     /// <summary>The list's condition flag, or why it could not be read.</summary>
@@ -884,14 +884,14 @@ public sealed class PleasureObserver : MonoBehaviour
         PleasureRuntime.PendingClimax = false;
         PleasureRuntime.Meter?.ConsumeClimax();
         PleasureRuntime.Climaxes.Record();
-        PleasureRuntime.Sensitivity?.Add(PleasureRuntime.Profile.Sensitivity.PerClimax);
+        PleasureRuntime.Corruption?.Add(PleasureRuntime.Profile.Corruption.PerClimax);
 
         PleasureRuntime.ClimaxFlashUntil =
             Time.timeAsDouble + PleasureRuntime.Profile.Climax.OverlaySeconds;
 
         PleasureRuntime.Log?.LogInfo(
-            $"Climax {PleasureRuntime.Climaxes.Count}; sensitivity "
-            + $"{PleasureRuntime.Sensitivity?.Value ?? 0f:F2}.");
+            $"Climax {PleasureRuntime.Climaxes.Count}; corruption "
+            + $"{PleasureRuntime.Corruption?.Value ?? 0f:F2}.");
     }
 
     [HideFromIl2Cpp]

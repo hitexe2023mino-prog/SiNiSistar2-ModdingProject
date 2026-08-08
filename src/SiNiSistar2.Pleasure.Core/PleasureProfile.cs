@@ -1,7 +1,7 @@
 namespace SiNiSistar2.Pleasure.Core;
 
 /// <summary>Tuning for the pleasure gauge (SPEC003 5.2).</summary>
-public sealed record PleasureTuning(bool Enabled, float GainPerHit, float DecayPerSecond, float SensitivityScale)
+public sealed record PleasureTuning(bool Enabled, float GainPerHit, float DecayPerSecond, float CorruptionScale)
 {
     public static PleasureTuning Disabled { get; } = new(false, 0f, 0f, 0f);
 
@@ -21,10 +21,10 @@ public sealed record ClimaxTuning(
     public static ClimaxTuning Disabled { get; } = new(false, 0f, 0, 0f, false, false);
 }
 
-/// <summary>Tuning for the one-way sensitivity track (SPEC003 5.7).</summary>
-public sealed record SensitivityTuning(bool Enabled, float PerClimax, float PerSexualHit, float Cap)
+/// <summary>Tuning for the one-way corruption track (SPEC003 5.7).</summary>
+public sealed record CorruptionTuning(bool Enabled, float PerClimax, float PerSexualHit, float Cap)
 {
-    public static SensitivityTuning Disabled { get; } = new(false, 0f, 0f, 0f);
+    public static CorruptionTuning Disabled { get; } = new(false, 0f, 0f, 0f);
 
     public bool HasEffect => Enabled && (PerClimax > 0f || PerSexualHit > 0f);
 }
@@ -33,7 +33,7 @@ public sealed record SensitivityTuning(bool Enabled, float PerClimax, float PerS
 public sealed record BreastSuperTuning(
     bool Enabled,
     int ApplicationsAtMaxLevel,
-    float SensitivityThreshold,
+    float CorruptionThreshold,
     bool ReplaceBreast,
     bool MakeHaanjaCurable,
     bool CountBelowMaxLevel,
@@ -89,7 +89,7 @@ public sealed record PleasureProfile(
     bool SuppressHp0WhileBound,
     PleasureTuning Pleasure,
     ClimaxTuning Climax,
-    SensitivityTuning Sensitivity,
+    CorruptionTuning Corruption,
     BreastSuperTuning BreastSuper,
     SexualAttackClassifier Classifier,
     bool RaiseDuringDefeatPerformance,
@@ -105,7 +105,7 @@ public sealed record PleasureProfile(
         false,
         PleasureTuning.Disabled,
         ClimaxTuning.Disabled,
-        SensitivityTuning.Disabled,
+        CorruptionTuning.Disabled,
         BreastSuperTuning.Disabled,
         new SexualAttackClassifier(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>()),
         false,
@@ -122,7 +122,7 @@ public sealed record PleasureProfile(
     /// </summary>
     public bool AnyMechanismActive =>
         Enabled
-        && (SuppressHp0WhileBound || Pleasure.HasEffect || Sensitivity.HasEffect
+        && (SuppressHp0WhileBound || Pleasure.HasEffect || Corruption.HasEffect
             || BreastSuper.HasEffect || ProbeMeasurements);
 }
 
@@ -155,7 +155,7 @@ public static class PleasureProfileFactory
 
         PleasureTuning pleasure = BuildPleasure(options, errors);
         ClimaxTuning climax = BuildClimax(options, errors, warnings);
-        SensitivityTuning sensitivity = BuildSensitivity(options, errors);
+        CorruptionTuning corruption = BuildCorruption(options, errors);
         BreastSuperTuning breastSuper = BuildBreastSuper(options, errors, warnings, notices);
         SexualAttackClassifier classifier = BuildClassifier(options, knownAbnormalNames, enemies, notices);
         var profile = new PleasureProfile(
@@ -163,7 +163,7 @@ public static class PleasureProfileFactory
             options.SuppressHp0WhileBound,
             pleasure,
             climax,
-            sensitivity,
+            corruption,
             breastSuper,
             classifier,
             options.RaiseDuringDefeatPerformance,
@@ -220,7 +220,7 @@ public static class PleasureProfileFactory
                  {
                      ("PleasureGainPerHit", options.PleasureGainPerHit),
                      ("PleasureDecayPerSecond", options.PleasureDecayPerSecond),
-                     ("SensitivityGainScale", options.SensitivityGainScale),
+                     ("CorruptionGainScale", options.CorruptionGainScale),
                  })
         {
             if (value < 0f)
@@ -236,7 +236,7 @@ public static class PleasureProfileFactory
                 true,
                 options.PleasureGainPerHit,
                 options.PleasureDecayPerSecond,
-                options.SensitivityGainScale);
+                options.CorruptionGainScale);
     }
 
     private static ClimaxTuning BuildClimax(
@@ -288,30 +288,30 @@ public static class PleasureProfileFactory
             options.ResetAtObeliskOnly);
     }
 
-    private static SensitivityTuning BuildSensitivity(PleasureOptions options, List<string> errors)
+    private static CorruptionTuning BuildCorruption(PleasureOptions options, List<string> errors)
     {
         var failed = false;
         foreach ((string key, float value) in new[]
                  {
-                     ("SensitivityPerClimax", options.SensitivityPerClimax),
-                     ("SensitivityPerSexualHit", options.SensitivityPerSexualHit),
-                     ("SensitivityCap", options.SensitivityCap),
+                     ("CorruptionPerClimax", options.CorruptionPerClimax),
+                     ("CorruptionPerSexualHit", options.CorruptionPerSexualHit),
+                     ("CorruptionCap", options.CorruptionCap),
                  })
         {
             if (value < 0f)
             {
-                errors.Add($"Sensitivity.{key} is {value}; negative values would let sensitivity fall, which it must never do. The sensitivity track is disabled.");
+                errors.Add($"Corruption.{key} is {value}; negative values would let corruption fall, which it must never do. The corruption track is disabled.");
                 failed = true;
             }
         }
 
         return failed
-            ? SensitivityTuning.Disabled
-            : new SensitivityTuning(
+            ? CorruptionTuning.Disabled
+            : new CorruptionTuning(
                 true,
-                options.SensitivityPerClimax,
-                options.SensitivityPerSexualHit,
-                options.SensitivityCap);
+                options.CorruptionPerClimax,
+                options.CorruptionPerSexualHit,
+                options.CorruptionCap);
     }
 
     private static BreastSuperTuning BuildBreastSuper(
@@ -328,9 +328,9 @@ public static class PleasureProfileFactory
             return BreastSuperTuning.Disabled;
         }
 
-        if (options.BreastSuperSensitivityThreshold < 0f)
+        if (options.BreastSuperCorruptionThreshold < 0f)
         {
-            errors.Add($"BreastSuper.BreastSuperSensitivityThreshold is {options.BreastSuperSensitivityThreshold}; BreastSuper is disabled.");
+            errors.Add($"BreastSuper.BreastSuperCorruptionThreshold is {options.BreastSuperCorruptionThreshold}; BreastSuper is disabled.");
             return BreastSuperTuning.Disabled;
         }
 
@@ -362,7 +362,7 @@ public static class PleasureProfileFactory
         return new BreastSuperTuning(
             true,
             options.BreastSuperAfterApplications,
-            options.BreastSuperSensitivityThreshold,
+            options.BreastSuperCorruptionThreshold,
             options.BreastSuperReplacesBreast,
             options.BreastSuperMakeHaanjaCurable,
             options.BreastSuperCountBelowMaxLevel,

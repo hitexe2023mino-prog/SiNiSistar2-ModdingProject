@@ -47,13 +47,13 @@ public sealed record PleasureOptions
 
     public bool ResetAtObeliskOnly { get; init; }
 
-    public float SensitivityPerClimax { get; init; }
+    public float CorruptionPerClimax { get; init; }
 
-    public float SensitivityPerSexualHit { get; init; }
+    public float CorruptionPerSexualHit { get; init; }
 
-    public float SensitivityGainScale { get; init; }
+    public float CorruptionGainScale { get; init; }
 
-    public float SensitivityCap { get; init; } = 10f;
+    public float CorruptionCap { get; init; } = 10f;
 
     /// <summary>
     /// How many further <c>Breast</c> applications, arriving while it is already at its maximum
@@ -61,7 +61,7 @@ public sealed record PleasureOptions
     /// </summary>
     public int BreastSuperAfterApplications { get; init; }
 
-    public float BreastSuperSensitivityThreshold { get; init; }
+    public float BreastSuperCorruptionThreshold { get; init; }
 
     /// <summary>Whether <c>Breast</c> is removed as <c>BreastSuper</c> is applied.</summary>
     public bool BreastSuperReplacesBreast { get; init; } = true;
@@ -129,7 +129,7 @@ public sealed record PleasureOptions
     /// </summary>
     public bool ProbeMeasurements { get; init; } = true;
 
-    /// <summary>Draws the pleasure gauge, sensitivity and climax count on screen.</summary>
+    /// <summary>Draws the pleasure gauge, corruption and climax count on screen.</summary>
     public bool ShowOverlay { get; init; } = true;
 
     public float GaugeCentreX { get; init; } = PleasureOverlayLayout.Default.Gauge.CentreX;

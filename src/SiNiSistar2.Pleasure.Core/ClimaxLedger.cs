@@ -14,7 +14,7 @@ public sealed class ClimaxLedger
     /// <summary>Records one climax.</summary>
     public void Record() => Count++;
 
-    /// <summary>Clears the count. Sensitivity is untouched — it is a separate, one-way track.</summary>
+    /// <summary>Clears the count. Corruption is untouched — it is a separate, one-way track.</summary>
     public void ResetCount() => Count = 0;
 
     /// <summary>Sets the count read from a sidecar file.</summary>

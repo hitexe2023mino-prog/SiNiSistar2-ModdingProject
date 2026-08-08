@@ -155,7 +155,7 @@ internal static class BreastPatches
             BreastOutcome outcome = escalation.Record(
                 atMax || PleasureRuntime.Profile.BreastSuper.CountBelowMaxLevel,
                 alreadySuper,
-                PleasureRuntime.Sensitivity?.Value ?? 0f);
+                PleasureRuntime.Corruption?.Value ?? 0f);
 
             PleasureRuntime.Log?.LogInfo(
                 $"Breast escalation: outcome={outcome}, counted={escalation.Count}, "

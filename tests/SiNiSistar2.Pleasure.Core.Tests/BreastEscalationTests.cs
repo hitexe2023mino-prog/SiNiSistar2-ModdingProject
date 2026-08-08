@@ -66,11 +66,11 @@ public sealed class BreastEscalationTests
     }
 
     /// <summary>
-    /// The sensitivity gate holds the escalation back without discarding the count, so it lands on
+    /// The corruption gate holds the escalation back without discarding the count, so it lands on
     /// the next application once the threshold is met rather than restarting the climb.
     /// </summary>
     [Fact]
-    public void TheSensitivityGateHoldsTheEscalationRatherThanResettingIt()
+    public void TheCorruptionGateHoldsTheEscalationRatherThanResettingIt()
     {
         BreastEscalation escalation = Escalation(after: 2, threshold: 5f);
 

@@ -1,18 +1,18 @@
 namespace SiNiSistar2.Pleasure.Core;
 
 /// <summary>
-/// Sensitivity: rises with climaxes and with sexual hits taken, and never falls (SPEC003 5.7).
+/// Corruption: rises with climaxes and with sexual hits taken, and never falls (SPEC003 5.7).
 ///
 /// There is deliberately no decrease path. Curing a status, resting, saving, and resetting the
-/// climax count all leave it alone. A cure that also lowered sensitivity would make the
+/// climax count all leave it alone. A cure that also lowered corruption would make the
 /// accumulation meaningless, which is the whole point of the requirement (SPEC003 DEC-208).
 /// The cap is a ceiling on growth, not a way down.
 /// </summary>
-public sealed class SensitivityTrack
+public sealed class CorruptionTrack
 {
     private readonly float _cap;
 
-    public SensitivityTrack(float cap) => _cap = Math.Max(0f, cap);
+    public CorruptionTrack(float cap) => _cap = Math.Max(0f, cap);
 
     public float Value { get; private set; }
 
@@ -21,7 +21,7 @@ public sealed class SensitivityTrack
     public bool IsAtCap => Value >= _cap;
 
     /// <summary>
-    /// Adds to sensitivity. A negative or zero amount is ignored rather than applied: the type is
+    /// Adds to corruption. A negative or zero amount is ignored rather than applied: the type is
     /// the single place the one-way rule is enforced, so it does not depend on every caller
     /// remembering it.
     /// </summary>

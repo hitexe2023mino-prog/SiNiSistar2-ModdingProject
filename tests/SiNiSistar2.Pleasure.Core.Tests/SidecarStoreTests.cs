@@ -39,7 +39,7 @@ public sealed class SidecarStoreTests : IDisposable
         SidecarLoad load = store.Load("slot0-Save01");
 
         Assert.True(load.IsLoaded);
-        Assert.Equal(3.5f, load.Document!.Sensitivity, 5);
+        Assert.Equal(3.5f, load.Document!.Corruption, 5);
         Assert.Equal(4, load.Document.ClimaxCount);
         Assert.Null(load.Notice);
     }
@@ -64,7 +64,7 @@ public sealed class SidecarStoreTests : IDisposable
 
         SidecarLoad load = store.Load("slot1");
 
-        Assert.Equal(2f, load.Document!.Sensitivity, 5);
+        Assert.Equal(2f, load.Document!.Corruption, 5);
         Assert.Equal(7, load.Document.ClimaxCount);
     }
 
@@ -89,7 +89,7 @@ public sealed class SidecarStoreTests : IDisposable
         Directory.CreateDirectory(_root);
         SidecarStore store = Store();
         string path = store.PathFor("slot3");
-        string future = new SidecarDocument { SchemaVersion = 99, Sensitivity = 9f, ClimaxCount = 9 }.Serialize();
+        string future = new SidecarDocument { SchemaVersion = 99, Corruption = 9f, ClimaxCount = 9 }.Serialize();
         File.WriteAllText(path, future);
 
         SidecarLoad load = store.Load("slot3");
@@ -130,13 +130,13 @@ public sealed class SidecarStoreTests : IDisposable
         SidecarLoad load = Store("newer-build").Load("slot5");
 
         Assert.True(load.IsLoaded);
-        Assert.Equal(2f, load.Document!.Sensitivity, 5);
+        Assert.Equal(2f, load.Document!.Corruption, 5);
         Assert.Contains("older-build", load.Notice!, StringComparison.Ordinal);
     }
 
     /// <summary>
     /// A file written by an earlier schema is still read. Refusing it would have thrown away the
-    /// player's accumulated sensitivity on the very upgrade that added a field, which is the
+    /// player's accumulated corruption on the very upgrade that added a field, which is the
     /// opposite of what a version check is for.
     /// </summary>
     [Fact]
@@ -146,12 +146,12 @@ public sealed class SidecarStoreTests : IDisposable
         SidecarStore store = Store();
         File.WriteAllText(
             store.PathFor("slot7"),
-            "{\"schemaVersion\": 1, \"gameBuildId\": \"b869-a562\", \"sensitivity\": 4.5, \"climaxCount\": 2}");
+            "{\"schemaVersion\": 1, \"gameBuildId\": \"b869-a562\", \"corruption\": 4.5, \"climaxCount\": 2}");
 
         SidecarLoad load = store.Load("slot7");
 
         Assert.True(load.IsLoaded);
-        Assert.Equal(4.5f, load.Document!.Sensitivity, 5);
+        Assert.Equal(4.5f, load.Document!.Corruption, 5);
         Assert.Equal(2, load.Document.ClimaxCount);
         Assert.Equal(0, load.Document.BreastAtMaxCount);
         Assert.False(load.Locked);
@@ -176,5 +176,33 @@ public sealed class SidecarStoreTests : IDisposable
         string? failure = store.Save("slot6", 1f, 1);
 
         Assert.NotNull(failure);
+    }
+
+    /// <summary>
+    /// The axis was renamed from sensitivity to corruption. Nothing else about it changed, and it
+    /// is the one number in the file that can never be earned back — nothing lowers it (DEC-208).
+    /// A file written before the rename has to keep its progress.
+    /// </summary>
+    [Fact]
+    public void AFileWrittenUnderTheOldNameKeepsItsProgress()
+    {
+        SidecarParse parse = SidecarDocument.Parse(
+            """{"schemaVersion":3,"gameBuildId":"x","sensitivity":0.42,"climaxCount":3}""");
+
+        Assert.True(parse.IsLoaded);
+        Assert.Equal(0.42f, parse.Document!.Corruption, 4);
+        Assert.Equal(3, parse.Document.ClimaxCount);
+    }
+
+    /// <summary>The new name wins where both are present, and the old one is not written back.</summary>
+    [Fact]
+    public void TheNewNameWinsAndTheOldOneIsNotWrittenBack()
+    {
+        SidecarParse parse = SidecarDocument.Parse(
+            """{"schemaVersion":4,"gameBuildId":"x","sensitivity":0.10,"corruption":0.80}""");
+
+        Assert.True(parse.IsLoaded);
+        Assert.Equal(0.80f, parse.Document!.Corruption, 4);
+        Assert.DoesNotContain("sensitivity", parse.Document.Serialize());
     }
 }

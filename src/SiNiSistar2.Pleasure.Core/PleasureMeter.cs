@@ -10,13 +10,13 @@ namespace SiNiSistar2.Pleasure.Core;
 public sealed class PleasureMeter
 {
     private readonly float _gainPerHit;
-    private readonly float _sensitivityScale;
+    private readonly float _corruptionScale;
     private readonly float _decayPerSecond;
 
-    public PleasureMeter(float gainPerHit, float sensitivityScale, float decayPerSecond)
+    public PleasureMeter(float gainPerHit, float corruptionScale, float decayPerSecond)
     {
         _gainPerHit = Math.Max(0f, gainPerHit);
-        _sensitivityScale = Math.Max(0f, sensitivityScale);
+        _corruptionScale = Math.Max(0f, corruptionScale);
         _decayPerSecond = Math.Max(0f, decayPerSecond);
     }
 
@@ -27,14 +27,14 @@ public sealed class PleasureMeter
     /// Applies one sexual hit. Returns true exactly once per fill: the caller owns the climax and
     /// must call <see cref="ConsumeClimax"/> to reset the gauge.
     /// </summary>
-    public bool AddSexualHit(float sensitivity)
+    public bool AddSexualHit(float corruption)
     {
         if (_gainPerHit <= 0f || Value >= 1f)
         {
             return false;
         }
 
-        float gain = _gainPerHit * (1f + (Math.Max(0f, sensitivity) * _sensitivityScale));
+        float gain = _gainPerHit * (1f + (Math.Max(0f, corruption) * _corruptionScale));
         Value = Math.Min(1f, Value + gain);
         return Value >= 1f;
     }

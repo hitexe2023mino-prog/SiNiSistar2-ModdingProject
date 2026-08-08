@@ -12,7 +12,7 @@ public sealed class PleasureMeterTests
     [Fact]
     public void AShippedZeroGainGaugeNeverRises()
     {
-        var meter = new PleasureMeter(gainPerHit: 0f, sensitivityScale: 1f, decayPerSecond: 0.1f);
+        var meter = new PleasureMeter(gainPerHit: 0f, corruptionScale: 1f, decayPerSecond: 0.1f);
 
         Assert.False(meter.AddSexualHit(5f));
         Assert.Equal(0f, meter.Value, 5);
@@ -30,9 +30,9 @@ public sealed class PleasureMeterTests
         Assert.Equal(1f, meter.Value, 5);
     }
 
-    /// <summary>AC-207: higher sensitivity means the same attack gives more.</summary>
+    /// <summary>AC-207: higher corruption means the same attack gives more.</summary>
     [Fact]
-    public void SensitivityIncreasesTheGainPerHit()
+    public void CorruptionIncreasesTheGainPerHit()
     {
         PleasureMeter dull = Meter(gain: 0.1f, scale: 1f);
         PleasureMeter keen = Meter(gain: 0.1f, scale: 1f);

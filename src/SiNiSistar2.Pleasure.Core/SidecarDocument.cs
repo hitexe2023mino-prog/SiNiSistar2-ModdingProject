@@ -13,7 +13,7 @@ namespace SiNiSistar2.Pleasure.Core;
 /// </summary>
 public sealed record SidecarDocument
 {
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
 
     [JsonPropertyName("schemaVersion")]
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
@@ -22,8 +22,21 @@ public sealed record SidecarDocument
     [JsonPropertyName("gameBuildId")]
     public string GameBuildId { get; init; } = string.Empty;
 
+    /// <summary>
+    /// How far the corruption has gone (SPEC003 5.7). Written under this name from schema 4.
+    /// </summary>
+    [JsonPropertyName("corruption")]
+    public float Corruption { get; init; }
+
+    /// <summary>
+    /// What schema 3 and earlier called the same number.
+    ///
+    /// Read, never written. Renaming the axis must not cost a player the progress they had under
+    /// the old name — it is the same accumulation, and it is the one thing in the file that can
+    /// never be earned back, because nothing lowers it (DEC-208).
+    /// </summary>
     [JsonPropertyName("sensitivity")]
-    public float Sensitivity { get; init; }
+    public float? LegacySensitivity { get; init; }
 
     [JsonPropertyName("climaxCount")]
     public int ClimaxCount { get; init; }
@@ -44,6 +57,7 @@ public sealed record SidecarDocument
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
     /// <summary>
@@ -75,7 +89,7 @@ public sealed record SidecarDocument
 
         // Only a newer file is refused. An older one is read: every field this version added is
         // absent rather than wrong, so it defaults, and refusing it would have thrown away the
-        // player's accumulated sensitivity on the very upgrade that introduced a new field.
+        // player's accumulated corruption on the very upgrade that introduced a new field.
         if (document.SchemaVersion > CurrentSchemaVersion)
         {
             return SidecarParse.Failed(
@@ -94,10 +108,17 @@ public sealed record SidecarDocument
 
         // Negative values can only come from a hand-edited or damaged file; clamping keeps them
         // from turning into a limit that can never be reached.
+        // The old name wins only when the new one is absent. A file written by this version has
+        // both if it was upgraded in place, and the new one is the value that has been maintained.
+        float corruption = document.Corruption > 0f
+            ? document.Corruption
+            : document.LegacySensitivity ?? 0f;
+
         return SidecarParse.Loaded(document with
         {
             SchemaVersion = CurrentSchemaVersion,
-            Sensitivity = Math.Max(0f, document.Sensitivity),
+            LegacySensitivity = null,
+            Corruption = Math.Max(0f, corruption),
             ClimaxCount = Math.Max(0, document.ClimaxCount),
             BreastAtMaxCount = Math.Max(0, document.BreastAtMaxCount),
             Milk = Math.Clamp(document.Milk, 0f, 1f),
