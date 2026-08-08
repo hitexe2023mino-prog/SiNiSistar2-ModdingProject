@@ -129,6 +129,11 @@ internal static class LustCrestArt
 
         texture.SetPixels(pixels);
         texture.Apply(false);
+
+        // Marked so a scene load cannot take it away. The crest is rebuilt only when a part is
+        // earned or the window resizes, so once it is dropped nothing asks for it again — which is
+        // exactly how it disappeared after a load (付録A A-48).
+        PleasureArt.Keep(texture);
         return texture;
     }
 

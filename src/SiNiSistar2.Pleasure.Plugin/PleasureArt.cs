@@ -427,9 +427,20 @@ internal static class PleasureArt
         texture.filterMode = FilterMode.Bilinear;
         texture.wrapMode = TextureWrapMode.Clamp;
         texture.Apply();
-
-        // Unity drops textures on scene unload unless they are marked, and a dropped texture would
-        // throw on every frame the overlay draws.
-        texture.hideFlags = HideFlags.HideAndDontSave;
+        Keep(texture);
     }
+
+    /// <summary>
+    /// Marks a generated texture so a scene load cannot take it away (SPEC003 付録A A-48).
+    ///
+    /// The game unloads unused assets when it changes scene, and a texture built at run time has no
+    /// reference Unity can see — the field holding it lives on the managed side of the interop
+    /// boundary. What is left is a dead handle, and whether that shows as a blank or a throw, it
+    /// shows every frame after a load.
+    ///
+    /// Public because the rule belongs to every generated texture, not only the ones this class
+    /// builds. It was written here first and then not applied to the crest, which is how the crest
+    /// came to vanish on load while everything else survived.
+    /// </summary>
+    internal static void Keep(Texture2D texture) => texture.hideFlags = HideFlags.HideAndDontSave;
 }
