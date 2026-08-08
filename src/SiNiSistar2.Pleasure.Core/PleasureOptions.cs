@@ -152,6 +152,12 @@ public sealed record PleasureOptions
     public float MilkBottomOffset { get; init; } = PleasureOverlayLayout.Default.Milk.BottomOffset;
 
     public float MilkSize { get; init; } = PleasureOverlayLayout.Default.Milk.Size;
+
+    public float CrestCentreX { get; init; } = PleasureOverlayLayout.Default.Crest.CentreX;
+
+    public float CrestBottomOffset { get; init; } = PleasureOverlayLayout.Default.Crest.BottomOffset;
+
+    public float CrestSize { get; init; } = PleasureOverlayLayout.Default.Crest.Size;
 }
 
 /// <summary>

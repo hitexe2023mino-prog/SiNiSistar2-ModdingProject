@@ -54,6 +54,9 @@ public sealed class PleasureObserver : MonoBehaviour
     private float _milkPhase;
     private double _milkBuiltAt;
     private bool _milkAnnounced;
+    private Texture2D? _crest;
+    private int _crestParts = -1;
+    private int _crestResolution;
 
 
     public PleasureObserver(IntPtr pointer)
@@ -177,6 +180,7 @@ public sealed class PleasureObserver : MonoBehaviour
         DrawGauge();
         DrawClimaxFlash();
         DrawMilk();
+        DrawCrest();
         DrawTransitionFade();
         DrawEditorChrome();
     }
@@ -1303,7 +1307,7 @@ public sealed class PleasureObserver : MonoBehaviour
                 break;
 
             case EventType.KeyDown when current.keyCode == KeyCode.Tab:
-                _editingElement = (_editingElement + 1) % 3;
+                _editingElement = (_editingElement + 1) % 4;
                 current.Use();
                 break;
 
@@ -1344,6 +1348,7 @@ public sealed class PleasureObserver : MonoBehaviour
         {
             1 => layout with { Cross = change(layout.Cross) },
             2 => layout with { Milk = change(layout.Milk) },
+            3 => layout with { Crest = change(layout.Crest) },
             _ => layout with { Gauge = change(layout.Gauge) },
         };
     }
@@ -1355,6 +1360,7 @@ public sealed class PleasureObserver : MonoBehaviour
         {
             1 => ("cross", layout.Cross),
             2 => ("milk gauge", layout.Milk),
+            3 => ("lust crest", layout.Crest),
             _ => ("gauge", layout.Gauge),
         };
 
@@ -1539,6 +1545,72 @@ public sealed class PleasureObserver : MonoBehaviour
                 _milkVessel,
                 new Color(1f, 1f, 1f, 0.25f + (pulse * 0.35f)));
         }
+    }
+
+    /// <summary>
+    /// Draws the lust crest, as much of it as the corruption has earned (SPEC003 5.7, FR-266).
+    ///
+    /// Corruption used to be a number with no face. It is the one axis that never falls, so it is
+    /// the one the player most needs to be able to feel, and a figure in the corner is the easiest
+    /// thing on a HUD to stop seeing. The mark completing itself says the same thing without a
+    /// number: there is less of it left to fill in.
+    ///
+    /// The pulse is applied here rather than baked into the texture, so every revealed part
+    /// breathes together and the whole mark reads as one thing. Slow and shallow on purpose — this
+    /// is a state, not an alarm, and something that flashes in the corner of the eye for the whole
+    /// run is a thing players turn off.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void DrawCrest()
+    {
+        CorruptionTrack? corruption = PleasureRuntime.Corruption;
+        if (corruption is null || corruption.Cap <= 0f)
+        {
+            return;
+        }
+
+        int parts = LustCrestArt.PartCount;
+        var revealed = (int)Math.Floor((corruption.Value / corruption.Cap) * parts);
+        revealed = Math.Clamp(revealed, 0, parts);
+        if (revealed <= 0)
+        {
+            // Nothing yet. An empty ring would be a promise the player has not been given a reason
+            // to read, and it would claim HUD space for a mechanism that has not started.
+            //
+            // Except while it is being placed: an element that cannot be seen cannot be dragged,
+            // and a fresh save is exactly when someone sets their HUD up.
+            if (!_editing || _editingElement != 3)
+            {
+                return;
+            }
+
+            revealed = LustCrestArt.PartCount;
+        }
+
+        OverlayPlacement placement = PleasureRuntime.Overlay.Crest;
+        float height = Screen.height;
+        float radius = height * placement.Size;
+        float x = Screen.width * placement.CentreX;
+        float y = height - (height * placement.BottomOffset);
+
+        int resolution = Resolution(radius * 2f);
+        if (_crest is null || _crestParts != revealed || _crestResolution != resolution)
+        {
+            // Rebuilt only when a part is earned or the window changes size. The build walks every
+            // pixel against every stroke, which is far too much to do per frame and costs nothing
+            // at the handful of moments it actually happens.
+            _crestParts = revealed;
+            _crestResolution = resolution;
+            _crest = LustCrestArt.Build(resolution, revealed);
+        }
+
+        var pulse = (float)((Math.Sin(Time.unscaledTimeAsDouble * 1.6d) + 1d) * 0.5d);
+        float alpha = 0.72f + (pulse * 0.20f);
+        float diameter = radius * 2f;
+        OverlayPainter.Draw(
+            new Rect(x - radius, y - radius, diameter, diameter),
+            _crest,
+            new Color(1f, 1f, 1f, alpha));
     }
 
     [HideFromIl2Cpp]

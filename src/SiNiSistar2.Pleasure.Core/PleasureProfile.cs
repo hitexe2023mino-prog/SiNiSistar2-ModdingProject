@@ -72,6 +72,7 @@ public sealed record PleasureOverlayLayout(
     OverlayPlacement Gauge,
     OverlayPlacement Cross,
     OverlayPlacement Milk,
+    OverlayPlacement Crest,
     float FlashSeconds,
     bool ShowCross)
 {
@@ -79,6 +80,7 @@ public sealed record PleasureOverlayLayout(
         new OverlayPlacement(0.283f, 0.115f, 0.086f),
         new OverlayPlacement(0.283f, 0.275f, 0.129f),
         new OverlayPlacement(0.375f, 0.135f, 0.070f),
+        new OverlayPlacement(0.140f, 0.150f, 0.105f),
         1.5f,
         true);
 }
@@ -185,6 +187,10 @@ public static class PleasureProfileFactory
                     options.MilkCentreX,
                     options.MilkBottomOffset,
                     Math.Max(0.01f, options.MilkSize)),
+                new OverlayPlacement(
+                    options.CrestCentreX,
+                    options.CrestBottomOffset,
+                    Math.Max(0.01f, options.CrestSize)),
                 Math.Max(0.01f, options.ClimaxOverlaySeconds),
                 options.ShowCross));
 

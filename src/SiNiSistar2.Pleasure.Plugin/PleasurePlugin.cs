@@ -40,6 +40,9 @@ public sealed class PleasurePlugin : BasePlugin
     private ConfigEntry<float>? _milkX;
     private ConfigEntry<float>? _milkY;
     private ConfigEntry<float>? _milkSize;
+    private ConfigEntry<float>? _crestX;
+    private ConfigEntry<float>? _crestY;
+    private ConfigEntry<float>? _crestSize;
     private string _gameBuildId = "unknown";
     private Harmony? _harmony;
     private PleasureObserver? _observer;
@@ -123,6 +126,9 @@ public sealed class PleasurePlugin : BasePlugin
             _milkX!.Value = layout.Milk.CentreX;
             _milkY!.Value = layout.Milk.BottomOffset;
             _milkSize!.Value = layout.Milk.Size;
+            _crestX!.Value = layout.Crest.CentreX;
+            _crestY!.Value = layout.Crest.BottomOffset;
+            _crestSize!.Value = layout.Crest.Size;
             Config.Save();
         };
 
@@ -213,8 +219,9 @@ public sealed class PleasurePlugin : BasePlugin
         {
             Log.LogInfo(
                 "Press F9 in game to place the overlay with the mouse: Tab cycles the gauge, the "
-                + "cross and the milk gauge, drag moves it, the wheel resizes it, Enter saves and "
-                + "Escape cancels.");
+                + "cross, the milk gauge and the lust crest, drag moves it, the wheel resizes it, "
+                + "Enter saves and Escape cancels. The crest is shown whole while it is being "
+                + "placed, however little of it corruption has earned.");
         }
 
         Log.LogInfo(
@@ -447,6 +454,14 @@ public sealed class PleasurePlugin : BasePlugin
             "Overlay", "MilkBottomOffset", PleasureOverlayLayout.Default.Milk.BottomOffset, "Milk gauge centre from the bottom.");
         _milkSize = Config.Bind(
             "Overlay", "MilkSize", PleasureOverlayLayout.Default.Milk.Size, "Milk gauge radius.");
+        _crestX = Config.Bind(
+            "Overlay", "CrestCentreX", PleasureOverlayLayout.Default.Crest.CentreX,
+            "Lust crest centre, fraction of width.");
+        _crestY = Config.Bind(
+            "Overlay", "CrestBottomOffset", PleasureOverlayLayout.Default.Crest.BottomOffset,
+            "Lust crest centre from the bottom.");
+        _crestSize = Config.Bind(
+            "Overlay", "CrestSize", PleasureOverlayLayout.Default.Crest.Size, "Lust crest radius.");
         ConfigEntry<bool> showCross = Config.Bind(
             "Overlay",
             "ShowCross",
@@ -498,6 +513,9 @@ public sealed class PleasurePlugin : BasePlugin
             MilkCentreX = _milkX.Value,
             MilkBottomOffset = _milkY.Value,
             MilkSize = _milkSize.Value,
+            CrestCentreX = _crestX.Value,
+            CrestBottomOffset = _crestY.Value,
+            CrestSize = _crestSize.Value,
             ShowCross = showCross.Value,
         };
     }
