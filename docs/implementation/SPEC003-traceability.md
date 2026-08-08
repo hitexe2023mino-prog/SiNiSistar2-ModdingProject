@@ -6,9 +6,11 @@ In-game steps live in [`docs/testing/SPEC003-test-scenarios.md`](../testing/SPEC
 
 ## Stage
 
-The HP0 removal, the pleasure gauge, climaxes, the cross, the climax haze and the sidecar are implemented and running in game.  (FR-221) is the one requirement still untouched.
+**v1.1（2026-08-09）。** 拘束中の敗北条件の置き換え方を改訂した。性的被弾はHPを削らず、絶頂限界の到達がその場でHPを `0` にする。v1.0 の `RemainHp1Msv` 寄与は撤去した。快楽ゲージ、絶頂、堕落・淫紋、母乳ゲージ、サイドカーは v1.0 のまま動いている。
 
-Every tuning value still ships at no-change (FR-233), so a fresh install only removes the HP0 defeat until the values in  are set. The probe log remains on to settle the 付録A items that need play to answer.
+**v1.1 で実機確認が要る2点。** A-50（`BattleMainParameter.DontSub` が減算を止めるか）と A-51（HPを `0` にできるか、そこからゲームの死亡経路が走るか）。どちらも実装側にフォールバックがあり、どの手段が効いたかは `[probe]` 行に出る。
+
+Every tuning value ships at no-change (FR-233) **without exception**: `SuppressSexualHpDamage` は既定で真だが、`PleasureGainPerHit` が `0` の間は抑止そのものが働かない（FR-278）。したがって新規導入した時点ではゲームの挙動が何も変わらない。
 
 ## Status meanings
 
@@ -19,7 +21,7 @@ Every tuning value still ships at no-change (FR-233), so a fresh install only re
 
 ## Automated coverage
 
-`dotnet test SiNiSistar2.Edi.sln -c Release` → 83 for this MOD, 89 for SPEC002, 143 for SPEC001, 0 failures.
+`dotnet test SiNiSistar2.Edi.sln -c Release` → 118 for this MOD, 89 for SPEC002, 143 for SPEC001, 0 failures.
 
 ## 要件台帳
 
@@ -27,10 +29,10 @@ Every tuning value still ships at no-change (FR-233), so a fresh install only re
 |---|---|---|---|---|
 | FR-201 | GUID `community.sinisistar2.pleasure` のプラグイン | `PleasurePlugin` | ビルドと配置 | Tested |
 | FR-202 | ゲームバイナリ・アセット・セーブ・フラグ変数を書き換えない | 全体（実行時パッチと寄与のみ） | AC-201 実機 | Implemented / unverified |
-| FR-203 | 拘束中に `RemainHp1Msv` へ寄与しHPを1で止める | `PleasureObserver.UpdateHp0Suppression` | 3.1 の A-1、AC-202 | Implemented / unverified |
-| FR-204 | 拘束終了・シーン遷移・巻き戻しで寄与を解除 | `PleasureObserver.Suspend` / `UpdateHp0Suppression`、`InterventionLedger` | AC-203 実機 | Implemented / unverified |
-| FR-205 | HPダメージと演出を抑止しない | 寄与のみで値を書かない設計 | AC-202 実機 | Implemented / unverified |
-| FR-206 | 拘束外のHP0に介入しない | 寄与の条件を `bound` に限定 | AC-204 実機 | Implemented / unverified |
+| FR-203 | 拘束中の性的被弾はHPを1点も減らさない（被弾の解決の間だけ） | `DamageProbePatches.OneDamagePrefix`、`PlayerHealth.Hold` / `Release` | 3.1.1 の A-50、AC-202 実機 | Implemented / unverified |
+| FR-204 | 抑止した状態を完了・例外・脱出・遷移・巻き戻しで必ず戻す | `OneDamagePostfix` 冒頭、`OneDamageFinalizer`、`PleasureObserver.SweepStaleHpHold`、`Suspend` | AC-203 実機 | Implemented / unverified |
+| FR-205 | 抑止するのはHPの減算だけ。演出・状態異常・MPは通す | `PlayerHealth` はHPしか触らない | AC-202 実機 | Implemented / unverified |
+| FR-206 | 非性的な被弾・攻撃以外の減少・拘束外に介入しない | 前提を `IsBound` と5.3の判別に限定 | AC-204、AC-239、AC-240 実機 | Implemented / unverified |
 | FR-207 | 拘束中かつ性的攻撃のときだけ快楽を上げる | `DamageProbePatches.OneDamagePostfix`、`PleasureMeter` | `PleasureMeterTests`（7件）、AC-205 実機 | Tested / unverified |
 | FR-208 | 5.3の順序で判別、不明は非性的 | `SexualAttackClassifier`、`EnemyAttackCatalog` | `SexualAttackClassifierTests`（6件）、`EnemyAttackCatalogTests`（4件） | Tested |
 | FR-209 | 感度が快楽の上昇量を増やす | `PleasureMeter.AddSexualHit` | `PleasureMeterTests.SensitivityIncreasesTheGainPerHit` | Tested |
@@ -39,8 +41,13 @@ Every tuning value still ships at no-change (FR-233), so a fresh install only re
 | FR-212 | 絶頂演出はMOD描画、`timeScale` を変えない | `PleasureObserver.DrawClimaxFlash` / `DrawVignette`、`PleasureArt` | AC-210 実機 | Implemented / unverified |
 | FR-213 | 演出が出なくても状態変化と判定は行う | `PleasureObserver.ConsumeClimax`（演出に依存しない） | AC-211 | Implemented / unverified |
 | FR-214 | 限界は基礎値＋耐久から算出、読めなければ基礎値 | `ClimaxLimit.Compute`、`PleasureObserver.IsAtClimaxLimit` | `SensitivityAndClimaxTests`（4件）、3.3 の A-6 | Tested / unverified |
-| FR-215 | 限界到達でHP0抑止を解除し既存経路へ委ねる | `PleasureObserver.UpdateHp0Suppression` | AC-213 実機 | Implemented / unverified |
-| FR-216 | 限界以上の間は寄与を再登録しない | 同上（`atLimit` 判定） | AC-229 実機 | Implemented / unverified |
+| FR-215 | 限界到達でMODがHPを `0` にする。ゲームオーバー処理は呼ばない | `PleasureObserver.ApplyClimaxLimit`、`PlayerHealth.Kill` | `ClimaxLethalityTests`（8件）、3.1.2 の A-51、AC-213 実機 | Tested / unverified |
+| FR-216 | 契機は絶頂の成立時のみ。死亡中・発火済みは行わない | `ClimaxLethality.ShouldBeLethal`、`PleasureRuntime.ClimaxDeathFired` | `ClimaxLethalityTests`、AC-229、AC-243 実機 | Tested / unverified |
+| FR-275 | HP操作はゲーム自身のAPI。効かなければ次の手段へ | `PlayerHealth`（`DontSub`→書き戻し、`SubAll`→`SetCurrentValue`→`RequestCommonDead`） | A-50、A-51 実機 | Implemented / unverified |
+| FR-276 | `SuppressSexualHpDamage=false` でも快楽・絶頂・堕落・致死化は成立 | `PleasureProfile.BlocksSexualHpDamage` のみを分岐に使う | `PleasureProfileTests.TurningTheSuppressionOffLeavesTheGaugeRunning`、AC-241 実機 | Tested / unverified |
+| FR-277 | `RemainHp1Msv` へ寄与しない | 当該経路と寄与キーを撤去 | AC-203 実機 | Implemented / unverified |
+| FR-278 | 快楽が上がらない設定では抑止しない | `PleasureProfile.BlocksSexualHpDamage` | `PleasureProfileTests`（3件）、AC-242 実機 | Tested / unverified |
+| FR-279 | `EnableClimaxGameOver` が偽なら致死化しない。事実は記録する | `ClimaxLethality.ShouldBeLethal`、`ApplyClimaxLimit` のログ | `ClimaxLethalityTests.TheLimitDoesNothingWhenTheGameOverIsOff`、AC-244 実機 | Tested / unverified |
 | FR-217 | セーブポイント／オベリスクで絶頂回数を0へ、感度は戻さない | `SavePointPatches.ExecutionOneAsyncPostfix` | `SensitivityAndClimaxTests.ResettingTheCount...`、3.4 の A-7 | Tested / unverified |
 | FR-218 | 絶頂と性的被弾で感度が増える | `PleasureObserver.ConsumeClimax`、`DamageProbePatches` | `SensitivityAndClimaxTests` | Tested / unverified |
 | FR-219 | 感度を減少させる経路を持たない | `SensitivityTrack.Add`（非正を無視） | `SensitivityAndClimaxTests.SensitivityNeverFalls`、AC-215 実機 | Tested |
@@ -64,7 +71,7 @@ Every tuning value still ships at no-change (FR-233), so a fresh install only re
 | FR-230 | メインスレッドで完結、待機しない | `PleasureObserver`（同期処理のみ） | AC-224 実機 | Implemented / unverified |
 | FR-231 | 起動ログに構成を記録 | `PleasurePlugin.Load` | AC-225 実機 | Implemented / unverified |
 | FR-232 | 判定と直列化をゲーム非依存層へ | `SiNiSistar2.Pleasure.Core`（ゲーム参照ゼロ） | 83件がゲーム起動なしで実行 | Tested |
-| FR-233 | 未実測の既定は無変更相当、HP0抑止のみ例外 | `PleasureOptions` の既定値 | `PleasureProfileTests.ShippedDefaults...` | Tested |
+| FR-233 | 未実測の既定は無変更相当。例外なし | `PleasureOptions` の既定値、`PleasureProfile.BlocksSexualHpDamage` | `PleasureProfileTests.ShippedDefaultsChangeNothing` | Tested |
 | FR-234 | `Enabled=false` でパッチも随伴ファイルもなし | `PleasurePlugin.Load` の早期 return | `PleasureProfileTests.DisablingTheMod...` | Tested |
 | FR-235 | 敵別分類を独立したカタログファイルへ、既存設定を種に | `EnemyAttackCatalogStore`、`EnemyAttackCatalog.SeedFrom`、`PleasurePlugin.LoadEnemyCatalog` | `EnemyAttackCatalogTests.TheOldConfigListsSeed...` ほか、AC-230 実機 | Tested / unverified |
 | FR-236 | ゲーム内編集画面、再起動なしで反映 | `EnemyCatalogEditor`（F10）、分類器がカタログを参照保持 | `EnemyAttackCatalogTests.AnEditAppliesWithoutRebuilding...`、AC-231 実機 | Tested / unverified |
@@ -74,6 +81,30 @@ Every tuning value still ships at no-change (FR-233), so a fresh install only re
 | FR-239 | カタログの原子的書き込み、非対応版を上書きしない、失敗で止めない | `EnemyAttackCatalogStore`、`JsonFile` | `EnemyAttackCatalogStoreTests`（6件） | Tested |
 
 ## 判断記録
+
+| 項目 | 内容 |
+|---|---|
+| 論点 | A-50 の手段を実装時に1つへ確定できない（`DontSub` が減算を止めるかは実機でしか分からない） |
+| 選択 | どちらかを選ばず**両方を毎回走らせる**。被弾ごとに `DontSub` を立て、解決後に元へ戻し、それでもHPが減っていれば減った分を書き戻す |
+| 根拠 | 「最初の1発で測って以後はその結論を信じる」形も書けるが、その1発がたまたま無ダメージだった場合に「`DontSub` は効く」と誤って確定し、以後の被弾が素通りする。比較1回で誤りようがなくなるなら、そちらが安い |
+| 影響 | A-50 は実装の分岐ではなくログの内容になった。`[probe] hp-held-off` と `hp-put-back` のどちらが出るかで答えが決まる |
+| 代替案 | 初回計測で手段を確定する、`DontSub` だけに賭ける、書き戻しだけにする |
+
+| 項目 | 内容 |
+|---|---|
+| 論点 | `DontSub` を立てたまま復元に失敗すると、拘束外を含めプレイヤーが一切傷つかなくなる（FR-204 の最悪の失敗） |
+| 選択 | 復元を4重にする。postfix の冒頭、Harmony の finalizer、`PleasureObserver` の毎フレーム掃き取り、`Suspend`（シーン遷移・停止） |
+| 根拠 | HarmonyX の finalizer が IL2CPP でこのメソッドに効くかは実機で確かめるまで断定できない。効かなかった場合に残るのが「無敵」であるため、効かなくても1フレームを越えられない構えにする |
+| 影響 | 掃き取りが発火した場合は警告が出るので、finalizer が効いていないことは黙って進行しない |
+| 代替案 | finalizer だけに任せる、prefix で `try` を張る（IL2CPP のパッチでは張れない） |
+
+| 項目 | 内容 |
+|---|---|
+| 論点 | `SubAll(bool)` と `SetCurrentValue(int, bool)` の bool の意味が interop から読めない |
+| 選択 | `SubAll(false)` → `SubAll(true)` → `SetCurrentValue(0,false)` → `SetCurrentValue(0,true)` → `RequestCommonDead` の順に試し、**各回のあとで `HP.Current` を見る**。0 になった時点で止める |
+| 根拠 | 引数の意味を推測して1つ選ぶより、結果を見て次へ進むほうが確実である。効いた手段は `[probe] climax-death-method` に出るので A-51 はプレイ1回で確定する |
+| 影響 | 実装は確定を待たずに出せる。仕様 5.5.3 の3段の手段はそのまま実装の順序になっている |
+| 代替案 | 実測まで実装を止める、`RequestCommonDead` を第一手段にする |
 
 | 項目 | 内容 |
 |---|---|

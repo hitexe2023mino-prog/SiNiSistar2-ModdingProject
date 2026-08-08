@@ -15,17 +15,18 @@ namespace SiNiSistar2.Pleasure.Plugin;
 /// Replaces the HP-based defeat inside a hold with pleasure, climaxes and corruption.
 /// Implements SPEC003.
 ///
-/// Version 1.0. The mechanisms are settled: pleasure replaces the HP0 defeat inside a hold,
-/// climaxes accumulate towards a limit, corruption rises one way and is worn as the lust crest, and
-/// the escalated swelling is endured through the milk gauge. Probe mode stays available, but it is
-/// no longer what the build is for.
+/// Version 1.1 completes the separation v1.0 began. A sexual attack no longer touches HP at all,
+/// so HP is the instrument for non-sexual threats and nothing else, and reaching the climax limit
+/// ends the run then and there rather than leaving it to the enemy's next swing. Corruption still
+/// rises one way and is worn as the lust crest, and the escalated swelling is still endured through
+/// the milk gauge.
 /// </summary>
 [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
 public sealed class PleasurePlugin : BasePlugin
 {
     public const string PluginGuid = "community.sinisistar2.pleasure";
     public const string PluginName = "SiNiSistar2 Pleasure";
-    public const string PluginVersion = "1.0.0";
+    public const string PluginVersion = "1.1.0";
 
     private const string ExpectedGameAssemblySha256 =
         "B869493305BBE587598C8709E7FE271F00D79D37803C6A8241946D6A6297499D";
@@ -112,7 +113,6 @@ public sealed class PleasurePlugin : BasePlugin
         PleasureRuntime.Breasts = new BreastEscalation(
             profile.BreastSuper.ApplicationsAtMaxLevel,
             profile.BreastSuper.CorruptionThreshold);
-        PleasureRuntime.ContributionKey = new Il2CppSystem.Object();
         PleasureRuntime.Sidecar = new SidecarStore(
             Path.Combine(Paths.BepInExRootPath, "data", PluginGuid),
             _gameBuildId);
@@ -136,11 +136,16 @@ public sealed class PleasurePlugin : BasePlugin
 
         _harmony = new Harmony(PluginGuid);
         var applied = 0;
+        // One seam for two jobs: holding the HP subtraction off for a sexual hit (5.1) and reading
+        // what the hit applied (5.2). The prefix opens the hold, the postfix closes it and moves
+        // the gauge, and the finalizer closes it again if the game's own code threw (FR-204).
         applied += Patch(
-            "damage-probe",
+            "damage",
             AccessTools.Method(typeof(DamageManager), nameof(DamageManager.OneDamage)),
             typeof(DamageProbePatches),
-            postfix: nameof(DamageProbePatches.OneDamagePostfix));
+            postfix: nameof(DamageProbePatches.OneDamagePostfix),
+            prefix: nameof(DamageProbePatches.OneDamagePrefix),
+            finalizer: nameof(DamageProbePatches.OneDamageFinalizer));
         // All three add paths. Which one an item, an enemy or an authored event reaches is not
         // visible in the interop metadata, and a status applied by an item must count the same as
         // one applied by a hold (FR-244). Duplicate reports are collapsed per frame.
@@ -200,7 +205,8 @@ public sealed class PleasurePlugin : BasePlugin
         _observer = AddComponent<PleasureObserver>();
 
         Log.LogInfo(
-            $"{PluginName} {PluginVersion} loaded; suppressHp0={profile.SuppressHp0WhileBound}, "
+            $"{PluginName} {PluginVersion} loaded; "
+            + $"suppressSexualHpDamage={(profile.BlocksSexualHpDamage ? "on" : "off")}, "
             + $"gauge={(profile.Pleasure.HasEffect ? "on" : "off")}, "
             + $"corruption={(profile.Corruption.HasEffect ? "on" : "off")}, "
             + $"climaxGameOver={profile.Climax.GameOverEnabled}, "
@@ -240,8 +246,9 @@ public sealed class PleasurePlugin : BasePlugin
         {
             Log.LogInfo(
                 "Probe mode is on. Play through a hold with a sexual enemy and a hold with a "
-                + "predator, then read the [probe] lines to settle SPEC003 付録A A-1, A-2, A-3, "
-                + "A-6, A-7 and A-9.");
+                + "predator, then read the [probe] lines to settle SPEC003 付録A A-2, A-3, A-6, A-9, "
+                + "A-50 (whether HP can be kept off a sexual hit) and A-51 (whether the climax "
+                + "limit can take HP to 0).");
         }
     }
 
@@ -265,7 +272,6 @@ public sealed class PleasurePlugin : BasePlugin
         }
 
         PleasureRuntime.Reset();
-        PleasureRuntime.ContributionKey = null;
         PleasureRuntime.Profile = PleasureProfile.Inactive;
         return true;
     }
@@ -275,10 +281,14 @@ public sealed class PleasurePlugin : BasePlugin
         ConfigEntry<bool> enabled = Config.Bind("General", "Enabled", true, "");
         ConfigEntry<bool> suppress = Config.Bind(
             "Survival",
-            "SuppressHp0WhileBound",
+            "SuppressSexualHpDamage",
             true,
-            "Stop HP reaching 0 while bound, so a hold is no longer decided by HP. Damage, its "
-            + "display and its effects are untouched; only the moment HP would hit 0 is removed.");
+            "Stop a sexual hit taken while bound from costing HP, so what a sexual hold costs is "
+            + "pleasure rather than health. The hit still lands: its damage display, its effects "
+            + "and the statuses it applies are untouched, and only the subtraction is held off. "
+            + "Non-sexual attacks, slip damage and everything outside a hold are left alone and can "
+            + "still reach 0. Does nothing until Pleasure.PleasureGainPerHit is above 0.");
+        ReportRetiredSetting("SuppressHp0WhileBound", nameof(PleasureOptions.SuppressSexualHpDamage));
 
         ConfigEntry<float> gain = Config.Bind(
             "Pleasure",
@@ -500,7 +510,7 @@ public sealed class PleasurePlugin : BasePlugin
         return new PleasureOptions
         {
             Enabled = enabled.Value,
-            SuppressHp0WhileBound = suppress.Value,
+            SuppressSexualHpDamage = suppress.Value,
             PleasureGainPerHit = gain.Value,
             PleasureDecayPerSecond = decay.Value,
             SexualAbnormalTypes = sexualTypes.Value,
@@ -627,7 +637,13 @@ public sealed class PleasurePlugin : BasePlugin
         return null;
     }
 
-    private int Patch(string mechanism, MethodBase? target, Type owner, string postfix)
+    private int Patch(
+        string mechanism,
+        MethodBase? target,
+        Type owner,
+        string postfix,
+        string? prefix = null,
+        string? finalizer = null)
     {
         if (target is null)
         {
@@ -641,9 +657,9 @@ public sealed class PleasurePlugin : BasePlugin
         {
             _harmony!.Patch(
                 target,
-                postfix: new HarmonyMethod(owner.GetMethod(
-                    postfix,
-                    BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)));
+                prefix: Method(owner, prefix),
+                postfix: Method(owner, postfix),
+                finalizer: Method(owner, finalizer));
             return 1;
         }
         catch (Exception exception)
@@ -652,6 +668,44 @@ public sealed class PleasurePlugin : BasePlugin
             return 0;
         }
     }
+
+    /// <summary>
+    /// Says once that a setting from an earlier version is no longer read (SPEC003 6章, CHG-002).
+    ///
+    /// An upgraded config file keeps the old key, and a key that is still there but no longer
+    /// consulted is worse than one that was deleted: it reads as a switch that has stopped working.
+    /// The file on disk is read rather than asking BepInEx, because a key nobody binds is not part
+    /// of the in-memory configuration at all — which is the whole reason it needs pointing out.
+    /// </summary>
+    private void ReportRetiredSetting(string retired, string successor)
+    {
+        try
+        {
+            if (!File.Exists(Config.ConfigFilePath)
+                || !File.ReadAllLines(Config.ConfigFilePath).Any(line =>
+                    line.TrimStart().StartsWith($"{retired} ", StringComparison.Ordinal)
+                    || line.TrimStart().StartsWith($"{retired}=", StringComparison.Ordinal)))
+            {
+                return;
+            }
+
+            Log.LogInfo(
+                $"The setting '{retired}' is left over from an earlier version and is no longer "
+                + $"read. Its successor is '{successor}', which stops a sexual hit costing HP at all "
+                + "rather than clamping HP at 1. The old line can be deleted.");
+        }
+        catch (Exception exception)
+        {
+            Log.LogWarning($"Could not check for retired settings: {exception.Message}");
+        }
+    }
+
+    private static HarmonyMethod? Method(Type owner, string? name) =>
+        name is null
+            ? null
+            : new HarmonyMethod(owner.GetMethod(
+                name,
+                BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public));
 
     /// <summary>
     /// Reads the enemy classification catalogue, creating it on a first run (SPEC003 FR-235).

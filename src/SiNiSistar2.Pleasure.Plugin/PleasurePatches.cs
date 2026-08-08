@@ -6,14 +6,105 @@ using SiNiSistar2.Pleasure.Core;
 namespace SiNiSistar2.Pleasure.Plugin;
 
 /// <summary>
-/// Observes damage as it resolves. In the shipped configuration this only measures: it answers
-/// 付録A A-2 (can a hit taken while bound be seen at all) and A-3 (does that hit carry the statuses
-/// the classifier needs). The gauge itself stays at zero gain until those are confirmed.
+/// Wraps the resolution of one hit.
+///
+/// Two things happen around it. A sexual hit taken while bound has its HP subtraction held off, so
+/// the cost of being held by that kind of enemy is paid in pleasure rather than in HP
+/// (SPEC003 5.1). And every hit that lands on the player is read for what it applies, which is what
+/// moves the gauge and the corruption.
+///
+/// The hold is opened in the prefix and closed in the postfix, with a finalizer behind that for
+/// the case where the game's own code throws, the observer's frame sweep behind that, and
+/// <c>Suspend</c> behind that again for a scene change. Four closes for one open is deliberate: a
+/// <c>DontSub</c> left standing is a player nothing can hurt, anywhere, for the rest of the
+/// session, and that is the worst failure this MOD can produce (FR-204).
 /// </summary>
 internal static class DamageProbePatches
 {
+    /// <summary>
+    /// The hold opened for the hit being resolved right now.
+    ///
+    /// A single field rather than a stack. The game walks its damage stacks one at a time from
+    /// <c>UpdateDamage</c> on the main thread, so a hit is never resolved inside another hit. If
+    /// that ever stopped being true, the inner prefix would see the hold already open and not take
+    /// a second one — the failure would be an inner hit that costs HP, which is the safe direction.
+    /// </summary>
+    private static PlayerHealth.Guard _guard;
+
+    /// <summary>Whether a hold is still open. Read by the observer's sweep (FR-204).</summary>
+    internal static bool IsHoldOpen => _guard.IsOpen;
+
+    /// <summary>
+    /// Decides, before the hit resolves, whether it is allowed to take HP (SPEC003 5.1.1).
+    ///
+    /// The classification is the same one the gauge uses, evaluated per hit, so an enemy declared
+    /// <c>Sexual</c> costs no HP for anything it does, an enemy declared <c>NonSexual</c> costs HP
+    /// for everything, and an <c>Auto</c> enemy is judged attack by attack from what that attack
+    /// inflicts (5.3). Nothing outside a hold is touched, and nothing that is not an attack — slip
+    /// damage, the environment, a fall — passes through here at all (5.1.3).
+    /// </summary>
+    internal static void OneDamagePrefix(DamageStack stack)
+    {
+        try
+        {
+            if (_guard.IsOpen || !PleasureRuntime.Profile.BlocksSexualHpDamage)
+            {
+                return;
+            }
+
+            // Only a hold. A defeat performance can go on delivering sexual attacks, but the player
+            // is already at zero there and holding the subtraction off would change nothing except
+            // to leave the guard open across a scene the observer is about to suspend on.
+            if (!PleasureRuntime.IsBound || !PleasureRuntime.IsPlayerReceiving(stack))
+            {
+                return;
+            }
+
+            AttackKind kind = Classify(stack);
+            if (kind != AttackKind.Sexual)
+            {
+                return;
+            }
+
+            _guard = PlayerHealth.Hold();
+        }
+        catch (Exception exception)
+        {
+            _guard = PlayerHealth.Guard.None;
+            PleasureRuntime.Log?.LogWarning(
+                $"The HP of a sexual hit could not be held off: {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Closes the hold whatever happened inside, including an exception from the game's own damage
+    /// code. Harmony runs a finalizer after the postfixes, so the ordinary path has already closed
+    /// it and this finds nothing to do (FR-204).
+    /// </summary>
+    internal static void OneDamageFinalizer() => ReleaseHold();
+
+    /// <summary>
+    /// Closes the hold. Safe to call when there is none, which is what lets the postfix, the
+    /// finalizer and the observer all call it for the same hit.
+    /// </summary>
+    internal static void ReleaseHold()
+    {
+        if (!_guard.IsOpen)
+        {
+            return;
+        }
+
+        PlayerHealth.Guard guard = _guard;
+        _guard = PlayerHealth.Guard.None;
+        PlayerHealth.Release(guard);
+    }
+
     internal static void OneDamagePostfix(DamageStack stack)
     {
+        // Before anything else, and outside the try below: the HP has to go back even if reading
+        // the hit for the gauge throws.
+        ReleaseHold();
+
         try
         {
             if (!PleasureRuntime.IsPlayerReceiving(stack))
@@ -155,6 +246,19 @@ internal static class DamageProbePatches
         PleasureRuntime.PendingBreastSuper = true;
         PleasureRuntime.Log?.LogInfo("The milk gauge filled; Breast escalates to BreastSuper.");
     }
+
+    /// <summary>
+    /// Sexual or not, for one hit (SPEC003 5.3).
+    ///
+    /// The prefix and the postfix ask the same question about the same hit and must not be able to
+    /// disagree: one decides whether HP is taken, the other whether pleasure is given, and a hit
+    /// that cost HP but also raised the gauge would be charged twice.
+    /// </summary>
+    private static AttackKind Classify(DamageStack stack) =>
+        PleasureRuntime.Profile.Classifier.Classify(
+            PleasureRuntime.BinderEnemyId,
+            SenderName(stack),
+            PleasureRuntime.AppliedStatuses(stack));
 
     /// <summary>
     /// The attacker's own name. Needed because an attack that carries no statuses cannot be judged

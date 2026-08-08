@@ -43,3 +43,44 @@ public static class ClimaxLimit
         return (int)Math.Clamp(total, 0d, int.MaxValue);
     }
 }
+
+/// <summary>
+/// Whether the climax that just happened ends the run (SPEC003 5.5.2, FR-215, FR-216, FR-279).
+///
+/// Kept here rather than in the observer so the rule can be tested without a game (FR-232). The
+/// observer supplies the facts it can only learn from the game — the count, the durability, whether
+/// the player is already dead — and applies whatever comes back.
+/// </summary>
+public static class ClimaxLethality
+{
+    /// <summary>
+    /// Called at the moment a climax completes, never on a sweep.
+    ///
+    /// A per-frame "is the count at the limit" test would kill the player the instant a save stored
+    /// at or above the limit was loaded, before they were given control. Making the climax itself
+    /// the trigger means such a save is survivable until the next one lands (DEC-258).
+    /// </summary>
+    /// <param name="tuning">Climax configuration.</param>
+    /// <param name="count">The climax count including the one that just happened.</param>
+    /// <param name="maxDurability">The player's maximum durability, or 0 when it cannot be read.</param>
+    /// <param name="alreadyDead">Whether the game already has the player in a defeat state.</param>
+    /// <param name="alreadyFired">Whether this run has already been made lethal.</param>
+    public static bool ShouldBeLethal(
+        ClimaxTuning tuning,
+        int count,
+        float maxDurability,
+        bool alreadyDead,
+        bool alreadyFired)
+    {
+        if (!tuning.Enabled || !tuning.GameOverEnabled || alreadyDead || alreadyFired)
+        {
+            return false;
+        }
+
+        int limit = ClimaxLimit.Compute(tuning.LimitBase, tuning.LimitPerDurability, maxDurability);
+
+        // A limit of zero is a configuration error rather than "fatal at once" (5.5.1). Treating it
+        // as a ceiling would make the first climax of a fresh install lethal.
+        return limit > 0 && count >= limit;
+    }
+}

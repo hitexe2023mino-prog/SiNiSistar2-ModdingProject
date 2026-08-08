@@ -10,12 +10,13 @@ using UnityEngine.SceneManagement;
 namespace SiNiSistar2.Pleasure.Plugin;
 
 /// <summary>
-/// Holds the HP0 suppression in place while the player is bound, consumes climaxes, and records the
-/// remaining 付録A measurements.
+/// Consumes climaxes, turns the climax limit into a death, and records the remaining 付録A
+/// measurements.
 ///
-/// The suppression is a contribution on the game's own <c>RemainHp1Msv</c>, so the MOD never writes
-/// HP and never blocks damage. What it removes is only the moment HP would reach zero
-/// (SPEC003 5.1, DEC-201).
+/// The HP a sexual hit would have taken is held off around the hit itself, in
+/// <see cref="DamageProbePatches"/>, not from here — it is a property of one hit rather than of
+/// being held. What this does own is the other half: a climax that reaches the limit takes HP to
+/// zero at once, rather than waiting for the enemy to finish the job (SPEC003 5.5, DEC-257).
 /// </summary>
 public sealed class PleasureObserver : MonoBehaviour
 {
@@ -256,8 +257,8 @@ public sealed class PleasureObserver : MonoBehaviour
         ApplyPendingBreastSuper(status);
         ApplyPendingLustCrest(status);
         EnforceSingleSwelling(status);
-        UpdateHp0Suppression(lelia, bound);
-        ConsumeClimax(status);
+        SweepStaleHpHold();
+        ConsumeClimax(lelia, status, dead);
         DecayWhenFree(bound);
         ProbeSaveSlot();
 
@@ -265,79 +266,27 @@ public sealed class PleasureObserver : MonoBehaviour
     }
 
     /// <summary>
-    /// Registers the HP0 suppression while bound and releases it otherwise. Once the climax limit
-    /// has been reached the contribution is deliberately withheld, which is how the run ends: HP
-    /// falls to zero and the game's own defeat path takes over unchanged (SPEC003 5.5, DEC-209).
+    /// Closes an HP hold that outlived the hit it was opened for (SPEC003 FR-204).
+    ///
+    /// The prefix opens it, the postfix closes it, and a finalizer closes it if the game's own
+    /// damage code threw. This is the fourth line, and it exists because the failure it guards
+    /// against is the worst one the MOD can produce: a <c>DontSub</c> left standing is a player who
+    /// cannot be hurt by anything, in or out of a hold, for the rest of the session. A stale hold
+    /// therefore cannot survive a single frame, whatever went wrong inside damage resolution.
     /// </summary>
     [HideFromIl2Cpp]
-    private void UpdateHp0Suppression(Lelia lelia, bool bound)
+    private void SweepStaleHpHold()
     {
-        if (!PleasureRuntime.Profile.SuppressHp0WhileBound)
+        if (!DamageProbePatches.IsHoldOpen)
         {
             return;
         }
 
-        bool atLimit = PleasureRuntime.Profile.Climax.GameOverEnabled && IsAtClimaxLimit();
-        bool wanted = bound && !atLimit;
-
-        if (wanted == PleasureRuntime.Ledger.IsOpen(PleasureRuntime.RemainHp1Key))
-        {
-            return;
-        }
-
-        if (!wanted)
-        {
-            string? failure = PleasureRuntime.Ledger.Release(PleasureRuntime.RemainHp1Key);
-            if (failure is not null)
-            {
-                PleasureRuntime.Log?.LogWarning($"Could not release the HP0 suppression: {failure}");
-            }
-            else if (atLimit)
-            {
-                PleasureRuntime.Log?.LogInfo(
-                    "Climax limit reached; HP0 suppression withheld. The hold is now fatal through "
-                    + "the game's own defeat path.");
-            }
-
-            return;
-        }
-
-        StatusCondition? condition = lelia.StatusCondition;
-        MultiSettingValue<bool>? remain = condition?.RemainHp1Msv;
-        Il2CppSystem.Object? key = PleasureRuntime.ContributionKey;
-        if (condition is null || remain is null || key is null)
-        {
-            PleasureRuntime.Probe(
-                "remain-hp1-unavailable",
-                "A-1 caution: RemainHp1Msv could not be resolved, so the HP0 defeat is NOT removed.");
-            return;
-        }
-
-        remain.ResitValue(key, true);
-        PleasureRuntime.Ledger.Register(
-            PleasureRuntime.RemainHp1Key,
-            () => remain.ReleaseValue(key));
-        PleasureRuntime.Probe(
-            "remain-hp1-registered",
-            $"A-1: HP0 suppression registered while bound; RemainHp1 now reads {condition.RemainHp1}.");
-    }
-
-    [HideFromIl2Cpp]
-    private static bool IsAtClimaxLimit()
-    {
-        ClimaxTuning tuning = PleasureRuntime.Profile.Climax;
-        float durability = 0f;
-        try
-        {
-            durability = ManagerList.PlayerStatus?.m_MaxDurability ?? 0f;
-        }
-        catch (Exception)
-        {
-            // Falls through to the base limit, which FR-214 requires rather than collapsing to 0.
-        }
-
-        int limit = ClimaxLimit.Compute(tuning.LimitBase, tuning.LimitPerDurability, durability);
-        return PleasureRuntime.Climaxes.IsAtLimit(limit);
+        DamageProbePatches.ReleaseHold();
+        PleasureRuntime.Log?.LogWarning(
+            "An HP hold outlived the hit it was opened for and was closed by the frame sweep. "
+            + "Damage resolution did not return through either the postfix or the finalizer "
+            + "(SPEC003 FR-204).");
     }
 
     /// <summary>
@@ -1090,8 +1039,17 @@ public sealed class PleasureObserver : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Completes one climax and, if it was the last the player had, ends the run
+    /// (SPEC003 5.4, 5.5).
+    ///
+    /// The order is the one the spec sets: the gauge is emptied, the count and the corruption move,
+    /// the performance starts, and only then is the limit tested. A climax that kills is still a
+    /// climax, and the performance not being drawable is never a reason for it not to count
+    /// (FR-213).
+    /// </summary>
     [HideFromIl2Cpp]
-    private void ConsumeClimax(PlayerStatusManager status)
+    private void ConsumeClimax(Lelia lelia, PlayerStatusManager status, bool dead)
     {
         if (!PleasureRuntime.PendingClimax)
         {
@@ -1109,6 +1067,51 @@ public sealed class PleasureObserver : MonoBehaviour
         PleasureRuntime.Log?.LogInfo(
             $"Climax {PleasureRuntime.Climaxes.Count}; corruption "
             + $"{PleasureRuntime.Corruption?.Value ?? 0f:F2}.");
+
+        ApplyClimaxLimit(lelia, status, dead);
+    }
+
+    /// <summary>
+    /// Turns the climax limit into a death (SPEC003 5.5.2, 5.5.3, FR-215, FR-216).
+    ///
+    /// Asked here and nowhere else. There is no per-frame test for "is the count at the limit",
+    /// because a save stored at or above it would then kill the player the instant it finished
+    /// loading. Reaching the limit is an event, and the event is a climax (DEC-258).
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void ApplyClimaxLimit(Lelia lelia, PlayerStatusManager status, bool dead)
+    {
+        ClimaxTuning tuning = PleasureRuntime.Profile.Climax;
+        float durability = _lastMaxDurability;
+        try
+        {
+            durability = status.m_MaxDurability;
+        }
+        catch (Exception)
+        {
+            // Falls back to the base limit, which FR-214 requires rather than collapsing to 0.
+        }
+
+        int count = PleasureRuntime.Climaxes.Count;
+        if (!ClimaxLethality.ShouldBeLethal(
+                tuning, count, durability, dead, PleasureRuntime.ClimaxDeathFired))
+        {
+            int limit = ClimaxLimit.Compute(tuning.LimitBase, tuning.LimitPerDurability, durability);
+            if (limit > 0 && count >= limit && !tuning.GameOverEnabled)
+            {
+                PleasureRuntime.Log?.LogInfo(
+                    $"Climax {count} of {limit}: the limit has been reached, but "
+                    + "Climax.EnableClimaxGameOver is off, so the run continues (FR-279).");
+            }
+
+            return;
+        }
+
+        // Latched before the attempt rather than after it. The performance that follows keeps
+        // running the observer, and a second pass finding the count still at the limit would ask
+        // for the death again.
+        PleasureRuntime.ClimaxDeathFired = true;
+        PlayerHealth.Kill(lelia, $"climax {count} reached the limit");
     }
 
     [HideFromIl2Cpp]
@@ -2125,11 +2128,8 @@ public sealed class PleasureObserver : MonoBehaviour
     [HideFromIl2Cpp]
     private void Suspend()
     {
-        string? failure = PleasureRuntime.Ledger.Release(PleasureRuntime.RemainHp1Key);
-        if (failure is not null)
-        {
-            PleasureRuntime.Log?.LogWarning($"Could not release the HP0 suppression: {failure}");
-        }
+        // A hold left open by a scene change would follow the player into the next one (FR-204).
+        DamageProbePatches.ReleaseHold();
 
         _gameplayActive = false;
         PleasureRuntime.IsBound = false;
