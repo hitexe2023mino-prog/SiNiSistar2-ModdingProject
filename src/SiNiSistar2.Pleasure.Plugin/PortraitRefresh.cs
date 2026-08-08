@@ -1,5 +1,6 @@
 using Il2CppInterop.Runtime;
 using SiNiSistar2.Manager;
+using SiNiSistar2.Obj;
 using SiNiSistar2.UI;
 using UnityEngine;
 
@@ -29,7 +30,7 @@ internal static class PortraitRefresh
     /// right art in" look identical from the outside, and the first one means the cause is
     /// somewhere else entirely.
     /// </summary>
-    internal static void Refresh(string why)
+    internal static void Refresh(string why, AbnormalType? wearing)
     {
         if (ManagerList.IsForbiddenManagerAccessState)
         {
@@ -38,6 +39,7 @@ internal static class PortraitRefresh
 
         try
         {
+            PortraitParameter? parameter = wearing is null ? null : ParameterOf(wearing.Value);
             var portraits = UnityEngine.Object.FindObjectsOfType(Il2CppType.Of<Portrait>());
             if (portraits.Length == 0)
             {
@@ -56,18 +58,53 @@ internal static class PortraitRefresh
                 }
 
                 string before = SpriteName(portrait);
+
+                // Redrawing alone changed nothing — measured: the breast art was 'none' before and
+                // after (付録A A-30). UpdatePortrait draws from the parameter already in effect, and
+                // nothing had put the escalated status's parameter there. ChangePortrait is the
+                // method that does, so the status's own parameter is handed to it. What is drawn is
+                // still entirely the game's: this only delivers the parameter the status carries.
+                if (parameter is null)
+                {
+                    portrait.ResetChangePortrait();
+                }
+                else
+                {
+                    portrait.ChangePortrait(parameter);
+                }
+
                 portrait.UpdatePortrait();
                 string after = SpriteName(portrait);
 
                 PleasureRuntime.Probe(
                     $"portrait-refresh-{why}-{after}",
-                    $"A-30: the portrait was redrawn for the {why}. Its breast art was '{before}' "
-                    + $"and is now '{after}'.");
+                    $"A-30: the portrait was {(parameter is null ? "reset" : "changed")} for the "
+                    + $"{why}. Its breast art was '{before}' and is now '{after}'.");
             }
         }
         catch (Exception exception)
         {
             PleasureRuntime.Log?.LogWarning($"The portrait could not be redrawn: {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// The portrait parameter a status carries, if any.
+    ///
+    /// Read from the attached status rather than from the manager's template: the template reports
+    /// the values a status has at level 0, before it belongs to anyone (付録A A-14).
+    /// </summary>
+    private static PortraitParameter? ParameterOf(AbnormalType type)
+    {
+        try
+        {
+            AbnormalList? list = PleasureRuntime.PlayerAbnormals;
+            AbnormalData? data = list?.GetAbnormalData(type);
+            return data?.AbnormalOne?.m_PortraitParameter;
+        }
+        catch (Exception)
+        {
+            return null;
         }
     }
 

@@ -425,7 +425,7 @@ public sealed class PleasureObserver : MonoBehaviour
 
         // The escalated swelling has its own art and its own body flag, but nothing on this path
         // asks for the portrait to be drawn again (付録A A-28, A-30).
-        PortraitRefresh.Refresh("escalation to BreastSuper");
+        PortraitRefresh.Refresh("escalation to BreastSuper", AbnormalType.BreastSuper);
 
         PleasureRuntime.Log?.LogInfo(
             $"Breast escalated to BreastSuper (Breast "
@@ -653,7 +653,10 @@ public sealed class PleasureObserver : MonoBehaviour
             }
 
             PleasureRuntime.PendingBreastSuperCure = false;
-            PortraitRefresh.Refresh("return to Breast");
+            // Reset rather than the ordinary swelling's own parameter. Breast carries a parameter
+        // object with every sprite in it null (付録A A-28), so handing that over would install an
+        // empty override and blank the portrait. The swollen look comes from the condition flag.
+        PortraitRefresh.Refresh("return to Breast", null);
         PleasureRuntime.Breasts?.Reset();
             if (present)
             {
