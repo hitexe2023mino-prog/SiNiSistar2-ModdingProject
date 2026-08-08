@@ -423,6 +423,10 @@ public sealed class PleasureObserver : MonoBehaviour
         PleasureRuntime.SuperTimer?.Start();
         BeginTransition();
 
+        // The escalated swelling has its own art and its own body flag, but nothing on this path
+        // asks for the portrait to be drawn again (付録A A-28, A-30).
+        PortraitRefresh.Refresh("escalation to BreastSuper");
+
         PleasureRuntime.Log?.LogInfo(
             $"Breast escalated to BreastSuper (Breast "
             + $"{(PleasureRuntime.Profile.BreastSuper.ReplaceBreast ? "removed" : "kept")}). "
@@ -649,7 +653,8 @@ public sealed class PleasureObserver : MonoBehaviour
             }
 
             PleasureRuntime.PendingBreastSuperCure = false;
-            PleasureRuntime.Breasts?.Reset();
+            PortraitRefresh.Refresh("return to Breast");
+        PleasureRuntime.Breasts?.Reset();
             if (present)
             {
                 abnormals.RemoveAbnormal(AbnormalType.BreastSuper);
