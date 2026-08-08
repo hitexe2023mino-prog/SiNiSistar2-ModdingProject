@@ -75,6 +75,7 @@ internal static class PortraitRefresh
                 string changed = SpriteName(portrait);
                 portrait.UpdatePortrait();
                 string after = SpriteName(portrait);
+                string placed = Place(portrait);
 
                 PleasureRuntime.Probe(
                     $"portrait-refresh-{why}-{after}",
@@ -83,7 +84,7 @@ internal static class PortraitRefresh
                     + $"ChangePortrait, and is '{after}' after UpdatePortrait. The portrait is "
                     + $"'{Describe(portrait.gameObject)}' (active={portrait.isActiveAndEnabled}), "
                     + $"one of {portraits.Length}. The parameter in effect now holds "
-                    + $"{InEffect(portrait)}.");
+                    + $"{InEffect(portrait)}. {placed}");
             }
         }
         catch (Exception exception)
@@ -109,6 +110,50 @@ internal static class PortraitRefresh
         catch (Exception)
         {
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Puts the sprite the game resolves for the breast part into the image that shows it
+    /// (SPEC003 付録A A-30).
+    ///
+    /// Measured: <c>ChangePortrait</c> does take — the parameter in effect afterwards holds
+    /// <c>stand_breast_super</c> — and <c>UpdatePortrait</c> still leaves the image on <c>none</c>.
+    /// So the break is between resolving the art and showing it, and only one of those two is
+    /// missing. <c>TryGetSprite</c> is the game's own resolver, so asking it separates them: what
+    /// it returns is the game's answer to "which sprite belongs in this part", and nothing here
+    /// chooses a sprite. If it answers and the image disagrees, the image is set from the answer.
+    /// If it does not answer, nothing is touched and the log says so.
+    /// </summary>
+    private static string Place(Portrait portrait)
+    {
+        try
+        {
+            bool found = portrait.TryGetSprite(PortraitParts.Breast, out Sprite? resolved);
+            if (!found || resolved is null)
+            {
+                return "TryGetSprite(Breast) has no sprite to give, so the image was left alone.";
+            }
+
+            var image = portrait.m_Breast;
+            if (image is null)
+            {
+                return $"TryGetSprite(Breast) resolves '{resolved.name}' but there is no image to put it in.";
+            }
+
+            if (ReferenceEquals(image.sprite, resolved))
+            {
+                return $"TryGetSprite(Breast) resolves '{resolved.name}', which the image already shows.";
+            }
+
+            image.sprite = resolved;
+            image.enabled = true;
+            return $"TryGetSprite(Breast) resolves '{resolved.name}', which was not in the image; it "
+                + "has been put there.";
+        }
+        catch (Exception exception)
+        {
+            return $"the breast sprite could not be resolved: {exception.Message}";
         }
     }
 
