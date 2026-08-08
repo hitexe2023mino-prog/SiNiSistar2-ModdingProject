@@ -15,15 +15,17 @@ namespace SiNiSistar2.Pleasure.Plugin;
 /// Replaces the HP-based defeat inside a hold with pleasure, climaxes and corruption.
 /// Implements SPEC003.
 ///
-/// This build ships in its measuring state: the HP0 defeat is removed, and everything else records
-/// what SPEC003 付録A still needs before its tuning values can be chosen (FR-233).
+/// Version 1.0. The mechanisms are settled: pleasure replaces the HP0 defeat inside a hold,
+/// climaxes accumulate towards a limit, corruption rises one way and is worn as the lust crest, and
+/// the escalated swelling is endured through the milk gauge. Probe mode stays available, but it is
+/// no longer what the build is for.
 /// </summary>
 [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
 public sealed class PleasurePlugin : BasePlugin
 {
     public const string PluginGuid = "community.sinisistar2.pleasure";
     public const string PluginName = "SiNiSistar2 Pleasure";
-    public const string PluginVersion = "0.1.0";
+    public const string PluginVersion = "1.0.0";
 
     private const string ExpectedGameAssemblySha256 =
         "B869493305BBE587598C8709E7FE271F00D79D37803C6A8241946D6A6297499D";

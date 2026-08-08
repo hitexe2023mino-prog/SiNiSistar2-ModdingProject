@@ -2,13 +2,14 @@
 
 | 項目 | 内容 |
 |---|---|
-| 状態 | 実装可能 |
-| 最終更新日 | 2026-08-08 |
+| 状態 | **v1.0（実装済み）** |
+| 最終更新日 | 2026-08-09 |
 | 対象 | SiNiSistar2 Windows x64版 |
 | 対象Unityランタイム | Unity 2022.3.62f2 / IL2CPP |
 | `GameAssembly.dll` SHA-256 | `B869493305BBE587598C8709E7FE271F00D79D37803C6A8241946D6A6297499D` |
 | `global-metadata.dat` SHA-256 | `A56278D0162B6C148312B56FBE208B54BA9AF2D3BAD609EBF9349B7AE7DDC84B` |
 | プラグインGUID | `community.sinisistar2.pleasure` |
+| プラグイン版 | `1.0.0`（タグ `pleasure-v1.0.0`） |
 | 共存対象 | [SPEC001](SPEC001.md) EDI連動MOD、[SPEC002](SPEC002.md) 難易度上昇MOD |
 | 想定読者 | MOD実装者、テスト担当者、バランス調整担当者 |
 | 開発ブランチ | `feature/difficulty-mod` |
