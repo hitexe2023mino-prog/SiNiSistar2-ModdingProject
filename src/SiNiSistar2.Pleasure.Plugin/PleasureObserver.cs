@@ -46,6 +46,7 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _breastSuperReported;
     private bool _breastSuperRequested;
     private KeyCode _milkingKey = KeyCode.None;
+    private static bool _eventWasRunning;
     private double _swellingOverlapSince;
     private double _breastSuperLoadAsked;
     private double _breastSuperWaitLogged;
@@ -126,7 +127,15 @@ public sealed class PleasureObserver : MonoBehaviour
                 swollen = false;
             }
 
-            if (swollen || (objects is not null && objects.IsCinematicEvent))
+            bool cinematic = objects is not null && objects.IsCinematicEvent;
+            if (cinematic && !_eventWasRunning)
+            {
+                MilkingAnimation.ProbeEventObjects(SceneManager.GetActiveScene().name);
+            }
+
+            _eventWasRunning = cinematic;
+
+            if (swollen || cinematic)
             {
                 MilkingAnimation.ProbeEvent(SceneManager.GetActiveScene().name, swollen);
             }

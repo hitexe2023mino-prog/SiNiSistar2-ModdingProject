@@ -180,6 +180,50 @@ internal static class MilkingAnimation
     }
 
     /// <summary>
+    /// Names the event objects the game creates while an event runs (SPEC003 付録A A-33).
+    ///
+    /// <c>Root/Event/BreastCure</c> was seen once and only while its event was running, so the
+    /// events the game builds live under one known parent. Looking that parent up by path and
+    /// listing its children names whatever is running — which is what four maps of walking could
+    /// not establish, because a clip called <c>Walk_Injured</c> says nothing about which event is
+    /// playing it.
+    ///
+    /// One lookup on the frame an event starts, not per frame, and one known path rather than a
+    /// walk of the scene (DEC-236).
+    /// </summary>
+    internal static void ProbeEventObjects(string scene)
+    {
+        try
+        {
+            GameObject? root = GameObject.Find("Root/Event");
+            if (root is null)
+            {
+                PleasureRuntime.Log?.LogInfo(
+                    $"A-33: an event started in '{scene}' but there is no 'Root/Event' to look under.");
+                return;
+            }
+
+            Transform parent = root.transform;
+            int count = parent.childCount;
+            var names = new List<string>(count);
+            for (var index = 0; index < count && index < 30; index++)
+            {
+                Transform child = parent.GetChild(index);
+                var animator = child.gameObject.GetComponent(Il2CppType.Of<Animator>())?.TryCast<Animator>();
+                names.Add(child.name + (animator is null ? string.Empty : " (has an animator)"));
+            }
+
+            PleasureRuntime.Log?.LogInfo(
+                $"A-33: an event started in '{scene}'. 'Root/Event' holds {count} object(s): "
+                + $"{(names.Count == 0 ? "(none)" : string.Join(", ", names))}.");
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Log?.LogWarning($"A-33: the running event could not be named: {exception.Message}");
+        }
+    }
+
+    /// <summary>
     /// Reads the take's own cast (SPEC003 付録A A-27, A-31).
     ///
     /// This replaces a walk of every object in the scene. That walk froze the game twice, in the
