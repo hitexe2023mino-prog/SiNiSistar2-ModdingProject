@@ -5,6 +5,7 @@ using SiNiSistar2.Drama;
 using SiNiSistar2.Obj;
 using SiNiSistar2.Pleasure.Core;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace SiNiSistar2.Pleasure.Plugin;
 
@@ -105,6 +106,14 @@ public sealed class PleasureObserver : MonoBehaviour
 
         try
         {
+            // The milking scene runs by itself in the field when a swollen player reaches the right
+            // place, so that is where its clip can be learned (付録A A-32). One animator, no walk.
+            ObjectManager? objects = ManagerList.Object;
+            if (objects is not null && objects.IsCinematicEvent)
+            {
+                MilkingAnimation.ProbeEvent(SceneManager.GetActiveScene().name);
+            }
+
             GaTakePlayer? player = ManagerList.Gallery?.CurrentTakePlayer;
             AnimationTakeData? take = player?.PlayingTakeData;
             if (take is null)

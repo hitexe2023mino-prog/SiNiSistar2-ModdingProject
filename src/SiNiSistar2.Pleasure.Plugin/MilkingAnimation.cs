@@ -39,6 +39,7 @@ internal static class MilkingAnimation
     private static bool _reportedMissing;
     private static bool _reportedFound;
     private static readonly HashSet<string> _galleryClips = new(StringComparer.Ordinal);
+    private static readonly HashSet<string> _eventClips = new(StringComparer.Ordinal);
     private static bool _reportedPaths;
     private static double _lastRequest;
     private static int _sweeps;
@@ -123,6 +124,53 @@ internal static class MilkingAnimation
             }
 
             InspectTake(take, takeName);
+        }
+        catch (Exception)
+        {
+            // A probe that can take the observer down is worse than one that misses a frame.
+        }
+    }
+
+    /// <summary>
+    /// Records what the player plays during a scripted event in the field (SPEC003 付録A A-32).
+    ///
+    /// The milking scene is not gallery-only: it runs by itself when a swollen player reaches a
+    /// certain place on a certain map. That makes the field the right place to learn its clip, and
+    /// a far cheaper one — the performer is the player, so this reads one animator and walks
+    /// nothing (DEC-236).
+    ///
+    /// SPEC001 already names the clip of any scripted event it has not seen before, but only the
+    /// first one and only while it is unregistered. The whole sequence is worth having, because an
+    /// event that plays four clips in a row cannot be reproduced from the name of the first.
+    /// </summary>
+    internal static void ProbeEvent(string scene)
+    {
+        try
+        {
+            Animator? animator = ManagerList.Object?.Lelia?.m_Animator;
+            if (animator is null || !animator.isActiveAndEnabled || !animator.isInitialized
+                || animator.runtimeAnimatorController is null || animator.layerCount == 0)
+            {
+                return;
+            }
+
+            var clips = animator.GetCurrentAnimatorClipInfo(0);
+            AnimationClip? clip = clips.Length == 0 ? null : clips[0].clip;
+            string? name = clip?.name;
+            if (clip is null || string.IsNullOrEmpty(name))
+            {
+                return;
+            }
+
+            if (!_eventClips.Add($"{scene}|{name}"))
+            {
+                return;
+            }
+
+            PleasureRuntime.Log?.LogInfo(
+                $"A-32: during a scripted event in '{scene}', the player is playing the clip "
+                + $"'{name}' ({clip.length:0.00}s, looping={clip.isLooping}) on controller "
+                + $"'{animator.runtimeAnimatorController.name}'.");
         }
         catch (Exception)
         {
