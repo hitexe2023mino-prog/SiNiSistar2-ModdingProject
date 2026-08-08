@@ -41,6 +41,11 @@ internal static class MilkingAnimation
     private static readonly HashSet<string> _galleryClips = new(StringComparer.Ordinal);
     private static readonly HashSet<string> _eventClips = new(StringComparer.Ordinal);
     private static double _lastCastRead;
+    private static double _lastPlayerRead;
+    private static string _playerScene = string.Empty;
+    private static double _silentSince;
+    private static bool _silenceLogged;
+    private static readonly HashSet<string> _proxySeen = new(StringComparer.Ordinal);
     private static bool _reportedPaths;
     private static double _lastRequest;
     private static int _sweeps;
@@ -50,8 +55,20 @@ internal static class MilkingAnimation
 
     private static bool _sweepAsked;
 
-    /// <summary>Asks for one sweep. Keys arrive through IMGUI here, so this is a press, not a hold.</summary>
-    internal static void RequestSweep() => _sweepAsked = true;
+    private static bool _describeAsked;
+
+    /// <summary>
+    /// Asks for one sweep. Keys arrive through IMGUI here, so this is a press, not a hold.
+    ///
+    /// The flag is read back on the observer's own frame rather than acted on here: the key arrives
+    /// during a GUI pass, and reading a manager from there is exactly what produced 57 access errors
+    /// in one scene load.
+    /// </summary>
+    internal static void RequestSweep()
+    {
+        _sweepAsked = true;
+        _describeAsked = true;
+    }
     private static AnimationClip? _clip;
 
     /// <summary>Starts the animation, or starts waiting for the clip that plays it.</summary>
@@ -133,63 +150,276 @@ internal static class MilkingAnimation
     }
 
     /// <summary>
-    /// Records what the player plays during a scripted event in the field (SPEC003 付録A A-32).
+    /// Records what performs while the player is on screen, whoever is doing the performing
+    /// (SPEC003 付録A A-32, A-36).
     ///
-    /// The milking scene is not gallery-only: it runs by itself when a swollen player reaches a
-    /// certain place on a certain map. That makes the field the right place to learn its clip, and
-    /// a far cheaper one — the performer is the player, so this reads one animator and walks
-    /// nothing (DEC-236).
+    /// The first version read one field — <c>Lelia.m_Animator</c> — and only while the escalated
+    /// swelling was worn or the game called the moment cinematic. It reported nothing during a
+    /// performance the player could see happening, and that silence was unreadable: "the probe did
+    /// not run", "it ran and the animator had no clip" and "it ran, read a clip, and had already
+    /// written that clip's name" all look the same from the log. Every one of those is a different
+    /// answer, so none of them is an answer.
     ///
-    /// SPEC001 already names the clip of any scripted event it has not seen before, but only the
-    /// first one and only while it is unregistered. The whole sequence is worth having, because an
-    /// event that plays four clips in a row cannot be reproduced from the name of the first.
+    /// Three changes, each aimed at one of those.
+    ///
+    /// It runs whenever measurements are on, not only when the MOD believes something is happening.
+    /// The game strips the escalated swelling on entering the map this scene lives on (A-34), so
+    /// the condition was false during the very event it existed to catch.
+    ///
+    /// It reads the stand-in as well as the player. <c>Lelia.ProxyLelia</c> is a whole GameObject
+    /// the game's own <c>ProxyPlayerLabel</c> puts in the player's place for an event, and it is a
+    /// different object with a different animator: reading <c>Lelia.m_Animator</c> while that
+    /// stand-in performs reads whatever the hidden real player was left holding.
+    ///
+    /// And it says so when it reads nothing at all. A probe that cannot tell "no performance" from
+    /// "not looking" is not a measurement.
     /// </summary>
-    internal static void ProbeEvent(string scene, bool swollen)
+    internal static void ProbePlayer(string scene, bool swollen)
     {
+        double now = Time.unscaledTimeAsDouble;
+        if (now - _lastPlayerRead < 0.25d)
+        {
+            return;
+        }
+
+        _lastPlayerRead = now;
+
+        if (!string.Equals(scene, _playerScene, StringComparison.Ordinal))
+        {
+            _playerScene = scene;
+            _silentSince = now;
+            _silenceLogged = false;
+        }
+
         try
         {
-            Animator? animator = ManagerList.Object?.Lelia?.m_Animator;
-            if (animator is null || !animator.isActiveAndEnabled || !animator.isInitialized
-                || animator.runtimeAnimatorController is null || animator.layerCount == 0)
+            Lelia? lelia = ManagerList.Object?.Lelia;
+            if (lelia is null)
             {
                 return;
             }
 
-            // Every layer, for the same reason as A-27: a performance on an upper layer reads as
-            // standing still if only layer 0 is asked, and standing still is exactly what this
-            // probe reported for an event that is known to animate.
-            AnimationClip? clip = null;
-            var layer = 0;
-            for (; layer < animator.layerCount; layer++)
+            if (_describeAsked)
             {
-                var candidates = animator.GetCurrentAnimatorClipInfo(layer);
-                if (candidates.Length > 0 && candidates[0].clip is not null)
+                _describeAsked = false;
+                DescribePlayer(scene);
+            }
+
+            var read = 0;
+            read += ReadTree(lelia.m_Animator?.gameObject, scene, "the player", swollen);
+
+            // The stand-in, if the event has put one in. Its own subtree, not the scene's: this is
+            // one object reached from the object that names it, which is what DEC-236 asks for.
+            GameObject? proxy = lelia.ProxyLelia;
+            if (proxy is not null)
+            {
+                if (_proxySeen.Add($"{scene}|{Describe(proxy)}"))
                 {
-                    clip = candidates[0].clip;
-                    break;
+                    PleasureRuntime.Log?.LogInfo(
+                        $"A-36: in '{scene}' the game has put a stand-in in the player's place: "
+                        + $"'{Describe(proxy)}' (active={proxy.activeInHierarchy}, "
+                        + $"enemyLayer={lelia.IsProxyIsEnemyLayer}). Its animators are read from here on.");
                 }
+
+                read += ReadTree(proxy, scene, "the stand-in in the player's place", swollen);
             }
 
-            string? name = clip?.name;
-            if (clip is null || string.IsNullOrEmpty(name))
+            if (read > 0)
             {
+                _silentSince = now;
+                _silenceLogged = false;
                 return;
             }
 
-            if (_eventClips.Count > 80 || !_eventClips.Add($"{scene}|{name}|{swollen}"))
+            // Three seconds of an on-screen player whose every animator has no clip to name. That is
+            // not nothing happening; it is the performance not coming from an animator state
+            // machine, and it is the one reading that would send this whole approach elsewhere.
+            if (!_silenceLogged && now - _silentSince > 3d)
             {
-                return;
+                _silenceLogged = true;
+                PleasureRuntime.Log?.LogInfo(
+                    $"A-36: in '{scene}', nothing under the player{(proxy is null ? "" : " or the stand-in")} "
+                    + "has named a clip for 3 seconds, though the probe is running. If something is "
+                    + "visibly playing, it is not being driven by an animator state machine.");
             }
-
-            PleasureRuntime.Log?.LogInfo(
-                $"A-32: in '{scene}'{(swollen ? " while the escalated swelling is worn" : " during a scripted event")}, "
-                + $"the player is playing the clip '{name}' ({clip.length:0.00}s, "
-                + $"looping={clip.isLooping}) on layer {layer} of controller "
-                + $"'{animator.runtimeAnimatorController.name}'.");
         }
         catch (Exception)
         {
             // A probe that can take the observer down is worse than one that misses a frame.
+        }
+    }
+
+    /// <summary>
+    /// Reads every animator in one object's subtree, and returns how many named a clip.
+    ///
+    /// The count is the point as much as the log is: a written line means a new clip, and no written
+    /// line means either a clip already seen or no clip at all. Only the count separates those.
+    /// </summary>
+    private static int ReadTree(GameObject? root, string scene, string who, bool swollen)
+    {
+        if (root is null)
+        {
+            return 0;
+        }
+
+        var read = 0;
+        try
+        {
+            var animators = root.GetComponentsInChildren(Il2CppType.Of<Animator>(), false);
+            for (var index = 0; index < animators.Length && index < 24; index++)
+            {
+                var animator = animators[index]?.TryCast<Animator>();
+                if (animator is null || !animator.isActiveAndEnabled || !animator.isInitialized
+                    || animator.runtimeAnimatorController is null || animator.layerCount == 0)
+                {
+                    continue;
+                }
+
+                // Every layer, for the same reason as A-27: a performance on an upper layer reads as
+                // standing still if only layer 0 is asked, and standing still is exactly what this
+                // probe reported for an event that is known to animate.
+                AnimationClip? clip = null;
+                var layer = 0;
+                for (; layer < animator.layerCount; layer++)
+                {
+                    var candidates = animator.GetCurrentAnimatorClipInfo(layer);
+                    if (candidates.Length > 0 && candidates[0].clip is not null)
+                    {
+                        clip = candidates[0].clip;
+                        break;
+                    }
+                }
+
+                string? name = clip?.name;
+                if (clip is null || string.IsNullOrEmpty(name))
+                {
+                    continue;
+                }
+
+                read++;
+                string path = Describe(animator.gameObject);
+                if (_eventClips.Count > 200 || !_eventClips.Add($"{scene}|{path}|{name}|{swollen}"))
+                {
+                    continue;
+                }
+
+                PleasureRuntime.Log?.LogInfo(
+                    $"A-32: in '{scene}'{(swollen ? " while the escalated swelling is worn" : "")}, "
+                    + $"{who} ('{path}') is playing the clip '{name}' ({clip.length:0.00}s, "
+                    + $"looping={clip.isLooping}) on layer {layer} of controller "
+                    + $"'{animator.runtimeAnimatorController.name}'.");
+            }
+        }
+        catch (Exception)
+        {
+            // Reading an animator must never be able to stop the observer.
+        }
+
+        return read;
+    }
+
+    /// <summary>
+    /// Writes everything about the player and any stand-in, once, on request (SPEC003 付録A A-36).
+    ///
+    /// The passive probe above is deliberately quiet — it dedupes, and it only writes clips. That is
+    /// right for something running every quarter second and wrong for answering "why did nothing
+    /// appear while I was watching it happen". This answers that: every animator, every layer, said
+    /// out loud whether or not it has anything, plus what the game thinks the player is doing.
+    /// </summary>
+    private static void DescribePlayer(string scene)
+    {
+        try
+        {
+            Lelia? lelia = ManagerList.Object?.Lelia;
+            if (lelia is null)
+            {
+                PleasureRuntime.Log?.LogInfo($"A-36: in '{scene}' there is no player object to read.");
+                return;
+            }
+
+            var lines = new List<string>(8);
+            Describe(lelia.m_Animator?.gameObject, "player", lines);
+
+            GameObject? proxy = lelia.ProxyLelia;
+            if (proxy is null)
+            {
+                lines.Add("no stand-in is in the player's place");
+            }
+            else
+            {
+                Describe(proxy, "stand-in", lines);
+            }
+
+            string state;
+            try
+            {
+                state = lelia.LeliaAnimation?.CurrentAnimState.ToString() ?? "(none)";
+            }
+            catch (Exception)
+            {
+                state = "(unreadable)";
+            }
+
+            PleasureRuntime.Log?.LogInfo(
+                $"A-36: in '{scene}' the player's own animation state is '{state}'. "
+                + string.Join(" | ", lines));
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Log?.LogWarning($"A-36: the player could not be described: {exception.Message}");
+        }
+    }
+
+    /// <summary>One subtree, every animator, said out loud whether it has anything or not.</summary>
+    private static void Describe(GameObject? root, string who, List<string> lines)
+    {
+        if (root is null)
+        {
+            lines.Add($"{who}: no object");
+            return;
+        }
+
+        var animators = root.GetComponentsInChildren(Il2CppType.Of<Animator>(), true);
+        if (animators.Length == 0)
+        {
+            lines.Add($"{who} '{Describe(root)}': no animator anywhere beneath it");
+            return;
+        }
+
+        for (var index = 0; index < animators.Length && index < 12; index++)
+        {
+            var animator = animators[index]?.TryCast<Animator>();
+            if (animator is null)
+            {
+                continue;
+            }
+
+            string path = Describe(animator.gameObject);
+            if (!animator.isActiveAndEnabled || !animator.isInitialized
+                || animator.runtimeAnimatorController is null)
+            {
+                lines.Add(
+                    $"{who} '{path}': enabled={animator.isActiveAndEnabled}, "
+                    + $"initialised={animator.isInitialized}, "
+                    + $"controller='{animator.runtimeAnimatorController?.name ?? "(none)"}'");
+                continue;
+            }
+
+            var layers = new List<string>(animator.layerCount);
+            for (var layer = 0; layer < animator.layerCount && layer < 6; layer++)
+            {
+                var candidates = animator.GetCurrentAnimatorClipInfo(layer);
+                AnimationClip? clip = candidates.Length > 0 ? candidates[0].clip : null;
+                AnimatorStateInfo info = animator.GetCurrentAnimatorStateInfo(layer);
+                layers.Add(
+                    $"layer {layer}: clip='{clip?.name ?? "(none)"}', "
+                    + $"stateHash={info.fullPathHash}, t={info.normalizedTime:0.00}, "
+                    + $"speed={animator.speed:0.00}");
+            }
+
+            lines.Add(
+                $"{who} '{path}' on '{animator.runtimeAnimatorController.name}': "
+                + string.Join("; ", layers));
         }
     }
 

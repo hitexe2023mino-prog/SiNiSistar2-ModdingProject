@@ -144,10 +144,13 @@ public sealed class PleasureObserver : MonoBehaviour
 
             _eventWasRunning = cinematic;
 
-            if (swollen || cinematic)
-            {
-                MilkingAnimation.ProbeEvent(scene, swollen);
-            }
+            // Unconditional. This used to run only while the escalated swelling was worn or the
+            // game called the moment cinematic, and the milking scene satisfies neither: the game
+            // strips the escalation on entering that map (付録A A-34), and the scene was watched
+            // playing on screen with not one line written. A condition that is false exactly when
+            // the thing being measured happens is worse than no condition at all. The probe is
+            // throttled and deduped instead, which costs a quarter-second read (付録A A-36).
+            MilkingAnimation.ProbePlayer(scene, swollen);
 
             GaTakePlayer? player = ManagerList.Gallery?.CurrentTakePlayer;
             AnimationTakeData? take = player?.PlayingTakeData;
