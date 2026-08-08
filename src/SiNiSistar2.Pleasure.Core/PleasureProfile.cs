@@ -37,18 +37,15 @@ public sealed record BreastSuperTuning(
     bool ReplaceBreast,
     bool MakeHaanjaCurable,
     bool CountBelowMaxLevel,
-    float SecondsMin,
-    float SecondsMax,
     bool CuredWithBreast,
     float FadeSeconds,
     float MilkPerSexualHit,
-    float MilkDrainPerSecond,
-    string MilkingKey)
+    float MilkDrainPerSecond)
 {
     public static BreastSuperTuning Disabled { get; } =
-        new(false, 0, 0f, false, false, false, 0f, 0f, false, 0f, 0f, 0f, "");
+        new(false, 0, 0f, false, false, false, false, 0f, 0f, 0f);
 
-    /// <summary>Whether milking can do anything.</summary>
+    /// <summary>Whether the escalation has any way out at all.</summary>
     public bool CanMilk => MilkDrainPerSecond > 0f;
 
     /// <summary>A count of zero means the escalation can never be reached, which is the shipped state.</summary>
@@ -369,13 +366,10 @@ public static class PleasureProfileFactory
             options.BreastSuperReplacesBreast,
             options.BreastSuperMakeHaanjaCurable,
             options.BreastSuperCountBelowMaxLevel,
-            Math.Max(0f, options.BreastSuperSecondsMin),
-            Math.Max(Math.Max(0f, options.BreastSuperSecondsMin), options.BreastSuperSecondsMax),
             options.BreastSuperCuredWithBreast,
             Math.Max(0f, options.BreastSuperFadeSeconds),
             Math.Max(0f, options.MilkPerSexualHit),
-            Math.Max(0f, options.MilkDrainPerSecond),
-            (options.MilkingKey ?? string.Empty).Trim());
+            Math.Max(0f, options.MilkDrainPerSecond));
     }
 
     private static SexualAttackClassifier BuildClassifier(

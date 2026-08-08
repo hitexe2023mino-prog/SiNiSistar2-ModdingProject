@@ -67,26 +67,6 @@ public sealed record PleasureOptions
     public bool BreastSuperReplacesBreast { get; init; } = true;
 
     /// <summary>
-    /// The shortest the escalation can last in the field, in seconds. 0 never subsides.
-    ///
-    /// The game's own way out of the escalation is the self-milking scene, and that scene cannot be
-    /// reproduced anywhere but the map it was authored on: it fades the screen, switches to a
-    /// virtual camera, and switches on a set of actors that exist only there (SPEC003 付録A A-42).
-    /// With no way out, the escalation has to end by being survived, so it is given a span the
-    /// player has to hold out for while enemies are still coming.
-    /// </summary>
-    public float BreastSuperSecondsMin { get; init; } = 30f;
-
-    /// <summary>
-    /// The longest the escalation can last in the field, in seconds.
-    ///
-    /// A span rather than a fixed number, drawn afresh each time. A player who knows the escalation
-    /// lasts exactly forty seconds counts to forty; one who knows it lasts somewhere between thirty
-    /// and sixty has to keep reading the fight. Below the minimum, the minimum is used.
-    /// </summary>
-    public float BreastSuperSecondsMax { get; init; } = 60f;
-
-    /// <summary>
     /// Whether the game's own <c>Breast</c> cure also removes <c>BreastSuper</c>. The cure is an
     /// authored list of statuses and the escalated one is not in it, so without this the MOD would
     /// have added a status the game cannot take away.
@@ -108,17 +88,15 @@ public sealed record PleasureOptions
     /// </summary>
     public float MilkPerSexualHit { get; init; } = 0.12f;
 
-    /// <summary>Milk removed per second while milking. 0 switches milking off.</summary>
-    public float MilkDrainPerSecond { get; init; } = 0.25f;
-
     /// <summary>
-    /// The key that milks, as a <c>KeyCode</c> name.
+    /// Milk the body works off per second while the escalation is worn. 0 leaves it with no way out.
     ///
-    /// Not C, which the game already uses to cast. Immediate-mode GUI cannot stop the game reading
-    /// the keyboard for itself — it only consumes the event within its own layer — so a key shared
-    /// with an action would fire both, and "only while swollen" cannot be arranged from here.
+    /// This is the escalation's whole duration, and it is deliberately not a duration. The default
+    /// empties a full gauge in about fifty seconds if nothing lands, and every sexual hit taken
+    /// meanwhile puts roughly <c>MilkPerSexualHit</c> back — so a player who cannot get clear is
+    /// not counting down, they are losing ground. That is the penalty (FR-264).
     /// </summary>
-    public string MilkingKey { get; init; } = "F8";
+    public float MilkDrainPerSecond { get; init; } = 0.02f;
 
     /// <summary>
     /// Counts every <c>Breast</c> application rather than only those at the maximum level. A

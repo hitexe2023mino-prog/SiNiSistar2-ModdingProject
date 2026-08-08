@@ -65,20 +65,14 @@ internal static class PleasureRuntime
     /// </summary>
     internal static bool PendingBreastSuper { get; set; }
 
-    /// <summary>Counts down <c>BreastSuper</c> back to <c>Breast</c> (SPEC003 5.8).</summary>
-    internal static BreastSuperTimer? SuperTimer { get; set; }
-
     /// <summary>Set when the game's own cure removes <c>Breast</c>, consumed by the observer.</summary>
     internal static bool PendingBreastSuperCure { get; set; }
 
     /// <summary>Game time at which the transition's black stops being drawn.</summary>
     internal static double TransitionFadeUntil { get; set; }
 
-    /// <summary>The milk the swelling makes and milking removes (SPEC003 FR-259).</summary>
+    /// <summary>The milk the swelling makes and the body works off (SPEC003 FR-259, FR-264).</summary>
     internal static MilkReservoir? Milk { get; set; }
-
-    /// <summary>Set by the damage patch when the player is hit, consumed by the observer.</summary>
-    internal static bool MilkingWasHit { get; set; }
 
     /// <summary>The player's own status list, used to tell player-received from enemy-received.</summary>
     internal static AbnormalList? PlayerAbnormals { get; set; }

@@ -101,8 +101,6 @@ public sealed class PleasurePlugin : BasePlugin
             profile.Pleasure.SensitivityScale,
             profile.Pleasure.DecayPerSecond);
         PleasureRuntime.Sensitivity = new SensitivityTrack(profile.Sensitivity.Cap);
-        PleasureRuntime.SuperTimer = new BreastSuperTimer(
-            profile.BreastSuper.SecondsMin, profile.BreastSuper.SecondsMax);
         PleasureRuntime.Milk = new MilkReservoir(
             profile.BreastSuper.MilkPerSexualHit,
             profile.BreastSuper.MilkDrainPerSecond);
@@ -207,8 +205,9 @@ public sealed class PleasurePlugin : BasePlugin
 
         Log.LogInfo(
             "Press F11 in game to apply Breast to the player, for checking the escalation. "
-            + $"Press {profile.BreastSuper.MilkingKey} while BreastSuper is active to milk: it "
-            + "empties the milk gauge, works anywhere, and being hit wastes it.");
+            + "BreastSuper has no key: it is endured. The milk gauge falls "
+            + $"{profile.BreastSuper.MilkDrainPerSecond:P1} a second and BreastSuper subsides to "
+            + "Breast when it empties, while sexual attacks put it back up.");
 
         if (profile.ShowOverlay)
         {
@@ -345,24 +344,6 @@ public sealed class PleasurePlugin : BasePlugin
             "BreastSuperReplacesBreast",
             true,
             "Remove Breast as BreastSuper is applied, so the two do not stack.");
-        // A span, not a number. The game's own way out of the escalation is the self-milking
-        // scene, and that cannot be reproduced away from the map it was authored on (SPEC003 付録A
-        // A-42), so the escalation now ends by being survived. A fixed duration would be counted;
-        // a span has to be read off the fight.
-        ConfigEntry<float> breastSecondsMin = Config.Bind(
-            "BreastSuper",
-            "BreastSuperSecondsMin",
-            30f,
-            "The shortest BreastSuper lasts in the field, in seconds, before subsiding back to "
-            + "Breast. 0 never subsides. Enduring it costs the ordinary swelling rather than "
-            + "curing it.");
-        ConfigEntry<float> breastSecondsMax = Config.Bind(
-            "BreastSuper",
-            "BreastSuperSecondsMax",
-            60f,
-            "The longest BreastSuper lasts in the field, in seconds. A span is drawn afresh each "
-            + "time it happens, so the wait cannot be counted off. Below the minimum, the minimum "
-            + "is used.");
         ConfigEntry<bool> breastCured = Config.Bind(
             "BreastSuper",
             "CuredWithBreast",
@@ -389,13 +370,6 @@ public sealed class PleasurePlugin : BasePlugin
             0.25f,
             "Milk removed per second while milking. Only BreastSuper can be milked, and it "
             + "subsides to Breast when the gauge empties. 0 switches milking off.");
-        ConfigEntry<string> milkingKey = Config.Bind(
-            "BreastSuper",
-            "MilkingKey",
-            "F8",
-            "The key that milks, as a UnityEngine.KeyCode name. Not C: the game casts with it, and "
-            + "immediate-mode GUI cannot stop the game reading the keyboard for itself, so a shared "
-            + "key would do both.");
         ConfigEntry<bool> breastBelowMax = Config.Bind(
             "BreastSuper",
             "CountBelowMaxLevel",
@@ -491,13 +465,10 @@ public sealed class PleasurePlugin : BasePlugin
             BreastSuperAfterApplications = breastAfter.Value,
             BreastSuperSensitivityThreshold = breastThreshold.Value,
             BreastSuperReplacesBreast = breastReplaces.Value,
-            BreastSuperSecondsMin = breastSecondsMin.Value,
-            BreastSuperSecondsMax = breastSecondsMax.Value,
             BreastSuperCuredWithBreast = breastCured.Value,
             BreastSuperFadeSeconds = breastFade.Value,
             MilkPerSexualHit = milkFill.Value,
             MilkDrainPerSecond = milkDrain.Value,
-            MilkingKey = milkingKey.Value,
             BreastSuperMakeHaanjaCurable = breastHaanja.Value,
             BreastSuperCountBelowMaxLevel = breastBelowMax.Value,
             LogTransitions = logTransitions.Value,

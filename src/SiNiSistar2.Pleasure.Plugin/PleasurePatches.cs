@@ -21,10 +21,6 @@ internal static class DamageProbePatches
                 return;
             }
 
-            // Being hit wastes the attempt. This is the whole point of milking taking time: doing it
-            // where something can reach you is a real risk rather than a formality (FR-257).
-            PleasureRuntime.MilkingWasHit = true;
-
             bool bound = PleasureRuntime.CanAccumulate;
             string? sender = SenderName(stack);
             string[] statuses = PleasureRuntime.AppliedStatuses(stack);
@@ -114,9 +110,11 @@ internal static class DamageProbePatches
             return;
         }
 
+        bool super;
         try
         {
-            if (abnormals.Has(AbnormalType.BreastSuper) || !abnormals.Has(AbnormalType.Breast))
+            super = abnormals.Has(AbnormalType.BreastSuper);
+            if (!super && !abnormals.Has(AbnormalType.Breast))
             {
                 return;
             }
@@ -126,8 +124,25 @@ internal static class DamageProbePatches
             return;
         }
 
+        // It fills under the escalation as well, which it did not used to. The escalation's only
+        // way out is the gauge running down (FR-264), so a sexual hit taken while escalated has to
+        // put the way out further away — otherwise the escalation would be a fixed wait that
+        // enemies could not make worse, and being caught while swollen would cost nothing.
         float before = milk.Fill;
-        if (!milk.AddFromHit())
+        bool filled = milk.AddFromHit();
+        if (super)
+        {
+            if (milk.Fill > before)
+            {
+                PleasureRuntime.LogTransition(
+                    $"Milk {before:P0} -> {milk.Fill:P0} while BreastSuper is worn; the escalation "
+                    + "lasts longer for it.");
+            }
+
+            return;
+        }
+
+        if (!filled)
         {
             if (milk.Fill > before)
             {

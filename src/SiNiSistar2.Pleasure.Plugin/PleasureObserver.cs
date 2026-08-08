@@ -45,7 +45,6 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _breastReported;
     private bool _breastSuperReported;
     private bool _breastSuperRequested;
-    private KeyCode _milkingKey = KeyCode.None;
     private double _swellingOverlapSince;
     private double _breastSuperLoadAsked;
     private double _breastSuperWaitLogged;
@@ -54,6 +53,7 @@ public sealed class PleasureObserver : MonoBehaviour
     private float _milkFill = -1f;
     private float _milkPhase;
     private double _milkBuiltAt;
+    private bool _milkAnnounced;
 
 
     public PleasureObserver(IntPtr pointer)
@@ -420,10 +420,6 @@ public sealed class PleasureObserver : MonoBehaviour
         // would make the escalated status the cheapest one to be rid of.
         PleasureRuntime.Milk?.LoadFrom(1f);
 
-        // The span is drawn here, and it is what the player now has to live through. The game's own
-        // way out — the self-milking scene — cannot be reproduced away from the map it was authored
-        // on (付録A A-42), so the escalation ends by being survived (FR-259).
-        PleasureRuntime.SuperTimer?.Start();
         BeginTransition();
 
         // The escalated swelling has its own art and its own body flag, but nothing on this path
@@ -660,7 +656,6 @@ public sealed class PleasureObserver : MonoBehaviour
             {
                 abnormals.RemoveAbnormal(AbnormalType.BreastSuper);
                 PortraitRefresh.Refresh("return to Breast", null);
-                PleasureRuntime.SuperTimer?.Stop();
                 BeginTransition();
                 PleasureRuntime.Log?.LogInfo(
                     "BreastSuper was removed along with Breast by the game's own cure.");
@@ -669,48 +664,10 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        if (!present)
-        {
-            PleasureRuntime.SuperTimer?.Stop();
-            return;
-        }
-
-        BreastSuperTimer? timer = PleasureRuntime.SuperTimer;
-        if (timer is null || !timer.HasDuration)
-        {
-            return;
-        }
-
-        bool wasRunning = timer.IsRunning;
-        timer.Start();
-        if (!wasRunning)
-        {
-            // Said once, when the wait begins. How long it is, is the whole of the situation: a
-            // player who does not know whether this lasts five seconds or five minutes cannot
-            // decide whether to run for it or stand and fight.
-            PleasureRuntime.Log?.LogInfo(
-                $"BreastSuper has to be endured for {timer.Target:0} seconds. Milking it out with "
-                + $"{MilkingKey()} is faster, but being hit wastes it.");
-        }
-
-        if (!timer.Tick(delta))
-        {
-            return;
-        }
-
-        // Back to Breast rather than to nothing. Enduring the escalation costs the ordinary
-        // swelling, it does not cure it; otherwise waiting would be better than being cured.
-        abnormals.RemoveAbnormal(AbnormalType.BreastSuper);
-        PortraitRefresh.Refresh("return to Breast", null);
-        AbnormalManager? manager = ManagerList.Abnormal;
-        AbnormalData? data = null;
-        if (manager is not null && manager.TryGetData(AbnormalType.Breast, out data) && data is not null)
-        {
-            abnormals.AddAbnormal(data, 1, null);
-        }
-
-        BeginTransition();
-        PleasureRuntime.Log?.LogInfo("BreastSuper was endured to its end and subsided back to Breast.");
+        // Nothing further here. How long the escalation lasts is the milk gauge, worked off in
+        // UpdateMilk (FR-264): there is no separate clock, because a clock and a gauge that both
+        // ended it would mean the hits that refill the gauge sometimes cost nothing.
+        _ = present;
     }
 
     /// <summary>
@@ -1135,16 +1092,6 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        if (current.type == EventType.KeyDown
-            && current.keyCode == MilkingKey()
-            && !_enemyEditor.IsOpen
-            && !_editing)
-        {
-            TryStartMilking();
-            current.Use();
-            return;
-        }
-
         if (current.type == EventType.KeyDown && current.keyCode == KeyCode.F10)
         {
             // Closing the layout editor first, so the two are never taking the same keys.
@@ -1224,111 +1171,24 @@ public sealed class PleasureObserver : MonoBehaviour
     }
 
     /// <summary>
-    /// The key that milks (SPEC003 FR-260).
+    /// Works the milk off while <c>BreastSuper</c> is worn, and takes it back down to <c>Breast</c>
+    /// when the gauge empties (SPEC003 FR-259, FR-264, FR-262).
     ///
-    /// Configurable, and not C. The game casts with C, and immediate-mode GUI cannot stop the game
-    /// reading the keyboard for itself — consuming an event only ends its travel within IMGUI — so a
-    /// shared key would milk and cast at once. "Only while swollen" cannot be arranged from here for
-    /// the same reason: the game's read does not know about the condition.
-    /// </summary>
-    [HideFromIl2Cpp]
-    private KeyCode MilkingKey()
-    {
-        if (_milkingKey != KeyCode.None)
-        {
-            return _milkingKey;
-        }
-
-        string name = PleasureRuntime.Profile.BreastSuper.MilkingKey;
-        if (!Enum.TryParse(name, ignoreCase: true, out KeyCode parsed) || parsed == KeyCode.None)
-        {
-            parsed = KeyCode.F8;
-            PleasureRuntime.Log?.LogWarning(
-                $"BreastSuper.MilkingKey '{name}' is not a KeyCode name; F8 is used instead.");
-        }
-
-        _milkingKey = parsed;
-        return parsed;
-    }
-
-    /// <summary>
-    /// Starts self-milking (SPEC003 5.8, FR-257).
+    /// This is the whole of the escalation's duration. There is no key and no separate clock. The
+    /// player endures it, and the same sexual attacks that filled the gauge keep filling it — so
+    /// how long it lasts is decided by how the next half minute goes rather than by a number.
     ///
-    /// It works wherever the player is standing. A safe place is not an area the game marks as safe;
-    /// it is any moment nothing is attacking, which is the player's judgement to make and to get
-    /// wrong. What it costs is the milk gauge: milking empties it, and the swelling steps down when
-    /// it reaches nothing.
-    /// </summary>
-    [HideFromIl2Cpp]
-    private void TryStartMilking()
-    {
-        AbnormalList? abnormals = PleasureRuntime.PlayerAbnormals;
-        MilkReservoir? milk = PleasureRuntime.Milk;
-        if (abnormals is null || milk is null)
-        {
-            return;
-        }
-
-        if (milk.IsMilking)
-        {
-            milk.StopMilking();
-            PleasureRuntime.Log?.LogInfo("Milking stopped.");
-            return;
-        }
-
-        // Only the escalated swelling can be milked. Ordinary swelling has no way out through
-        // milking: its gauge fills one way towards the escalation, and its cure is the game's own
-        // (FR-262).
-        if (!abnormals.Has(AbnormalType.BreastSuper))
-        {
-            if (abnormals.Has(AbnormalType.Breast))
-            {
-                PleasureRuntime.Log?.LogInfo(
-                    "Ordinary swelling cannot be milked away; only BreastSuper can.");
-            }
-
-            return;
-        }
-
-        // Not while held or downed: the hands are not free, and letting it run there would make a
-        // hold something to be waited out rather than escaped.
-        if (PleasureRuntime.IsBound || PleasureRuntime.IsDefeatPerformance)
-        {
-            PleasureRuntime.Log?.LogInfo("Milking cannot be started while held.");
-            return;
-        }
-
-        if (!milk.CanMilk)
-        {
-            PleasureRuntime.Log?.LogInfo(
-                $"There is nothing to milk: the gauge is at {milk.Fill:P0}.");
-            return;
-        }
-
-        if (milk.TryStartMilking())
-        {
-            PleasureRuntime.MilkingWasHit = false;
-            PleasureRuntime.Log?.LogInfo(
-                $"Milking started at {milk.Fill:P0}; being hit will waste it and the gauge will "
-                + "start filling again. BreastSuper will subside to Breast.");
-        }
-    }
-
-    /// <summary>
-    /// Drains the reservoir while milking, and takes <c>BreastSuper</c> back down to <c>Breast</c>
-    /// when it empties (SPEC003 FR-259, FR-262).
-    ///
-    /// Nothing fills it here. Milk comes from sexual hits taken while swollen, recorded where those
-    /// hits are already being watched.
+    /// Below the escalation nothing drains: the gauge is a one-way countdown towards it, and a
+    /// swelling that leaked back down would make the escalation something you could simply avoid by
+    /// waiting.
     /// </summary>
     [HideFromIl2Cpp]
     private void UpdateMilk(PlayerStatusManager status, double delta)
     {
         MilkReservoir? milk = PleasureRuntime.Milk;
         AbnormalList? abnormals = status.AbnormalList;
-        if (milk is null || abnormals is null || !milk.IsMilking)
+        if (milk is null || abnormals is null)
         {
-            PleasureRuntime.MilkingWasHit = false;
             return;
         }
 
@@ -1342,16 +1202,26 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        if (PleasureRuntime.MilkingWasHit || PleasureRuntime.IsBound
-            || PleasureRuntime.IsDefeatPerformance || !super)
+        if (!super)
         {
-            PleasureRuntime.MilkingWasHit = false;
-            if (milk.StopMilking())
-            {
-                PleasureRuntime.Log?.LogInfo(
-                    $"Milking was interrupted at {milk.Fill:P0}; the gauge fills again from here.");
-            }
+            _milkAnnounced = false;
+            return;
+        }
 
+        if (!_milkAnnounced)
+        {
+            _milkAnnounced = true;
+            PleasureRuntime.Log?.LogInfo(
+                $"BreastSuper has to be endured until the milk gauge empties. It is at "
+                + $"{milk.Fill:P0}, falling {PleasureRuntime.Profile.BreastSuper.MilkDrainPerSecond:P1} "
+                + "a second, and sexual attacks put it back up.");
+        }
+
+        // Not while held or downed. Recovering out of a hold would make being caught something to
+        // be waited out rather than escaped, and the attacks landing there are already filling the
+        // gauge from the other side.
+        if (PleasureRuntime.IsBound || PleasureRuntime.IsDefeatPerformance)
+        {
             return;
         }
 
@@ -1360,11 +1230,10 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        // Down to Breast, not to nothing. Milking out of the escalation still leaves the swelling,
-        // which is the same ladder the duration walks back down.
+        // Down to Breast, not to nothing. Working the escalation off still leaves the swelling;
+        // otherwise enduring would be better than being cured.
         abnormals.RemoveAbnormal(AbnormalType.BreastSuper);
         PortraitRefresh.Refresh("return to Breast", null);
-        PleasureRuntime.SuperTimer?.Stop();
         AbnormalManager? manager = ManagerList.Abnormal;
         AbnormalData? data = null;
         if (manager is not null && manager.TryGetData(AbnormalType.Breast, out data) && data is not null)
@@ -1373,8 +1242,9 @@ public sealed class PleasureObserver : MonoBehaviour
         }
 
         PleasureRuntime.Breasts?.Reset();
+        _milkAnnounced = false;
         BeginTransition();
-        PleasureRuntime.Log?.LogInfo("Milked dry: BreastSuper subsided to Breast.");
+        PleasureRuntime.Log?.LogInfo("The milk ran out: BreastSuper subsided to Breast.");
     }
 
     /// <summary>
@@ -1624,7 +1494,7 @@ public sealed class PleasureObserver : MonoBehaviour
     }
 
     /// <summary>
-    /// The milk reservoir, drawn whenever there is any (SPEC003 FR-261).
+    /// The milk reservoir, drawn whenever there is any (SPEC003 FR-264).
     ///
     /// Always on while it holds something, not only while milking: what it reports is how long the
     /// next milking will take, and that is worth knowing before deciding whether now is the moment.
@@ -1638,7 +1508,7 @@ public sealed class PleasureObserver : MonoBehaviour
         // the pleasure gauge already taught: a gauge that vanishes when it reads zero cannot be told
         // apart from one that is broken, and this one reads zero exactly when the player has just
         // been cured and wants to see that it worked.
-        if (milk is null || (!PleasureRuntime.IsSwollen && milk.Fill <= 0.001f && !milk.IsMilking))
+        if (milk is null || (!PleasureRuntime.IsSwollen && milk.Fill <= 0.001f))
         {
             return;
         }
@@ -1658,9 +1528,10 @@ public sealed class PleasureObserver : MonoBehaviour
         float diameter = radius * 2f;
         OverlayPainter.Draw(new Rect(x - radius, y - radius, diameter, diameter), _milkVessel, Color.white);
 
-        // While milking the vessel pulses, so the difference between "there is milk" and "it is
-        // being taken out" is visible without reading a number.
-        if (milk.IsMilking)
+        // While the escalation is worn the vessel pulses, so the difference between "this is
+        // filling towards the escalation" and "this is what has to be worked off" is visible
+        // without reading a number.
+        if (PleasureRuntime.PlayerAbnormals?.Has(AbnormalType.BreastSuper) == true)
         {
             var pulse = (float)((Math.Sin(Time.unscaledTimeAsDouble * 7d) + 1d) * 0.5d);
             OverlayPainter.Draw(

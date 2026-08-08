@@ -1,9 +1,9 @@
 namespace SiNiSistar2.Pleasure.Core.Tests;
 
 /// <summary>
-/// The reservoir is the road to the escalation and the way back out of it. It fills one way from
-/// sexual hits taken while swollen, and only milking the escalated swelling takes anything out
-/// (SPEC003 5.8, FR-259, FR-262).
+/// The reservoir is the road to the escalation and the way back out of it. It fills from sexual
+/// hits taken while swollen, and while the escalation is worn the body works it off by itself
+/// (SPEC003 5.8, FR-259, FR-264, FR-262).
 /// </summary>
 public sealed class MilkReservoirTests
 {
@@ -56,64 +56,64 @@ public sealed class MilkReservoirTests
     }
 
     [Fact]
-    public void MilkingDrainsItAndReportsWhenItEmpties()
+    public void ItDrainsAndReportsWhenItEmpties()
     {
         MilkReservoir milk = Reservoir(drain: 0.5f);
         milk.LoadFrom(1f);
-        Assert.True(milk.TryStartMilking());
 
         Assert.Equal(MilkOutcome.None, milk.Tick(1d));
         Assert.Equal(0.5f, milk.Fill, 4);
         Assert.Equal(MilkOutcome.Emptied, milk.Tick(1d));
         Assert.Equal(0f, milk.Fill);
-        Assert.False(milk.IsMilking);
     }
 
+    /// <summary>Once. The caller steps the swelling down on it, and twice would step it down twice.</summary>
     [Fact]
-    public void AnEmptyReservoirCannotBeMilked()
+    public void ItReportsEmptyOnlyOnTheTickThatEmptiedIt()
     {
-        Assert.False(Reservoir().TryStartMilking());
+        MilkReservoir milk = Reservoir(drain: 1f);
+        milk.LoadFrom(0.5f);
+
+        Assert.Equal(MilkOutcome.Emptied, milk.Tick(1d));
+        Assert.Equal(MilkOutcome.None, milk.Tick(1d));
     }
 
     [Fact]
-    public void ADrainOfZeroCannotMilk()
+    public void ADrainOfZeroLeavesNoWayOut()
     {
         MilkReservoir milk = Reservoir(drain: 0f);
         milk.LoadFrom(1f);
 
-        Assert.False(milk.CanMilk);
-        Assert.False(milk.TryStartMilking());
+        Assert.False(milk.CanDrain);
+        Assert.Equal(MilkOutcome.None, milk.Tick(1000d));
+        Assert.Equal(1f, milk.Fill);
     }
 
     /// <summary>
-    /// An interruption keeps what is left, and the gauge fills again from there. Being hit costs
-    /// the attempt, not the reservoir; the redo is the cost.
+    /// FR-264: hits fill it while the escalation is worn too. That is the penalty — the way out is
+    /// the gauge, so being hit while escalated puts the way out further away.
     /// </summary>
     [Fact]
-    public void StoppingKeepsWhatIsLeftAndLetsItFillAgain()
+    public void HitsFillItWhileItIsDraining()
     {
         MilkReservoir milk = Reservoir(perHit: 0.25f, drain: 0.5f);
         milk.LoadFrom(1f);
-        milk.TryStartMilking();
         milk.Tick(1d);
-
-        Assert.True(milk.StopMilking());
         Assert.Equal(0.5f, milk.Fill, 4);
 
         milk.AddFromHit();
         Assert.Equal(0.75f, milk.Fill, 4);
     }
 
-    /// <summary>Hits do not accumulate while it is being drained, or the two would fight.</summary>
+    /// <summary>A hit landing on a full gauge cannot push it past full, or the escalation would fire twice.</summary>
     [Fact]
-    public void HitsDoNotFillItWhileMilking()
+    public void AFullGaugeDoesNotOverfill()
     {
-        MilkReservoir milk = Reservoir(perHit: 0.5f, drain: 0.1f);
-        milk.LoadFrom(0.5f);
-        milk.TryStartMilking();
+        MilkReservoir milk = Reservoir(perHit: 0.5f);
+        milk.LoadFrom(1f);
 
         Assert.False(milk.AddFromHit());
-        Assert.Equal(0.5f, milk.Fill, 4);
+        Assert.Equal(1f, milk.Fill);
     }
 
     [Fact]
