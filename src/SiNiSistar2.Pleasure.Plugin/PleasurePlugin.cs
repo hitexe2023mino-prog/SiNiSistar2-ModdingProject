@@ -159,12 +159,14 @@ public sealed class PleasurePlugin : BasePlugin
             postfix: nameof(AbnormalLabelPatches.ExecutionOnePostfix));
         applied += Patch(
             "item-use",
-            AccessTools.Method(
-                typeof(InventoryHandler),
-                nameof(InventoryHandler.PlayItemEvent),
-                new[] { typeof(ItemID), typeof(System.Threading.CancellationToken) }),
+            FindMethod(typeof(InventoryHandler), nameof(InventoryHandler.PlayItemEvent), typeof(ItemID)),
             typeof(ItemUsePatches),
             postfix: nameof(ItemUsePatches.PlayItemEventPostfix));
+        applied += Patch(
+            "item-consumed",
+            FindMethod(typeof(InventoryHandler), nameof(InventoryHandler.RemoveItem), typeof(ItemID)),
+            typeof(ItemUsePatches),
+            postfix: nameof(ItemUsePatches.RemoveItemPostfix));
         applied += Patch(
             "save-point",
             AccessTools.Method(typeof(SavePointAsyncLabel), nameof(SavePointAsyncLabel.ExecutionOneAsync)),
@@ -439,6 +441,56 @@ public sealed class PleasurePlugin : BasePlugin
             Log.LogError($"Disabled: could not fingerprint the game build: {exception.Message}");
             return false;
         }
+    }
+
+    /// <summary>
+    /// Finds a method by name and its leading parameter types, ignoring the rest of the signature.
+    ///
+    /// Matching the full signature is what lost the item probe: the interop assembly declares the
+    /// trailing parameter as <c>Il2CppSystem.Threading.CancellationToken</c>, and asking for
+    /// <c>System.Threading.CancellationToken</c> found nothing. The leading parameters are the ones
+    /// that distinguish the overloads that matter here, and a name that resolves to several
+    /// candidates is reported rather than guessed at.
+    /// </summary>
+    private MethodBase? FindMethod(Type declaringType, string name, params Type[] leading)
+    {
+        MethodInfo[] candidates = AccessTools.GetDeclaredMethods(declaringType)
+            .Where(method => method.Name == name)
+            .Where(method =>
+            {
+                ParameterInfo[] parameters = method.GetParameters();
+                if (parameters.Length < leading.Length)
+                {
+                    return false;
+                }
+
+                for (var index = 0; index < leading.Length; index++)
+                {
+                    if (parameters[index].ParameterType != leading[index])
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            })
+            .ToArray();
+
+        if (candidates.Length == 1)
+        {
+            return candidates[0];
+        }
+
+        string available = string.Join(
+            "; ",
+            AccessTools.GetDeclaredMethods(declaringType)
+                .Where(method => method.Name == name)
+                .Select(method => $"({string.Join(", ", method.GetParameters().Select(p => p.ParameterType.FullName))})"));
+        Log.LogError(
+            $"{declaringType.Name}.{name} matched {candidates.Length} methods for leading parameters "
+            + $"({string.Join(", ", leading.Select(t => t.Name))}). Declared overloads: "
+            + $"{(available.Length == 0 ? "none" : available)}.");
+        return null;
     }
 
     private int Patch(string mechanism, MethodBase? target, Type owner, string postfix)

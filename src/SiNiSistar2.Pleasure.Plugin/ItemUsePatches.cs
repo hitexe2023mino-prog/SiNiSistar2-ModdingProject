@@ -25,4 +25,23 @@ internal static class ItemUsePatches
             PleasureRuntime.Log?.LogWarning($"The item use could not be observed: {exception.Message}");
         }
     }
+
+    /// <summary>
+    /// The item leaving the inventory, watched as well as the event that plays it.
+    ///
+    /// Two witnesses, because either one alone is ambiguous. <c>PlayItemEvent</c> returns a UniTask,
+    /// so a postfix on it fires when the task is created rather than when the effect lands, and an
+    /// item that is consumed without playing an event would not appear there at all.
+    /// </summary>
+    internal static void RemoveItemPostfix(ItemID __0, int __1)
+    {
+        try
+        {
+            PleasureRuntime.Log?.LogInfo($"[status] InventoryHandler.RemoveItem: {__1} x {__0}.");
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Log?.LogWarning($"The item removal could not be observed: {exception.Message}");
+        }
+    }
 }
