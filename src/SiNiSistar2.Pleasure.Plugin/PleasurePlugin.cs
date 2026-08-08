@@ -7,6 +7,7 @@ using SiNiSistar2.Damage;
 using SiNiSistar2.EventLabel;
 using SiNiSistar2.Obj;
 using SiNiSistar2.Pleasure.Core;
+using SiNiSistar2.UI.Gallery;
 
 namespace SiNiSistar2.Pleasure.Plugin;
 
@@ -62,7 +63,10 @@ public sealed class PleasurePlugin : BasePlugin
             return;
         }
 
-        PleasureValidation validation = PleasureProfileFactory.Create(options, KnownAbnormalNames());
+        EnemyAttackCatalog enemies = LoadEnemyCatalog(options);
+
+        PleasureValidation validation = PleasureProfileFactory.Create(
+            options, KnownAbnormalNames(), enemies);
         foreach (string error in validation.Errors)
         {
             Log.LogError(error);
@@ -138,6 +142,11 @@ public sealed class PleasurePlugin : BasePlugin
                 + "cross, drag moves it, the wheel resizes it, Enter saves and Escape cancels.");
         }
 
+        Log.LogInfo(
+            "Press F10 in game to say which enemies make sexual attacks while they hold you: the arrow "
+            + "keys or the wheel move through the list, Space or a click cycles Auto/Sexual/NonSexual, "
+            + "Enter saves and Escape cancels.");
+
         if (profile.ProbeMeasurements)
         {
             Log.LogInfo(
@@ -150,6 +159,7 @@ public sealed class PleasurePlugin : BasePlugin
     public override bool Unload()
     {
         _observer?.Shutdown();
+        PleasureRuntime.SaveEnemies("unload");
 
         foreach (string failure in PleasureRuntime.Ledger.ReleaseAll())
         {
@@ -197,12 +207,14 @@ public sealed class PleasurePlugin : BasePlugin
             "Pleasure",
             "SexualEnemyIds",
             string.Join(",", SexualAbnormalDefaults.SexualEnemyIds),
-            "GalleryEnemyIDs whose every attack is sexual, whatever it inflicts.");
+            "Seed only. The enemy classification now lives in "
+            + "config/community.sinisistar2.pleasure/enemy-attacks.json, which this list fills in "
+            + "the first time that file is created. Edit it in game with F10.");
         ConfigEntry<string> nonSexualEnemies = Config.Bind(
             "Pleasure",
             "NonSexualEnemyIds",
             string.Empty,
-            "GalleryEnemyIDs never treated as sexual. Takes priority over everything else.");
+            "Seed only, like SexualEnemyIds. Once the catalogue file exists it is the authority.");
         ConfigEntry<string> sexualSenders = Config.Bind(
             "Pleasure",
             "SexualSenderNames",
@@ -372,6 +384,71 @@ public sealed class PleasurePlugin : BasePlugin
             return 0;
         }
     }
+
+    /// <summary>
+    /// Reads the enemy classification catalogue, creating it on a first run (SPEC003 FR-235).
+    ///
+    /// Every id the game defines is written into it, not only the ones met so far. The editor is
+    /// only useful if the enemy about to be faced is already listed, and an enemy that has to be
+    /// survived once before it can be classified is the wrong way round.
+    /// </summary>
+    private EnemyAttackCatalog LoadEnemyCatalog(PleasureOptions options)
+    {
+        var store = new EnemyAttackCatalogStore(
+            Path.Combine(Paths.ConfigPath, PluginGuid));
+        EnemyAttackCatalogLoad load = store.Load();
+
+        if (load.Notice is not null)
+        {
+            Log.LogWarning($"The enemy catalogue {load.Notice}");
+        }
+
+        EnemyAttackCatalog catalog = load.Catalog;
+        bool isNew = catalog.Count == 0 && !load.Locked;
+        if (isNew)
+        {
+            catalog.SeedFrom(SplitList(options.SexualEnemyIds), SplitList(options.NonSexualEnemyIds));
+        }
+
+        int added = catalog.AddMissing(KnownEnemyIds());
+        PleasureRuntime.EnemyStore = store;
+        PleasureRuntime.Enemies = catalog;
+
+        if (!load.Locked)
+        {
+            PleasureRuntime.SaveEnemies(isNew ? "created" : $"{added} new enemy id(s)");
+        }
+
+        Log.LogInfo(
+            $"Enemy catalogue: {catalog.Summary()}, at '{store.FilePath}'. Press F10 in game to edit it.");
+        return catalog;
+    }
+
+    /// <summary>
+    /// Every <c>GalleryEnemyID</c> the build defines. An empty answer is not fatal: the catalogue
+    /// then fills in as enemies are met, which is worse but still works.
+    /// </summary>
+    private IReadOnlyCollection<string> KnownEnemyIds()
+    {
+        try
+        {
+            return Enum.GetNames(typeof(GalleryEnemyID));
+        }
+        catch (Exception exception)
+        {
+            Log.LogWarning(
+                $"Could not enumerate GalleryEnemyID: {exception.Message}. The enemy catalogue will "
+                + "list only enemies that have been met.");
+            return Array.Empty<string>();
+        }
+    }
+
+    private static string[] SplitList(string? raw) =>
+        (raw ?? string.Empty)
+            .Split(',')
+            .Select(x => x.Trim())
+            .Where(x => x.Length > 0)
+            .ToArray();
 
     private IReadOnlyCollection<string> KnownAbnormalNames()
     {

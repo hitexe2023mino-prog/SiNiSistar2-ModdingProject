@@ -124,9 +124,12 @@ BepInEx (IL2CPP)
       ├ PleasurePlugin (BasePlugin)          設定読込、パッチ適用、巻き戻し
       ├ Harmonyパッチ群                      ゲームへの介入点
       ├ PleasureOverlay (MonoBehaviour)      快楽ゲージと絶頂演出の描画
+      ├ EnemyCatalogEditor                   敵別分類のゲーム内編集画面（F10）
       └ SiNiSistar2.Pleasure.Core            純粋ロジック（ゲーム参照なし・単体テスト対象）
           ├ PleasureProfile                  設定の検証済み表現
           ├ SexualAttackClassifier           攻撃の性的／非性的判別
+          ├ EnemyAttackCatalog               敵別分類の保持と編集
+          ├ EnemyAttackCatalogStore          分類カタログの読み書きと検証
           ├ PleasureMeter                    快楽の上昇・減衰・上限到達
           ├ ClimaxLedger                     絶頂回数、絶頂限界、リセット
           ├ SensitivityTrack                 感度の単調蓄積
@@ -224,16 +227,20 @@ OnAfterSaveMainSaveData  ──> スロットキーを決定 ──> 随伴フ�
 
 ### 5.3 性的攻撃の判別
 
+敵ごとの宣言は、設定ファイルとは別の**分類カタログ**（6.2）に持つ。宣言は `Auto`・`Sexual`・`NonSexual` の3値であり、既定はすべて `Auto` である。
+
 判別は次の順で行い、最初に一致した規則を採用する。
 
-1. 拘束相手の `GalleryEnemyID` が `NonSexualEnemyIds` に含まれる場合、非性的攻撃とする。
-2. 拘束相手の `GalleryEnemyID` が `SexualEnemyIds` に含まれる場合、性的攻撃とする。
+1. 拘束相手の `GalleryEnemyID` の宣言が `NonSexual` の場合、非性的攻撃とする。
+2. 拘束相手の `GalleryEnemyID` の宣言が `Sexual` の場合、性的攻撃とする。
 3. 受けたダメージの `DamageParameter.m_AbnormalTypes` が `SexualAbnormalTypes` のいずれかを含む場合、性的攻撃とする。
 4. いずれにも当たらない場合、非性的攻撃とする。
 
+- 宣言が `Auto` の敵は規則1と2に当たらず、規則3の状態異常判定へ進む。すなわち `Auto` は「ゲーム側の情報に任せる」であって「非性的」ではない。
 - 既定は「判別できなければ非性的」とする。捕食・暴力を行う敵で快楽が上昇することは、要求に対する明確な誤りであり、無反応より重い。
 - 拘束相手を特定できない場合、規則1と2を適用せず規則3へ進む。
 - 判別結果は被弾ごとに評価する。同じ敵でも攻撃によって性的・非性的が分かれることを許す。
+- 分類器はカタログを参照で保持する。編集は次の被弾から効き、再起動を要しない（DEC-212）。
 
 ### 5.4 絶頂
 
@@ -306,6 +313,20 @@ OnAfterSaveMainSaveData  ──> スロットキーを決定 ──> 随伴フ�
 - 解除に失敗した介入は、対象と理由を記録する。
 - 全機構を無効化した設定で起動した場合、Harmonyパッチを適用せず、随伴ファイルも書かない。
 
+### 5.11 分類カタログの編集画面
+
+拘束中の敵が性的攻撃を行うかどうかは、画面に映っているものを見て下す判断である。その判断ができる唯一の場所はその敵の前であり、セッションの合間に記憶を頼りにテキストを編集する形では正しく下せない。したがってMODはゲーム内に編集画面を持つ。
+
+- `F10` で開閉する。ゲームプレイ中、拘束中、タイトル画面のいずれでも開ける。
+- 一覧はゲームが定義する `GalleryEnemyID` の全件を対象とし、**拘束された経験のある敵を先頭**に、その中は識別子順に並べる。
+- 上下キーとホイールで移動し、`Space`・左右キー・クリックで `Auto` → `Sexual` → `NonSexual` → `Auto` と巡回する。
+- `Tab` は「拘束された経験のある敵のみ」と「全件」を切り替える。
+- `Enter` で保存して閉じる。`Escape` は開いた時点の内容へ戻して閉じる。
+- 現在プレイヤーを拘束している敵を画面上部に表示し、開いた時点でその行を選択する。
+- 描画は本MODのオーバーレイと同じ即時モードGUIで行い、ゲームのUI階層へオブジェクトを追加しない。`Time.timeScale` を変更せず、ゲームを停止させない。
+
+編集画面はゲームの入力を奪わない。IMGUIのイベント消費はIMGUIの内部にとどまり、ゲームは独自に入力を読むため、画面を開いている間のクリックやキー入力はゲーム側にも届く。したがって拘束中に開く場合は、キーボード操作のみで完結できる経路（上下キーと `Space`）を用意する。
+
 ## 6. 設定
 
 BepInEx の `ConfigEntry` として `BepInEx/config/community.sinisistar2.pleasure.cfg` に生成する。
@@ -317,8 +338,8 @@ BepInEx の `ConfigEntry` として `BepInEx/config/community.sinisistar2.pleasu
 | `Pleasure` | `PleasureGainPerHit` | float | 実測後に確定 | 性的攻撃1回あたりの快楽上昇量。 |
 | `Pleasure` | `PleasureDecayPerSecond` | float | 実測後に確定 | 拘束外での毎秒の減衰量。 |
 | `Pleasure` | `SexualAbnormalTypes` | string | 6.1参照 | 性的攻撃と判定する状態異常名のカンマ区切り。 |
-| `Pleasure` | `SexualEnemyIds` | string | 空 | 強制的に性的とみなす `GalleryEnemyID` のカンマ区切り。 |
-| `Pleasure` | `NonSexualEnemyIds` | string | 空 | 強制的に非性的とみなす `GalleryEnemyID`。最優先で適用する。 |
+| `Pleasure` | `SexualEnemyIds` | string | 6.2参照 | **種として使うのみ。** 分類カタログを新規作成するときに `Sexual` として書き込む `GalleryEnemyID` のカンマ区切り。カタログが存在する場合は参照しない。 |
+| `Pleasure` | `NonSexualEnemyIds` | string | 空 | 種として使うのみ。新規作成時に `NonSexual` として書き込む `GalleryEnemyID`。 |
 | `Climax` | `ClimaxOverlaySeconds` | float | `1.5` | 絶頂演出の長さ。 |
 | `Climax` | `ClimaxLimitBase` | int | 実測後に確定 | 絶頂限界の基礎値。 |
 | `Climax` | `ClimaxLimitPerDurability` | float | 実測後に確定 | 耐久の最大値1あたりの限界増分。 |
@@ -341,6 +362,33 @@ BepInEx の `ConfigEntry` として `BepInEx/config/community.sinisistar2.pleasu
 `Lustfull`、`Lustfull_Forever`、`LustMarkCurse`、`Defilement`、`Semen`、`Semen_mucus`、`Pregnant`、`Pregnant_Demi`、`Breast`、`BreastSuper`、`Milk`、`WetNurse`、`MindControl`、`MindIntegration`、`Infertility`、`InfertilityBlessing`
 
 SPEC002 の快楽系集合とは目的が異なるため一致させない。SPEC002 は「抵抗の意思が損なわれる状態」を、本仕様は「性的な行為を受けたことを示す状態」を指す。`Defilement` は SPEC002 では意図的に除外されるが、本仕様では性的攻撃の指標として含める。
+
+### 6.2 敵別分類カタログ
+
+敵ごとの宣言は `BepInEx/config/community.sinisistar2.pleasure/enemy-attacks.json` に持つ。`ConfigEntry` のカンマ区切り文字列ではなくファイルとする理由は3つある。対象が108件あり1行に収まらないこと、判断が敵ごとに独立していて差分として読めるべきこと、そしてゲーム内の編集画面が書き戻す先を必要とすることである。
+
+```json
+{
+  "schemaVersion": 1,
+  "note": "...",
+  "enemies": [
+    { "id": "GaID_PictureFrameBig", "kind": "Sexual", "seen": true, "note": "..." },
+    { "id": "GaID_MeatWormVore", "kind": "Auto", "seen": false }
+  ]
+}
+```
+
+| フィールド | 意味 |
+|---|---|
+| `id` | `GalleryEnemyID` の列挙子名。 |
+| `kind` | `Auto`・`Sexual`・`NonSexual`。認識できない語は `Auto` として扱う。 |
+| `seen` | この敵に拘束された経験があるか。編集画面の並び順にのみ使う。判別には影響しない。 |
+| `note` | 由来の記録。MODは読み書きするだけで解釈しない。 |
+
+- 起動時にファイルが無ければ、`SexualEnemyIds` / `NonSexualEnemyIds` を種として作成する。既存の設定が更新で失われないようにするためである。
+- 起動時に、ゲームが定義する `GalleryEnemyID` のうちファイルに無いものを `Auto` として追加する。遭遇前の敵を分類できるようにするためである。
+- 書き込みは原子的に行う。読めないファイルと非対応スキーマ版のファイルは読まず、上書きもしない。破損したファイルは退避して新規から開始する。随伴ファイル（5.9）と同じ規律とする。
+- 書き込みの契機は、初回の拘束、編集画面の保存、プラグインの終了の3つとする。被弾ごとに書かない。
 
 ## 7. 他MODとの互換性
 
@@ -414,6 +462,11 @@ SPEC002 の快楽系集合とは目的が異なるため一致させない。SPE
 | FR-232 | 快楽の増減、絶頂の判定、限界の算出、感度の蓄積、随伴ファイルの直列化は、ゲームへ依存しない層に置き、単体テストで検証可能でなければならない。 | Must | 実機でしか試せない範囲の縮小（4.1） |
 | FR-233 | 実測で確定していない調整値の既定値は、挙動を変更しない値でなければならない。`SuppressHp0WhileBound` は例外とし、既定で有効とする。 | Must | 未検証の値でゲームを壊さない |
 | FR-234 | `Enabled` が偽の場合、MODはHarmonyパッチを適用してはならず、随伴ファイルを書いてはならない。 | Must | 完全な無効化の保証 |
+| FR-235 | MODは敵別の性的・非性的の宣言を、設定ファイルとは独立した分類カタログファイルに保持しなければならない。カタログが存在しない場合、既存の `SexualEnemyIds` / `NonSexualEnemyIds` を種として作成しなければならない。 | Must | 外部ファイル化（5.3、6.2）、更新時の設定喪失の防止 |
+| FR-236 | MODはゲーム内から呼び出せる編集画面を提供し、敵ごとに `Auto`・`Sexual`・`NonSexual` を切り替えられなければならない。変更は再起動を要さず、次の被弾の判別から反映されなければならない。 | Must | 判断を対象の前で下せること（5.11） |
+| FR-237 | 編集画面はゲームが定義する `GalleryEnemyID` の全件を列挙し、拘束された経験のある敵を先頭に並べなければならない。 | Must | 遭遇前の分類（5.11） |
+| FR-238 | 編集画面は保存と取り消しを区別しなければならない。取り消したとき、開いた時点の宣言へ戻さなければならない。 | Must | 誤操作からの復帰 |
+| FR-239 | 分類カタログファイルの書き込みは原子的でなければならず、非対応スキーマ版のファイルを読んでも上書きしてもならない。読み書きに失敗しても、MODはゲームと他の機構を継続させなければならない。 | Must | 手作業の判断の保護、障害分離 |
 
 ## 9. エラーと復旧
 
@@ -499,6 +552,11 @@ SPEC002 の快楽系集合とは目的が異なるため一致させない。SPE
 | AC-226 | FR-232 | Given `Core` の単体テスト / When 快楽の増減、絶頂判定、限界算出、感度の単調性、随伴ファイルの直列化を検証する / Then ゲームを起動せずに合否が判定できる |
 | AC-227 | FR-233 | Given 実測前の既定値のまま / When プレイする / Then 快楽が上昇せず絶頂も起きない。HP0抑止だけが有効である |
 | AC-228 | FR-234 | Given `Enabled = false` / When 起動する / Then Harmonyパッチが1件も適用されず、随伴ファイルが書かれない |
+| AC-230 | FR-235 | Given カタログファイルが存在しない構成で `SexualEnemyIds` に値がある / When 起動する / Then カタログが作成され、当該IDが `Sexual` として現れる。Given カタログが存在する / When `SexualEnemyIds` を変更して起動する / Then カタログの内容が変化しない |
+| AC-231 | FR-236 | Given `Auto` の敵に拘束され快楽が上昇しない / When `F10` を押し当該敵を `Sexual` にして保存し、拘束を継続する / Then 再起動せずに次の被弾から快楽が上昇する |
+| AC-232 | FR-237 | Given 一度も拘束されたことのない敵 / When 編集画面を開き全件表示に切り替える / Then 当該敵が一覧に現れ分類できる。Given 拘束された経験のある敵がある / Then それらが一覧の先頭に並ぶ |
+| AC-233 | FR-238 | Given 編集画面で複数の敵の宣言を変更する / When `Escape` で閉じる / Then すべて開いた時点の値へ戻り、ファイルも変化しない |
+| AC-234 | FR-239 | Given 非対応スキーマ版のカタログファイル / When 起動して編集を保存する / Then ファイルが上書きされず、拒否が記録され、ゲームと他の機構が継続する |
 
 ## 12. リポジトリ成果物と運用
 
@@ -510,6 +568,7 @@ SPEC002 の快楽系集合とは目的が異なるため一致させない。SPE
 | 実行プラグイン | `BepInEx/plugins/community.sinisistar2.pleasure` |
 | 設定ファイル（追跡しない） | `BepInEx/config/community.sinisistar2.pleasure.cfg` |
 | 随伴ファイル（追跡しない） | `BepInEx/data/community.sinisistar2.pleasure/{slotKey}.json` |
+| 敵別分類カタログ | `BepInEx/config/community.sinisistar2.pleasure/enemy-attacks.json` |
 | 本仕様 | `docs/specifications/SPEC003.md` |
 | 実装トレーサビリティ | `docs/implementation/SPEC003-traceability.md` |
 | 実機テストシナリオ | `docs/testing/SPEC003-test-scenarios.md` |
@@ -525,7 +584,7 @@ SPEC002 の快楽系集合とは目的が異なるため一致させない。SPE
 
 ### 12.2 ロールバック
 
-`BepInEx/plugins/community.sinisistar2.pleasure` を削除する。または `Enabled = false` を設定する。ゲームのセーブデータとアセットへの変更は残らない。随伴ファイルは残るため、再導入すれば続きから再開できる。不要なら `BepInEx/data/community.sinisistar2.pleasure` を削除する。
+`BepInEx/plugins/community.sinisistar2.pleasure` を削除する。または `Enabled = false` を設定する。ゲームのセーブデータとアセットへの変更は残らない。随伴ファイルは残るため、再導入すれば続きから再開できる。不要なら `BepInEx/data/community.sinisistar2.pleasure` を削除する。 敵別分類カタログは `BepInEx/config/community.sinisistar2.pleasure` に残る。
 
 ## 13. 設計判断
 
@@ -541,6 +600,7 @@ SPEC002 の快楽系集合とは目的が異なるため一致させない。SPE
 | DEC-208 | 感度に減少経路を一切設けない。 | 要求が明示的に一方通行を求めている。治療や休息で下がる逃げ道を作ると、蓄積そのものの意味が薄れる。上限は設けるが、これは成長の頭打ちであって減少ではない。 | 高難度の治療手段を用意する、時間経過で微減させる |
 | DEC-209 | 絶頂限界の到達を、HP0抑止の寄与の解除として表現し、ゲームオーバー処理そのものは呼ばない。 | ゲームオーバーの発火は復帰処理、ペナルティ、セーブ、演出へ波及する。MODが自前で呼ぶと、そのすべてを正しく再現する責任を負い、誤れば進行不能やセーブ破損を招く。抑止を外すだけなら、以降はゲーム自身が普段どおりの経路を走る。MODが増やしたのは「いつHPが0へ到達し得るか」という条件だけであり、到達後の処理は一切変えていない。SPEC001の `game-over` トリガーが従来どおり成立するのも同じ理由による。 | `GameOverLabel.ExecutionOne` を自前の `GameOverParameter` で呼ぶ、`Lelia.RequestCommonDead` を立てる |
 | DEC-210 | 性的とみなす状態異常の集合を、SPEC002の快楽系集合と一致させない。 | 目的が異なる。SPEC002は「抵抗の意思が損なわれる状態」を、本仕様は「性的な行為を受けたことを示す状態」を指す。`Defilement` はSPEC002では穢れ軸との二重作用を避けるため意図的に除外されるが、本仕様では性的攻撃の最も直接的な指標である。 | 両仕様で同じ集合を共有する、SPEC002から参照する |
+| DEC-212 | 敵別の分類を設定ファイルの文字列から独立したカタログファイルへ移し、編集手段をゲーム内に置く。分類器はカタログを参照で保持する。 | 対象が108件あり、カンマ区切りの1行では読むことも差分を取ることもできない。さらに、その敵の攻撃が性的かどうかは画面に映っているものを見て下す判断であり、ゲームを終了してテキストを編集し再起動する経路では、判断の対象が目の前にないまま記憶で決めることになる。参照で保持するのは、値を複製すると編集が次回起動まで効かず、ゲーム内編集の意味が失われるためである。 | `ConfigEntry` の文字列を増やす、外部エディタ用のCSVのみを用意する、編集のたびにプロファイルを再構築する |
 | DEC-211 | 本MODを第3のプラグインとして分離する。 | SPEC002は「セーブを書き換えない」を要件として固定しており、機構も難易度の強化に閉じている。本MODは新しいサブシステムであり、随伴ファイルという別の永続化責任を持つ。分離すれば片方だけを導入でき、一方の障害が他方を止めない。 | SPEC002のプラグインへ同居させる、SPEC002を拡張する |
 
 ## 14. 前提、延期事項、残存リスク
@@ -597,6 +657,7 @@ SPEC002 の快楽系集合とは目的が異なるため一致させない。SPE
 | A-8 | `SaveData` のセーブ・ロードSubjectの発火順序と、実際のファイル入出力との前後関係 | 5.9、FR-222 |
 | A-9 | `MainSaveData.LoadedFileName` がオートセーブと手動セーブで安定しているか | 5.9のスロットキー |
 | A-10 | `AbnormalType.BreastSuper` を通常付与したときの挙動。演出、UI、セリフ、解除可否 | 5.8、FR-221 |
+| A-13 | 拘束中に編集画面を開いたときの入力の干渉。キー入力とクリックがゲーム側へ同時に届くことによる実害の有無 | 5.11、FR-236 |
 | A-11 | 絶頂演出のオーバーレイがゲームのUIやSPEC001のホールドUIと競合しないか | 5.4、14.3 |
 | A-12 | 快楽の上昇量、減衰量、感度の増分、絶頂限界の基礎値の実用域 | 6章の「実測後に確定」全項目 |
 

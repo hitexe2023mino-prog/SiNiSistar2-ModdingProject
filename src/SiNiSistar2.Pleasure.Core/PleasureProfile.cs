@@ -119,7 +119,8 @@ public static class PleasureProfileFactory
     /// </summary>
     public static PleasureValidation Create(
         PleasureOptions options,
-        IReadOnlyCollection<string> knownAbnormalNames)
+        IReadOnlyCollection<string> knownAbnormalNames,
+        IEnemyAttackOverrides? enemies = null)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -135,7 +136,7 @@ public static class PleasureProfileFactory
         ClimaxTuning climax = BuildClimax(options, errors, warnings);
         SensitivityTuning sensitivity = BuildSensitivity(options, errors);
         BreastSuperTuning breastSuper = BuildBreastSuper(options, errors, warnings);
-        SexualAttackClassifier classifier = BuildClassifier(options, knownAbnormalNames, notices);
+        SexualAttackClassifier classifier = BuildClassifier(options, knownAbnormalNames, enemies, notices);
 
         var profile = new PleasureProfile(
             true,
@@ -311,6 +312,7 @@ public static class PleasureProfileFactory
     private static SexualAttackClassifier BuildClassifier(
         PleasureOptions options,
         IReadOnlyCollection<string> known,
+        IEnemyAttackOverrides? enemies,
         List<string> notices)
     {
         var knownSet = new HashSet<string>(known, StringComparer.Ordinal);
@@ -335,10 +337,17 @@ public static class PleasureProfileFactory
                 + "The remaining names stay in effect.");
         }
 
+        // The catalogue file is the authority when there is one. The config lists survive only as
+        // the seed for a catalogue being created for the first time, so an existing configuration
+        // is not lost on upgrade (FR-235).
+        IEnemyAttackOverrides overrides = enemies
+            ?? new FixedEnemyAttackOverrides(
+                Split(options.SexualEnemyIds),
+                Split(options.NonSexualEnemyIds));
+
         return new SexualAttackClassifier(
             accepted,
-            Split(options.SexualEnemyIds),
-            Split(options.NonSexualEnemyIds),
+            overrides,
             Split(options.SexualSenderNames),
             Split(options.NonSexualSenderNames));
     }

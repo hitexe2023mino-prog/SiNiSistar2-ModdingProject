@@ -24,23 +24,40 @@ public enum AttackKind
 public sealed class SexualAttackClassifier
 {
     private readonly HashSet<string> _sexualStatuses;
-    private readonly HashSet<string> _sexualEnemies;
-    private readonly HashSet<string> _nonSexualEnemies;
+    private readonly IEnemyAttackOverrides _enemies;
     private readonly string[] _sexualSenders;
     private readonly string[] _nonSexualSenders;
 
+    /// <summary>
+    /// The per-enemy decisions are held by reference rather than copied. They live in a file the
+    /// player edits from inside the game, and a copy would mean a change only took effect after a
+    /// restart — which is the opposite of what an in-game editor is for (FR-236).
+    /// </summary>
+    public SexualAttackClassifier(
+        IReadOnlyCollection<string> sexualStatuses,
+        IEnemyAttackOverrides enemies,
+        IReadOnlyCollection<string>? sexualSenders = null,
+        IReadOnlyCollection<string>? nonSexualSenders = null)
+    {
+        _sexualStatuses = new HashSet<string>(sexualStatuses, StringComparer.Ordinal);
+        _enemies = enemies;
+        _sexualSenders = (sexualSenders ?? Array.Empty<string>()).ToArray();
+        _nonSexualSenders = (nonSexualSenders ?? Array.Empty<string>()).ToArray();
+    }
+
+    /// <summary>A classifier over a fixed pair of lists, for tests and for the inactive profile.</summary>
     public SexualAttackClassifier(
         IReadOnlyCollection<string> sexualStatuses,
         IReadOnlyCollection<string> sexualEnemies,
         IReadOnlyCollection<string> nonSexualEnemies,
         IReadOnlyCollection<string>? sexualSenders = null,
         IReadOnlyCollection<string>? nonSexualSenders = null)
+        : this(
+            sexualStatuses,
+            new FixedEnemyAttackOverrides(sexualEnemies, nonSexualEnemies),
+            sexualSenders,
+            nonSexualSenders)
     {
-        _sexualStatuses = new HashSet<string>(sexualStatuses, StringComparer.Ordinal);
-        _sexualEnemies = new HashSet<string>(sexualEnemies, StringComparer.Ordinal);
-        _nonSexualEnemies = new HashSet<string>(nonSexualEnemies, StringComparer.Ordinal);
-        _sexualSenders = (sexualSenders ?? Array.Empty<string>()).ToArray();
-        _nonSexualSenders = (nonSexualSenders ?? Array.Empty<string>()).ToArray();
     }
 
     /// <summary>
@@ -53,7 +70,11 @@ public sealed class SexualAttackClassifier
         string? senderName,
         IReadOnlyCollection<string>? appliedStatuses)
     {
-        if (!string.IsNullOrEmpty(binderEnemyId) && _nonSexualEnemies.Contains(binderEnemyId!))
+        EnemyAttackSetting declared = string.IsNullOrEmpty(binderEnemyId)
+            ? EnemyAttackSetting.Auto
+            : _enemies.SettingFor(binderEnemyId!);
+
+        if (declared == EnemyAttackSetting.NonSexual)
         {
             return AttackKind.NonSexual;
         }
@@ -63,7 +84,7 @@ public sealed class SexualAttackClassifier
             return AttackKind.NonSexual;
         }
 
-        if (!string.IsNullOrEmpty(binderEnemyId) && _sexualEnemies.Contains(binderEnemyId!))
+        if (declared == EnemyAttackSetting.Sexual)
         {
             return AttackKind.Sexual;
         }
@@ -107,5 +128,34 @@ public sealed class SexualAttackClassifier
         }
 
         return false;
+    }
+}
+
+/// <summary>
+/// The two comma-separated lists behaving as a set of per-enemy decisions. Kept so a classifier can
+/// still be built without a catalogue file — the inactive profile has no file, and a test should not
+/// need one to state which enemy it means.
+/// </summary>
+internal sealed class FixedEnemyAttackOverrides : IEnemyAttackOverrides
+{
+    private readonly HashSet<string> _sexual;
+    private readonly HashSet<string> _nonSexual;
+
+    internal FixedEnemyAttackOverrides(
+        IReadOnlyCollection<string> sexual,
+        IReadOnlyCollection<string> nonSexual)
+    {
+        _sexual = new HashSet<string>(sexual, StringComparer.Ordinal);
+        _nonSexual = new HashSet<string>(nonSexual, StringComparer.Ordinal);
+    }
+
+    public EnemyAttackSetting SettingFor(string enemyId)
+    {
+        if (_nonSexual.Contains(enemyId))
+        {
+            return EnemyAttackSetting.NonSexual;
+        }
+
+        return _sexual.Contains(enemyId) ? EnemyAttackSetting.Sexual : EnemyAttackSetting.Auto;
     }
 }

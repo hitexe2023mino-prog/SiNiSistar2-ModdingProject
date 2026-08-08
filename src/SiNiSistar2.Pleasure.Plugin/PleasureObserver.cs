@@ -20,7 +20,6 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _faultLogged;
     private bool _selfChecked;
     private bool _drawFaultLogged;
-    private bool _labelUnavailable;
     private bool _gameplayActive;
     private bool _wasDead;
     private bool _editing;
@@ -28,7 +27,6 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _editingCross;
     private Texture2D? _liquid;
     private Texture2D? _cross;
-    private Texture2D? _haze;
     private float _liquidFill = -1f;
     private float _liquidPhase;
     private double _liquidBuiltAt;
@@ -39,6 +37,7 @@ public sealed class PleasureObserver : MonoBehaviour
     private string? _lastSaveFile;
     private double _lastFrameTime;
     private float _lastMaxDurability;
+    private readonly EnemyCatalogEditor _enemyEditor = new();
 
 
     public PleasureObserver(IntPtr pointer)
@@ -74,26 +73,20 @@ public sealed class PleasureObserver : MonoBehaviour
     /// </summary>
     public void OnGUI()
     {
-        if (!PleasureRuntime.Profile.ShowOverlay)
-        {
-            return;
-        }
+        // The enemy screen is not part of the overlay and is reachable whether or not the overlay
+        // is drawn: it says which enemies raise pleasure at all, which matters even to someone who
+        // has turned the gauge off.
+        HandleEnemyEditor();
 
-        HandleLayoutEditor();
-
-        // Only while gameplay is actually running. The title screen, the loading screens and the
-        // menus have no player to report on, and a gauge floating over them is plainly wrong.
-        // While the layout is being edited it is drawn regardless, so there is something to aim.
-        if (!_gameplayActive && !_editing)
+        if (PleasureRuntime.Profile.ShowOverlay && !_enemyEditor.IsOpen)
         {
-            return;
+            HandleLayoutEditor();
         }
 
         try
         {
-            DrawGauge();
-            DrawClimaxFlash();
-            DrawEditorChrome();
+            DrawOverlay();
+            _enemyEditor.Draw();
             _drawFaultLogged = false;
         }
         catch (Exception exception)
@@ -109,12 +102,33 @@ public sealed class PleasureObserver : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// The gauge, the cross and the climax flash.
+    ///
+    /// Only while gameplay is actually running. The title screen, the loading screens and the menus
+    /// have no player to report on, and a gauge floating over them is plainly wrong. While the
+    /// layout is being edited it is drawn regardless, so there is something to aim.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void DrawOverlay()
+    {
+        if (!PleasureRuntime.Profile.ShowOverlay || (!_gameplayActive && !_editing))
+        {
+            return;
+        }
+
+        DrawGauge();
+        DrawClimaxFlash();
+        DrawEditorChrome();
+    }
+
     public void OnApplicationQuit() => Shutdown();
 
     [HideFromIl2Cpp]
     public void Shutdown()
     {
         Suspend();
+        PleasureRuntime.SaveEnemies("shutdown");
         PleasureRuntime.Reset();
     }
 
@@ -160,6 +174,7 @@ public sealed class PleasureObserver : MonoBehaviour
         _wasDead = dead;
         _lastMaxDurability = status.m_MaxDurability;
         PleasureRuntime.BinderEnemyId = ResolveBinderId(lelia);
+        RecordSighting(PleasureRuntime.BinderEnemyId);
 
         _gameplayActive = true;
         ReportSelfCheck(status);
@@ -368,7 +383,7 @@ public sealed class PleasureObserver : MonoBehaviour
         if (_liquid is not null)
         {
             float diameter = radius * 2f;
-            Draw(new Rect(gaugeX - radius, gaugeY - radius, diameter, diameter), _liquid, Color.white);
+            OverlayPainter.Draw(new Rect(gaugeX - radius, gaugeY - radius, diameter, diameter), _liquid, Color.white);
         }
 
         if (layout.ShowCross)
@@ -381,7 +396,7 @@ public sealed class PleasureObserver : MonoBehaviour
                 float crossWidth = crossHeight * 0.66f;
                 float crossX = Screen.width * cross.CentreX;
                 float crossY = height - (height * cross.BottomOffset);
-                Draw(
+                OverlayPainter.Draw(
                     new Rect(crossX - (crossWidth / 2f), crossY - (crossHeight / 2f), crossWidth, crossHeight),
                     _cross,
                     Color.white);
@@ -406,7 +421,6 @@ public sealed class PleasureObserver : MonoBehaviour
     [HideFromIl2Cpp]
     private void DrawSelectionMarker(float radius, float gaugeX, float gaugeY, float height, PleasureOverlayLayout layout)
     {
-        _haze ??= PleasureArt.Solid(Color.white);
 
         float x;
         float y;
@@ -426,10 +440,60 @@ public sealed class PleasureObserver : MonoBehaviour
 
         var tint = new Color(1f, 0.85f, 0.35f, 0.85f);
         const float edge = 2f;
-        Draw(new Rect(x - half, y - half, half * 2f, edge), _haze, tint);
-        Draw(new Rect(x - half, y + half - edge, half * 2f, edge), _haze, tint);
-        Draw(new Rect(x - half, y - half, edge, half * 2f), _haze, tint);
-        Draw(new Rect(x + half - edge, y - half, edge, half * 2f), _haze, tint);
+        OverlayPainter.Draw(new Rect(x - half, y - half, half * 2f, edge), OverlayPainter.Solid, tint);
+        OverlayPainter.Draw(new Rect(x - half, y + half - edge, half * 2f, edge), OverlayPainter.Solid, tint);
+        OverlayPainter.Draw(new Rect(x - half, y - half, edge, half * 2f), OverlayPainter.Solid, tint);
+        OverlayPainter.Draw(new Rect(x + half - edge, y - half, edge, half * 2f), OverlayPainter.Solid, tint);
+    }
+
+    /// <summary>
+    /// Opens and drives the enemy classification screen.
+    ///
+    /// It is deliberately reachable while a hold is in progress: the judgement being made is about
+    /// what is happening on screen right now, and it is worth nothing if it can only be made from
+    /// memory afterwards.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void HandleEnemyEditor()
+    {
+        UnityEngine.Event current = UnityEngine.Event.current;
+        if (current is null)
+        {
+            return;
+        }
+
+        if (current.type == EventType.KeyDown && current.keyCode == KeyCode.F10)
+        {
+            // Closing the layout editor first, so the two are never taking the same keys.
+            if (_editing)
+            {
+                CommitEditing();
+            }
+
+            _enemyEditor.Toggle();
+            current.Use();
+            return;
+        }
+
+        if (_enemyEditor.HandleEvent(current))
+        {
+            current.Use();
+        }
+    }
+
+    /// <summary>
+    /// Notes that this enemy has been met, so the editor can offer the handful that matter ahead of
+    /// the hundred that do not. Written through on the first sighting only.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private static void RecordSighting(string? enemyId)
+    {
+        if (enemyId is null || !PleasureRuntime.Enemies.MarkSeen(enemyId))
+        {
+            return;
+        }
+
+        PleasureRuntime.SaveEnemies($"first sighting of {enemyId}");
     }
 
     /// <summary>
@@ -626,37 +690,6 @@ public sealed class PleasureObserver : MonoBehaviour
     }
 
     /// <summary>
-    /// Puts a texture on screen, tinted. Falls back to a tinted box if this build cannot draw a
-    /// texture through a label either, so the gauge degrades instead of disappearing.
-    /// </summary>
-    [HideFromIl2Cpp]
-    private void Draw(Rect area, Texture2D texture, Color tint)
-    {
-        Color previous = GUI.color;
-        GUI.color = tint;
-
-        if (!_labelUnavailable)
-        {
-            try
-            {
-                GUI.Label(area, texture);
-                GUI.color = previous;
-                return;
-            }
-            catch (Exception exception)
-            {
-                _labelUnavailable = true;
-                PleasureRuntime.Log?.LogWarning(
-                    "Textures cannot be drawn on this build; the gauge falls back to plain blocks "
-                    + $"({exception.Message}).");
-            }
-        }
-
-        GUI.Box(area, GUIContent.none);
-        GUI.color = previous;
-    }
-
-    /// <summary>
     /// A pink haze closing in from the edges when a climax lands.
     ///
     /// IMGUI has no gradient, so the falloff is nested bands whose alpha drops toward the centre.
@@ -688,7 +721,6 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        _haze ??= PleasureArt.Solid(Color.white);
         float width = Screen.width;
         float height = Screen.height;
         const int bands = 12;
@@ -705,10 +737,10 @@ public sealed class PleasureObserver : MonoBehaviour
 
             var tint = new Color(1f, 0.42f, 0.70f, alpha);
             float offset = index * step;
-            Draw(new Rect(0f, offset, width, step + 1f), _haze, tint);
-            Draw(new Rect(0f, height - offset - step - 1f, width, step + 1f), _haze, tint);
-            Draw(new Rect(offset, 0f, step + 1f, height), _haze, tint);
-            Draw(new Rect(width - offset - step - 1f, 0f, step + 1f, height), _haze, tint);
+            OverlayPainter.Draw(new Rect(0f, offset, width, step + 1f), OverlayPainter.Solid, tint);
+            OverlayPainter.Draw(new Rect(0f, height - offset - step - 1f, width, step + 1f), OverlayPainter.Solid, tint);
+            OverlayPainter.Draw(new Rect(offset, 0f, step + 1f, height), OverlayPainter.Solid, tint);
+            OverlayPainter.Draw(new Rect(width - offset - step - 1f, 0f, step + 1f, height), OverlayPainter.Solid, tint);
         }
     }
 

@@ -47,7 +47,7 @@ public sealed class SidecarStore
 
             text = File.ReadAllText(path);
         }
-        catch (Exception exception) when (IsFileFailure(exception))
+        catch (Exception exception) when (JsonFile.IsFileFailure(exception))
         {
             return new SidecarLoad(null, $"could not be read ({exception.Message})", false);
         }
@@ -69,7 +69,7 @@ public sealed class SidecarStore
 
         // Damaged rather than newer: the file is set aside so the evidence survives, and the slot
         // starts fresh instead of refusing to work.
-        string? moved = Quarantine(path);
+        string? moved = JsonFile.Quarantine(path);
         return new SidecarLoad(
             null,
             moved is null ? parse.Error : $"{parse.Error} It was moved to '{Path.GetFileName(moved)}'.",
@@ -94,65 +94,6 @@ public sealed class SidecarStore
             ClimaxCount = Math.Max(0, climaxCount),
         };
 
-        string path = PathFor(slotKey);
-        string temporary = path + ".tmp";
-        try
-        {
-            Directory.CreateDirectory(_root);
-            File.WriteAllText(temporary, document.Serialize());
-
-            // Written beside the target and moved into place, so a crash mid-write leaves the
-            // previous file intact rather than a half-written one.
-            File.Move(temporary, path, overwrite: true);
-            return null;
-        }
-        catch (Exception exception) when (IsFileFailure(exception))
-        {
-            TryDelete(temporary);
-            return exception.Message;
-        }
-    }
-
-    /// <summary>
-    /// Everything a path can fail with. A configured location that is wrong should be reported,
-    /// not thrown into the game: an invalid path raises ArgumentException rather than IOException,
-    /// which a narrower filter would have let escape into the frame that called it.
-    /// </summary>
-    private static bool IsFileFailure(Exception exception) =>
-        exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException;
-
-    private static string? Quarantine(string path)
-    {
-        try
-        {
-            string target = path + ".corrupt";
-            var suffix = 1;
-            while (File.Exists(target))
-            {
-                target = $"{path}.corrupt{suffix++}";
-            }
-
-            File.Move(path, target);
-            return target;
-        }
-        catch (Exception exception) when (IsFileFailure(exception))
-        {
-            return null;
-        }
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch (Exception exception) when (IsFileFailure(exception))
-        {
-            // Nothing useful to do; the next save will overwrite it.
-        }
+        return JsonFile.WriteAtomically(_root, PathFor(slotKey), document.Serialize());
     }
 }

@@ -34,6 +34,14 @@ internal static class PleasureRuntime
     /// <summary>Carries sensitivity and the climax count alongside the game's save slots.</summary>
     internal static SidecarStore? Sidecar { get; set; }
 
+    /// <summary>
+    /// Which enemies make sexual attacks, as edited in game. The classifier holds this same object,
+    /// so a change applies to the next hit rather than the next launch (FR-236).
+    /// </summary>
+    internal static EnemyAttackCatalog Enemies { get; set; } = new();
+
+    internal static EnemyAttackCatalogStore? EnemyStore { get; set; }
+
     /// <summary>Which slot the sidecar is following, or null before one has been identified.</summary>
     internal static string? CurrentSlotKey { get; private set; }
 
@@ -232,6 +240,27 @@ internal static class PleasureRuntime
         Log?.LogInfo(
             $"Slot '{CurrentSlotKey}' saved ({reason}): climaxes {Climaxes.Count}, "
             + $"sensitivity {Sensitivity?.Value ?? 0f:F2}.");
+    }
+
+    /// <summary>
+    /// Writes the enemy catalogue if anything changed. A failure is reported and nothing else
+    /// happens: losing a classification edit must never interrupt play (FR-239).
+    /// </summary>
+    internal static void SaveEnemies(string reason)
+    {
+        if (EnemyStore is null || !Enemies.IsDirty)
+        {
+            return;
+        }
+
+        string? failure = EnemyStore.Save(Enemies);
+        if (failure is not null)
+        {
+            Log?.LogWarning($"The enemy catalogue could not be written ({reason}): {failure}");
+            return;
+        }
+
+        Log?.LogInfo($"Enemy catalogue saved ({reason}): {Enemies.Summary()}.");
     }
 
     internal static void Reset()

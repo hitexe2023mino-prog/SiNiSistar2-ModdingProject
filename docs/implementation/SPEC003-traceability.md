@@ -19,7 +19,7 @@ Every tuning value still ships at no-change (FR-233), so a fresh install only re
 
 ## Automated coverage
 
-`dotnet test SiNiSistar2.Edi.sln -c Release` → 54 for this MOD, 89 for SPEC002, 143 for SPEC001, 0 failures.
+`dotnet test SiNiSistar2.Edi.sln -c Release` → 71 for this MOD, 89 for SPEC002, 143 for SPEC001, 0 failures.
 
 ## 要件台帳
 
@@ -32,7 +32,7 @@ Every tuning value still ships at no-change (FR-233), so a fresh install only re
 | FR-205 | HPダメージと演出を抑止しない | 寄与のみで値を書かない設計 | AC-202 実機 | Implemented / unverified |
 | FR-206 | 拘束外のHP0に介入しない | 寄与の条件を `bound` に限定 | AC-204 実機 | Implemented / unverified |
 | FR-207 | 拘束中かつ性的攻撃のときだけ快楽を上げる | `DamageProbePatches.OneDamagePostfix`、`PleasureMeter` | `PleasureMeterTests`（7件）、AC-205 実機 | Tested / unverified |
-| FR-208 | 5.3の順序で判別、不明は非性的 | `SexualAttackClassifier` | `SexualAttackClassifierTests`（6件） | Tested |
+| FR-208 | 5.3の順序で判別、不明は非性的 | `SexualAttackClassifier`、`EnemyAttackCatalog` | `SexualAttackClassifierTests`（6件）、`EnemyAttackCatalogTests`（4件） | Tested |
 | FR-209 | 感度が快楽の上昇量を増やす | `PleasureMeter.AddSexualHit` | `PleasureMeterTests.SensitivityIncreasesTheGainPerHit` | Tested |
 | FR-210 | 拘束外で減衰、拘束中は減衰しない | `PleasureObserver.DecayWhenFree`、`PleasureMeter.Decay` | `PleasureMeterTests`（2件）、AC-208 実機 | Tested / unverified |
 | FR-211 | 上限到達で1回だけ絶頂処理 | `PleasureMeter.ConsumeClimax`、`PleasureObserver.ConsumeClimax` | `PleasureMeterTests.AFullGaugeYieldsExactlyOneClimax` | Tested |
@@ -56,9 +56,14 @@ Every tuning value still ships at no-change (FR-233), so a fresh install only re
 | FR-229 | SPEC002の管理面へ介入しない | 参照なし | AC-223 実機 | Implemented / unverified |
 | FR-230 | メインスレッドで完結、待機しない | `PleasureObserver`（同期処理のみ） | AC-224 実機 | Implemented / unverified |
 | FR-231 | 起動ログに構成を記録 | `PleasurePlugin.Load` | AC-225 実機 | Implemented / unverified |
-| FR-232 | 判定と直列化をゲーム非依存層へ | `SiNiSistar2.Pleasure.Core`（ゲーム参照ゼロ） | 54件がゲーム起動なしで実行 | Tested |
+| FR-232 | 判定と直列化をゲーム非依存層へ | `SiNiSistar2.Pleasure.Core`（ゲーム参照ゼロ） | 71件がゲーム起動なしで実行 | Tested |
 | FR-233 | 未実測の既定は無変更相当、HP0抑止のみ例外 | `PleasureOptions` の既定値 | `PleasureProfileTests.ShippedDefaults...` | Tested |
 | FR-234 | `Enabled=false` でパッチも随伴ファイルもなし | `PleasurePlugin.Load` の早期 return | `PleasureProfileTests.DisablingTheMod...` | Tested |
+| FR-235 | 敵別分類を独立したカタログファイルへ、既存設定を種に | `EnemyAttackCatalogStore`、`EnemyAttackCatalog.SeedFrom`、`PleasurePlugin.LoadEnemyCatalog` | `EnemyAttackCatalogTests.TheOldConfigListsSeed...` ほか、AC-230 実機 | Tested / unverified |
+| FR-236 | ゲーム内編集画面、再起動なしで反映 | `EnemyCatalogEditor`（F10）、分類器がカタログを参照保持 | `EnemyAttackCatalogTests.AnEditAppliesWithoutRebuilding...`、AC-231 実機 | Tested / unverified |
+| FR-237 | `GalleryEnemyID` 全件を列挙し拘束経験のある敵を先頭に | `PleasurePlugin.KnownEnemyIds`、`EnemyAttackCatalog.AddMissing` / `Rows` | `EnemyAttackCatalogTests`（2件）、AC-232 実機 | Tested / unverified |
+| FR-238 | 保存と取り消しの区別、取り消しで開始時点へ | `EnemyCatalogEditor.Commit` / `Cancel`、`EnemyAttackCatalog.RestoreFrom` | `EnemyAttackCatalogTests.CancellingRestores...`、AC-233 実機 | Tested / unverified |
+| FR-239 | カタログの原子的書き込み、非対応版を上書きしない、失敗で止めない | `EnemyAttackCatalogStore`、`JsonFile` | `EnemyAttackCatalogStoreTests`（6件） | Tested |
 
 ## 判断記録
 
@@ -94,9 +99,26 @@ Every tuning value still ships at no-change (FR-233), so a fresh install only re
 | 影響 | 1回のプレイで A-1、A-2、A-3、A-6、A-7、A-9 がまとめて確定する |
 | 代替案 | 全機構を実装してから実機で調整する |
 
+| 項目 | 内容 |
+|---|---|
+| 論点 | 敵別の性的・非性的の宣言をどこに置き、どこから編集させるか |
+| 選択 | 設定文字列から独立したカタログファイルへ移し、`F10` のゲーム内画面から編集する。分類器はカタログを参照で保持する |
+| 根拠 | 対象は `GalleryEnemyID` 108件でカンマ区切りの1行に収まらない。さらに、その敵の攻撃が性的かどうかは画面を見て下す判断であり、ゲームを終了して編集し再起動する経路では対象が目の前にない状態で決めることになる |
+| 影響 | 編集が次の被弾から効く。`SexualEnemyIds` / `NonSexualEnemyIds` はカタログ新規作成時の種としてのみ残る |
+| 代替案 | `ConfigEntry` の文字列を増やす、外部エディタ用のCSVのみ、編集のたびにプロファイル再構築 |
+
+| 項目 | 内容 |
+|---|---|
+| 論点 | 編集画面をどのIMGUI呼び出しで作るか |
+| 選択 | `GUI.Label` と `GUI.Box` だけで描き、行の当たり判定を自前で行う |
+| 根拠 | `GUI.Button`、`GUI.BeginScrollView`、`GUI.TextField` はいずれも interop メタデータにあるが、`GUI.DrawTexture` も同様にありながら本ビルドでは実行時に `Method unstripping failed` を投げた。実機で成功が確認できている呼び出しだけに限る |
+| 影響 | スクロールと選択を自前で持つ分だけ実装が増えたが、実行時に失敗し得る面が増えない |
+| 代替案 | `GUI.Button` と `BeginScrollView` を使う、uGUI のキャンバスを立てる |
+
 ## 完了監査
 
 - 未着手は **FR-221（`BreastSuper` の通常付与）のみ**。状態欄に **Not started** と明記した。仕様が満たされたと誤読される箇所はない。
+- 新規の FR-235〜239 は Core 側を単体テストで、ゲーム内編集画面（`EnemyCatalogEditor`）を **Implemented / unverified** として扱う。実機確認は AC-230〜234 と 付録A A-13。
 - 実機で確認済み: HP0 抑止（A-1）、拘束中の被弾の観測（A-2）、状態異常の同伴（A-3）、耐久値（A-6）、セーブポイント検出（A-7）、スロット識別（A-9）。
 - SPEC001 と SPEC002 のファイルは未変更。`SiNiSistar2.Edi.sln` へは3プロジェクトの追加のみ。
 - 未検証項目は実機テストシナリオ3章へ引き継ぎ済み。
