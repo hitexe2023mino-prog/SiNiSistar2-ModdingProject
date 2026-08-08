@@ -345,6 +345,34 @@ public sealed class PleasurePlugin : BasePlugin
             "Corruption", "CorruptionGainScale", 0f, "How much corruption multiplies pleasure gain.");
         ConfigEntry<float> cap = Config.Bind(
             "Corruption", "CorruptionCap", 10f, "The most corruption that can be accumulated.");
+        ConfigEntry<float> shakeSeconds = Config.Bind(
+            "Climax",
+            "ClimaxShakeSeconds",
+            0.45f,
+            "Seconds the camera keeps moving after a climax. 0 leaves the camera alone. Shorter "
+            + "than the haze on purpose: a camera still moving after the moment has passed reads "
+            + "as a fault rather than a feeling.");
+        ConfigEntry<float> shakeStrength = Config.Bind(
+            "Climax",
+            "ClimaxShakeStrength",
+            0.09f,
+            "How far the camera moves at the height of the shake, in world units. Small: the game "
+            + "still has to be readable while it happens.");
+        ConfigEntry<float> crestAt = Config.Bind(
+            "Corruption",
+            "CorruptionCrestAtFraction",
+            0.5f,
+            "The fraction of the cap at which the game's own lust crest is put on the player. 0 "
+            + "never puts it on. The HUD mark is the MOD's picture of the corruption; this is where "
+            + "the picture stops being one.");
+        ConfigEntry<float> crestScale = Config.Bind(
+            "Corruption",
+            "CorruptionCrestGainScale",
+            2f,
+            "What one unit of corruption becomes while the lust crest is worn. The crest's own "
+            + "flavour is that the body has been made sensitive, so it is applied to the rate. This "
+            + "is also what makes an enemy putting the crest on an uncorrupted player serious: "
+            + "nothing has been lost yet, but everything from here costs more. Never below 1.");
 
         ConfigEntry<int> breastAfter = Config.Bind(
             "BreastSuper",
@@ -490,6 +518,10 @@ public sealed class PleasurePlugin : BasePlugin
             CorruptionPerSexualHit = perHit.Value,
             CorruptionGainScale = gainScale.Value,
             CorruptionCap = cap.Value,
+            ClimaxShakeSeconds = shakeSeconds.Value,
+            ClimaxShakeStrength = shakeStrength.Value,
+            CorruptionCrestAtFraction = crestAt.Value,
+            CorruptionCrestGainScale = crestScale.Value,
             BreastSuperAfterApplications = breastAfter.Value,
             BreastSuperCorruptionThreshold = breastThreshold.Value,
             BreastSuperReplacesBreast = breastReplaces.Value,

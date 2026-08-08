@@ -53,6 +53,63 @@ internal static class PleasureRuntime
 
     internal static CorruptionTrack? Corruption { get; set; }
 
+    /// <summary>Unscaled time at which the climax shake stops (SPEC003 FR-268).</summary>
+    internal static double ClimaxShakeUntil { get; set; }
+
+    /// <summary>Set when the corruption has earned the crest, consumed by the observer.</summary>
+    internal static bool PendingLustCrest { get; set; }
+
+    /// <summary>
+    /// Whether the game's lust crest is on the player right now (SPEC003 FR-267).
+    ///
+    /// Asked wherever corruption is gained, so it has to be cheap and it has to be safe during a
+    /// status callback. Reading the list is both; the answer is cached for the frame by the caller
+    /// rather than here, because a status can be added and removed within one.
+    /// </summary>
+    internal static bool IsCrestWorn
+    {
+        get
+        {
+            try
+            {
+                return PlayerAbnormals?.Has(AbnormalType.LustMarkCurse) == true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// One gain of corruption, scaled by whether the crest is worn.
+    ///
+    /// Every gain goes through here rather than each caller multiplying for itself. The crest's
+    /// effect is a property of the body, not of the particular thing that happened to it, and a
+    /// caller that forgot would make the crest silently harmless on that path.
+    /// </summary>
+    internal static void GainCorruption(float amount)
+    {
+        CorruptionTrack? track = Corruption;
+        if (track is null || amount <= 0f)
+        {
+            return;
+        }
+
+        track.Add(amount * Profile.Corruption.ScaleFor(IsCrestWorn));
+
+        CorruptionTuning tuning = Profile.Corruption;
+        if (!tuning.MarksTheBody || track.Cap <= 0f || PendingLustCrest)
+        {
+            return;
+        }
+
+        if (track.Value / track.Cap >= tuning.CrestAtFraction && !IsCrestWorn)
+        {
+            PendingLustCrest = true;
+        }
+    }
+
     internal static ClimaxLedger Climaxes { get; } = new();
 
     /// <summary>Counts the <c>Breast</c> applications that lead to <c>BreastSuper</c> (SPEC003 5.8).</summary>

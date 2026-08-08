@@ -66,7 +66,7 @@ internal static class DamageProbePatches
             }
 
             float before = meter.Value;
-            corruption?.Add(PleasureRuntime.Profile.Corruption.PerSexualHit);
+            PleasureRuntime.GainCorruption(PleasureRuntime.Profile.Corruption.PerSexualHit);
             if (meter.AddSexualHit(corruption?.Value ?? 0f))
             {
                 PleasureRuntime.PendingClimax = true;

@@ -16,17 +16,41 @@ public sealed record ClimaxTuning(
     int LimitBase,
     float LimitPerDurability,
     bool GameOverEnabled,
-    bool ResetAtObeliskOnly)
+    bool ResetAtObeliskOnly,
+    float ShakeSeconds,
+    float ShakeStrength)
 {
-    public static ClimaxTuning Disabled { get; } = new(false, 0f, 0, 0f, false, false);
+    public static ClimaxTuning Disabled { get; } = new(false, 0f, 0, 0f, false, false, 0f, 0f);
+
+    /// <summary>Whether the camera moves at all when a climax lands.</summary>
+    public bool Shakes => ShakeSeconds > 0f && ShakeStrength > 0f;
 }
 
 /// <summary>Tuning for the one-way corruption track (SPEC003 5.7).</summary>
-public sealed record CorruptionTuning(bool Enabled, float PerClimax, float PerSexualHit, float Cap)
+public sealed record CorruptionTuning(
+    bool Enabled,
+    float PerClimax,
+    float PerSexualHit,
+    float Cap,
+    float CrestAtFraction,
+    float CrestGainScale)
 {
-    public static CorruptionTuning Disabled { get; } = new(false, 0f, 0f, 0f);
+    public static CorruptionTuning Disabled { get; } = new(false, 0f, 0f, 0f, 0f, 1f);
 
     public bool HasEffect => Enabled && (PerClimax > 0f || PerSexualHit > 0f);
+
+    /// <summary>Whether the mark is ever put on the player by the MOD.</summary>
+    public bool MarksTheBody => Enabled && CrestAtFraction > 0f;
+
+    /// <summary>
+    /// What one unit of corruption becomes while the lust crest is worn (SPEC003 FR-267).
+    ///
+    /// The game's own flavour for the crest is that the body has been made sensitive. That is a
+    /// statement about what happens next, so it is applied to the rate rather than to a one-off:
+    /// the marked body learns faster. A scale below 1 would make the crest a blessing, so it is
+    /// never allowed below it.
+    /// </summary>
+    public float ScaleFor(bool crestWorn) => crestWorn ? Math.Max(1f, CrestGainScale) : 1f;
 }
 
 /// <summary>Tuning for opening <c>BreastSuper</c> to ordinary play (SPEC003 5.8).</summary>
@@ -291,7 +315,9 @@ public static class PleasureProfileFactory
             options.ClimaxLimitBase,
             options.ClimaxLimitPerDurability,
             options.EnableClimaxGameOver,
-            options.ResetAtObeliskOnly);
+            options.ResetAtObeliskOnly,
+            Math.Max(0f, options.ClimaxShakeSeconds),
+            Math.Max(0f, options.ClimaxShakeStrength));
     }
 
     private static CorruptionTuning BuildCorruption(PleasureOptions options, List<string> errors)
@@ -317,7 +343,9 @@ public static class PleasureProfileFactory
                 true,
                 options.CorruptionPerClimax,
                 options.CorruptionPerSexualHit,
-                options.CorruptionCap);
+                options.CorruptionCap,
+                Math.Clamp(options.CorruptionCrestAtFraction, 0f, 1f),
+                Math.Max(1f, options.CorruptionCrestGainScale));
     }
 
     private static BreastSuperTuning BuildBreastSuper(

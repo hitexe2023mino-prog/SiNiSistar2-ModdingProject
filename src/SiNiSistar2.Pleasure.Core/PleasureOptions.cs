@@ -144,6 +144,43 @@ public sealed record PleasureOptions
 
     public float CrossSize { get; init; } = PleasureOverlayLayout.Default.Cross.Size;
 
+    /// <summary>
+    /// The fraction of the cap at which the game's own lust crest is put on the player. 0 never
+    /// puts it on.
+    ///
+    /// The mark the HUD draws is the MOD's own picture of the corruption. This is the point where
+    /// the game's status of the same name is actually applied, so the picture stops being a picture
+    /// (SPEC003 FR-267).
+    /// </summary>
+    public float CorruptionCrestAtFraction { get; init; } = 0.5f;
+
+    /// <summary>
+    /// What one unit of corruption becomes while the lust crest is worn.
+    ///
+    /// The crest's own flavour is that the body has been made sensitive, so it is applied to the
+    /// rate rather than as a one-off: a marked body learns faster. This is also what makes an enemy
+    /// putting the crest on an uncorrupted player a serious event rather than a cosmetic one —
+    /// nothing has been lost yet, but everything from here costs more.
+    /// </summary>
+    public float CorruptionCrestGainScale { get; init; } = 2f;
+
+    /// <summary>
+    /// Seconds the camera keeps moving after a climax. 0 leaves the camera alone.
+    ///
+    /// Shorter than the haze on purpose. The haze says what happened and can linger; the shake is
+    /// the moment itself, and a camera that keeps moving after the moment has passed reads as a
+    /// fault rather than a feeling.
+    /// </summary>
+    public float ClimaxShakeSeconds { get; init; } = 0.45f;
+
+    /// <summary>
+    /// How far the camera moves at the height of the shake, in world units.
+    ///
+    /// Small. This is a game the player has to keep reading while it happens, and the shake is
+    /// there to be felt rather than watched.
+    /// </summary>
+    public float ClimaxShakeStrength { get; init; } = 0.09f;
+
     /// <summary>Shows the cross that breaks as the climax limit is approached.</summary>
     public bool ShowCross { get; init; } = true;
 

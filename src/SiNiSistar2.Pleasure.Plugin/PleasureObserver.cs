@@ -57,6 +57,8 @@ public sealed class PleasureObserver : MonoBehaviour
     private Texture2D? _crest;
     private int _crestParts = -1;
     private int _crestResolution;
+    private Vector3 _shakeOffset;
+    private Vector3 _shakeLeftAt;
 
 
     public PleasureObserver(IntPtr pointer)
@@ -122,6 +124,75 @@ public sealed class PleasureObserver : MonoBehaviour
         {
             // The gallery is absent for most of a session, and that is not a fault.
         }
+    }
+
+    /// <summary>
+    /// Moves the camera for a moment when a climax lands (SPEC003 FR-268).
+    ///
+    /// In <c>LateUpdate</c> because that is where Cinemachine writes the camera transform. Running
+    /// before the brain means the offset is overwritten and nothing is seen; running after means it
+    /// shows. Either is acceptable, and neither can leave the camera displaced, because the brain
+    /// rebuilds the transform from its own state every frame rather than reading it back.
+    ///
+    /// The exception is a camera nothing else drives, where the additions would accumulate into a
+    /// permanent drift. So the previous offset is taken back whenever the transform is still
+    /// exactly where this left it — if nobody else wrote to it, this one did, and it undoes itself.
+    /// That is what keeps a cosmetic effect from becoming a broken camera.
+    /// </summary>
+    public void LateUpdate()
+    {
+        try
+        {
+            ShakeCamera();
+        }
+        catch (Exception)
+        {
+            // A shake that can take the observer down is not worth having.
+        }
+    }
+
+    [HideFromIl2Cpp]
+    private void ShakeCamera()
+    {
+        ClimaxTuning climax = PleasureRuntime.Profile.Climax;
+        Camera? camera = Camera.main;
+        if (camera is null)
+        {
+            _shakeOffset = Vector3.zero;
+            return;
+        }
+
+        Transform transform = camera.transform;
+        if (_shakeOffset != Vector3.zero && transform.position == _shakeLeftAt)
+        {
+            transform.position -= _shakeOffset;
+        }
+
+        _shakeOffset = Vector3.zero;
+        if (!climax.Shakes)
+        {
+            return;
+        }
+
+        double remaining = PleasureRuntime.ClimaxShakeUntil - Time.unscaledTimeAsDouble;
+        if (remaining <= 0d)
+        {
+            return;
+        }
+
+        // Squared decay: it arrives at full strength and leaves quickly, which is what an impact
+        // does. Two frequencies rather than one, so it reads as a shudder instead of a buzz, and
+        // the vertical is the smaller of the two because a horizontal camera is easier to read.
+        var t = (float)Math.Clamp(remaining / climax.ShakeSeconds, 0d, 1d);
+        float amount = climax.ShakeStrength * t * t;
+        double now = Time.unscaledTimeAsDouble;
+        _shakeOffset = new Vector3(
+            (float)Math.Sin(now * 43d) * amount,
+            (float)Math.Sin((now * 29d) + 1.7d) * amount * 0.6f,
+            0f);
+
+        transform.position += _shakeOffset;
+        _shakeLeftAt = transform.position;
     }
 
     /// <summary>
@@ -247,6 +318,7 @@ public sealed class PleasureObserver : MonoBehaviour
         ReportSelfCheck(status);
         ReportBreastCureSurface(status);
         ApplyPendingBreastSuper(status);
+        ApplyPendingLustCrest(status);
         EnforceSingleSwelling(status);
         UpdateHp0Suppression(lelia, bound);
         ConsumeClimax(status);
@@ -330,6 +402,67 @@ public sealed class PleasureObserver : MonoBehaviour
 
         int limit = ClimaxLimit.Compute(tuning.LimitBase, tuning.LimitPerDurability, durability);
         return PleasureRuntime.Climaxes.IsAtLimit(limit);
+    }
+
+    /// <summary>
+    /// Puts the game's own lust crest on the player once the corruption has earned it
+    /// (SPEC003 FR-267).
+    ///
+    /// The HUD mark is the MOD's picture of the corruption; this is where the picture stops being
+    /// one. The status is the game's, applied through the game's own path, and it carries whatever
+    /// the game already attaches to it — this adds a status, it does not invent a condition.
+    ///
+    /// Deferred the same way the escalation is. A status added underneath an open menu goes onto a
+    /// list the UI has already drawn and will not redraw.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void ApplyPendingLustCrest(PlayerStatusManager status)
+    {
+        if (!PleasureRuntime.PendingLustCrest)
+        {
+            return;
+        }
+
+        if (Time.timeScale <= 0f || PleasureRuntime.IsBound || PleasureRuntime.IsDefeatPerformance)
+        {
+            return;
+        }
+
+        AbnormalList? abnormals = status.AbnormalList;
+        if (abnormals is null)
+        {
+            return;
+        }
+
+        if (abnormals.Has(AbnormalType.LustMarkCurse))
+        {
+            PleasureRuntime.PendingLustCrest = false;
+            return;
+        }
+
+        AbnormalManager? manager = ManagerList.Abnormal;
+        AbnormalData? data = null;
+        if (manager is null || !manager.TryGetData(AbnormalType.LustMarkCurse, out data) || data is null)
+        {
+            // Left standing. Loading is asynchronous, so "not yet" must not become "never" — the
+            // same reasoning as the escalation, and the same failure it once had.
+            return;
+        }
+
+        abnormals.AddAbnormal(data, 1, null);
+        PleasureRuntime.PendingLustCrest = false;
+
+        if (!abnormals.Has(AbnormalType.LustMarkCurse))
+        {
+            PleasureRuntime.Log?.LogWarning(
+                "The lust crest was applied and the status list still reports it absent. The "
+                + "corruption keeps accumulating; only the game's own status is missing.");
+            return;
+        }
+
+        PleasureRuntime.Log?.LogInfo(
+            "The corruption has marked the body: the lust crest is now worn. Corruption is gained "
+            + $"{PleasureRuntime.Profile.Corruption.ScaleFor(true):0.##}x faster while it is.");
     }
 
     /// <summary>
@@ -888,10 +1021,15 @@ public sealed class PleasureObserver : MonoBehaviour
         PleasureRuntime.PendingClimax = false;
         PleasureRuntime.Meter?.ConsumeClimax();
         PleasureRuntime.Climaxes.Record();
-        PleasureRuntime.Corruption?.Add(PleasureRuntime.Profile.Corruption.PerClimax);
+        PleasureRuntime.GainCorruption(PleasureRuntime.Profile.Corruption.PerClimax);
 
         PleasureRuntime.ClimaxFlashUntil =
             Time.timeAsDouble + PleasureRuntime.Profile.Climax.OverlaySeconds;
+
+        // Unscaled, unlike the haze. The moment can land while the game is slowed, and a shake that
+        // stretches with the time scale stops reading as an impact.
+        PleasureRuntime.ClimaxShakeUntil =
+            Time.unscaledTimeAsDouble + PleasureRuntime.Profile.Climax.ShakeSeconds;
 
         PleasureRuntime.Log?.LogInfo(
             $"Climax {PleasureRuntime.Climaxes.Count}; corruption "
