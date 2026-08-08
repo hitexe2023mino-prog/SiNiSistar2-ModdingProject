@@ -74,8 +74,8 @@ internal static class PleasureRuntime
     /// <summary>Game time at which the transition's black stops being drawn.</summary>
     internal static double TransitionFadeUntil { get; set; }
 
-    /// <summary>Self-milking in progress: it takes time and being hit wastes it (SPEC003 FR-257).</summary>
-    internal static MilkingChannel? Milking { get; set; }
+    /// <summary>The milk the swelling makes and milking removes (SPEC003 FR-259).</summary>
+    internal static MilkReservoir? Milk { get; set; }
 
     /// <summary>Set by the damage patch when the player is hit, consumed by the observer.</summary>
     internal static bool MilkingWasHit { get; set; }
@@ -222,12 +222,14 @@ internal static class PleasureRuntime
             Sensitivity?.LoadFrom(stored.Sensitivity);
             Climaxes.LoadFrom(stored.ClimaxCount);
             Breasts?.LoadFrom(stored.BreastAtMaxCount);
+            Milk?.LoadFrom(stored.Milk);
         }
         else
         {
             Sensitivity?.LoadFrom(0f);
             Climaxes.ResetCount();
             Breasts?.Reset();
+            Milk?.Reset();
         }
 
         Meter?.Reset();
@@ -238,7 +240,7 @@ internal static class PleasureRuntime
         string state = stored is not null
             ? $"restored climaxes {Climaxes.Count}, sensitivity {Sensitivity?.Value ?? 0f:F2}, "
               + $"breast applications {Breasts?.Count ?? 0} "
-              + $"({Breasts?.Remaining ?? 0} more before BreastSuper)"
+              + $"({Breasts?.Remaining ?? 0} more before BreastSuper), milk {Milk?.Fill ?? 0f:P0}"
             : "no sidecar yet, starting from zero";
         string notice = load.Notice is null ? string.Empty : $" The stored file {load.Notice}.";
         Log?.LogInfo($"Slot '{slotKey}' ({reason}): {state}.{notice}");
@@ -270,7 +272,11 @@ internal static class PleasureRuntime
         }
 
         string? failure = Sidecar.Save(
-            CurrentSlotKey, Sensitivity?.Value ?? 0f, Climaxes.Count, Breasts?.Count ?? 0);
+            CurrentSlotKey,
+            Sensitivity?.Value ?? 0f,
+            Climaxes.Count,
+            Breasts?.Count ?? 0,
+            Milk?.Fill ?? 0f);
         if (failure is not null)
         {
             Log?.LogWarning($"Slot '{CurrentSlotKey}' could not be written ({reason}): {failure}");

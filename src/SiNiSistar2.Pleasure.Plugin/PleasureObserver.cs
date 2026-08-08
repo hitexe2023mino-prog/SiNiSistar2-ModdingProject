@@ -25,7 +25,7 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _wasDead;
     private bool _editing;
     private PleasureOverlayLayout? _layoutBeforeEdit;
-    private bool _editingCross;
+    private int _editingElement;
     private Texture2D? _liquid;
     private Texture2D? _cross;
     private float _liquidFill = -1f;
@@ -44,6 +44,11 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _breastSuperReported;
     private bool _breastSuperRequested;
     private int _milkingReturnState;
+    private KeyCode _milkingKey = KeyCode.None;
+    private Texture2D? _milkVessel;
+    private float _milkFill = -1f;
+    private float _milkPhase;
+    private double _milkBuiltAt;
 
 
     public PleasureObserver(IntPtr pointer)
@@ -125,7 +130,7 @@ public sealed class PleasureObserver : MonoBehaviour
 
         DrawGauge();
         DrawClimaxFlash();
-        DrawMilking();
+        DrawMilk();
         DrawTransitionFade();
         DrawEditorChrome();
     }
@@ -643,7 +648,7 @@ public sealed class PleasureObserver : MonoBehaviour
         if (status is not null)
         {
             UpdateBreastSuperLife(status, delta);
-            UpdateMilking(status, delta);
+            UpdateMilk(status, delta);
         }
 
         // Decaying inside a hold would let the player wait out the danger (SPEC003 5.2).
@@ -782,21 +787,15 @@ public sealed class PleasureObserver : MonoBehaviour
     private void DrawSelectionMarker(float radius, float gaugeX, float gaugeY, float height, PleasureOverlayLayout layout)
     {
 
-        float x;
-        float y;
-        float half;
-        if (_editingCross)
+        (_, OverlayPlacement selected) = Selected(layout);
+        float x = _editingElement == 0 ? gaugeX : Screen.width * selected.CentreX;
+        float y = _editingElement == 0 ? gaugeY : height - (height * selected.BottomOffset);
+        float half = _editingElement switch
         {
-            x = Screen.width * layout.Cross.CentreX;
-            y = height - (height * layout.Cross.BottomOffset);
-            half = height * layout.Cross.Size * 0.5f;
-        }
-        else
-        {
-            x = gaugeX;
-            y = gaugeY;
-            half = radius;
-        }
+            0 => radius,
+            1 => height * selected.Size * 0.5f,
+            _ => height * selected.Size,
+        };
 
         var tint = new Color(1f, 0.85f, 0.35f, 0.85f);
         const float edge = 2f;
@@ -837,7 +836,7 @@ public sealed class PleasureObserver : MonoBehaviour
         }
 
         if (current.type == EventType.KeyDown
-            && current.keyCode == KeyCode.C
+            && current.keyCode == MilkingKey()
             && !_enemyEditor.IsOpen
             && !_editing)
         {
@@ -898,28 +897,55 @@ public sealed class PleasureObserver : MonoBehaviour
     }
 
     /// <summary>
+    /// The key that milks (SPEC003 FR-260).
+    ///
+    /// Configurable, and not C. The game casts with C, and immediate-mode GUI cannot stop the game
+    /// reading the keyboard for itself — consuming an event only ends its travel within IMGUI — so a
+    /// shared key would milk and cast at once. "Only while swollen" cannot be arranged from here for
+    /// the same reason: the game's read does not know about the condition.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private KeyCode MilkingKey()
+    {
+        if (_milkingKey != KeyCode.None)
+        {
+            return _milkingKey;
+        }
+
+        string name = PleasureRuntime.Profile.BreastSuper.MilkingKey;
+        if (!Enum.TryParse(name, ignoreCase: true, out KeyCode parsed) || parsed == KeyCode.None)
+        {
+            parsed = KeyCode.F8;
+            PleasureRuntime.Log?.LogWarning(
+                $"BreastSuper.MilkingKey '{name}' is not a KeyCode name; F8 is used instead.");
+        }
+
+        _milkingKey = parsed;
+        return parsed;
+    }
+
+    /// <summary>
     /// Starts self-milking (SPEC003 5.8, FR-257).
     ///
-    /// It works wherever the player is standing. An earlier attempt looked for the game's own cure
-    /// event in the scene, on the reasoning that reusing authored content beats reproducing it —
-    /// but the object it needs is created by the event and does not exist beforehand, and tying the
-    /// cure to the few places the game put it misses the point. A safe place is not an area the game
-    /// marks as safe; it is any moment nothing is attacking, which is the player's judgement to make
-    /// and to get wrong.
+    /// It works wherever the player is standing. A safe place is not an area the game marks as safe;
+    /// it is any moment nothing is attacking, which is the player's judgement to make and to get
+    /// wrong. What it costs is the milk gauge: milking empties it, and the swelling steps down when
+    /// it reaches nothing.
     /// </summary>
     [HideFromIl2Cpp]
     private void TryStartMilking()
     {
         AbnormalList? abnormals = PleasureRuntime.PlayerAbnormals;
-        MilkingChannel? milking = PleasureRuntime.Milking;
-        if (abnormals is null || milking is null || !milking.IsEnabled)
+        MilkReservoir? milk = PleasureRuntime.Milk;
+        if (abnormals is null || milk is null)
         {
             return;
         }
 
-        if (milking.IsRunning)
+        if (milk.IsMilking)
         {
-            milking.Interrupt();
+            milk.StopMilking();
+            StopMilkingAnimation();
             PleasureRuntime.Log?.LogInfo("Milking stopped.");
             return;
         }
@@ -938,54 +964,74 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        if (milking.TryStart())
+        if (!milk.CanMilk)
+        {
+            PleasureRuntime.Log?.LogInfo(
+                $"There is nothing to milk: the gauge is at {milk.Fill:P0}.");
+            return;
+        }
+
+        if (milk.TryStartMilking())
         {
             PleasureRuntime.MilkingWasHit = false;
             StartMilkingAnimation();
             PleasureRuntime.Log?.LogInfo(
-                $"Milking started; it will take a moment and being hit will waste it. "
+                $"Milking started at {milk.Fill:P0}; being hit will waste it. "
                 + $"{(super ? "BreastSuper will subside to Breast." : "Breast will be cleared.")}");
         }
     }
 
-    /// <summary>Advances a milking attempt, and ends it on completion or interruption.</summary>
+    /// <summary>
+    /// Fills the reservoir while swollen, drains it while milking, and steps the swelling down when
+    /// it empties (SPEC003 FR-259).
+    /// </summary>
     [HideFromIl2Cpp]
-    private void UpdateMilking(PlayerStatusManager status, double delta)
+    private void UpdateMilk(PlayerStatusManager status, double delta)
     {
-        MilkingChannel? milking = PleasureRuntime.Milking;
-        if (milking is null || !milking.IsRunning)
-        {
-            PleasureRuntime.MilkingWasHit = false;
-            return;
-        }
-
+        MilkReservoir? milk = PleasureRuntime.Milk;
         AbnormalList? abnormals = status.AbnormalList;
-        if (abnormals is null)
+        if (milk is null || abnormals is null)
         {
-            milking.Interrupt();
             return;
         }
 
-        if (PleasureRuntime.MilkingWasHit || PleasureRuntime.IsBound || PleasureRuntime.IsDefeatPerformance)
+        bool super;
+        bool swollen;
+        try
+        {
+            super = abnormals.Has(AbnormalType.BreastSuper);
+            swollen = super || abnormals.Has(AbnormalType.Breast);
+        }
+        catch (Exception)
+        {
+            return;
+        }
+
+        if (milk.IsMilking
+            && (PleasureRuntime.MilkingWasHit || PleasureRuntime.IsBound
+                || PleasureRuntime.IsDefeatPerformance || !swollen))
         {
             PleasureRuntime.MilkingWasHit = false;
-            if (milking.Interrupt())
+            if (milk.StopMilking())
             {
                 StopMilkingAnimation();
-                PleasureRuntime.Log?.LogInfo("Milking was interrupted; nothing was cured.");
+                PleasureRuntime.Log?.LogInfo("Milking was interrupted; the gauge keeps what is left.");
             }
 
             return;
         }
 
-        if (milking.Tick(delta) != MilkingOutcome.Completed)
+        PleasureRuntime.MilkingWasHit = false;
+        if (milk.Tick(delta, swollen, super) != MilkOutcome.Emptied)
         {
             return;
         }
 
+        StopMilkingAnimation();
+
         // One step down, not a full cure from either state. Milking out of the escalation still
         // leaves the swelling, which is the same ladder the duration walks back down.
-        if (abnormals.Has(AbnormalType.BreastSuper))
+        if (super)
         {
             abnormals.RemoveAbnormal(AbnormalType.BreastSuper);
             PleasureRuntime.SuperTimer?.Stop();
@@ -996,16 +1042,15 @@ public sealed class PleasureObserver : MonoBehaviour
                 abnormals.AddAbnormal(data, 1, null);
             }
 
-            PleasureRuntime.Log?.LogInfo("Milking finished: BreastSuper subsided to Breast.");
+            PleasureRuntime.Log?.LogInfo("Milked dry: BreastSuper subsided to Breast.");
         }
         else
         {
             abnormals.RemoveAbnormal(AbnormalType.Breast);
-            PleasureRuntime.Log?.LogInfo("Milking finished: Breast was cleared.");
+            PleasureRuntime.Log?.LogInfo("Milked dry: Breast was cleared.");
         }
 
         PleasureRuntime.Breasts?.Reset();
-        StopMilkingAnimation();
         BeginTransition();
     }
 
@@ -1249,7 +1294,7 @@ public sealed class PleasureObserver : MonoBehaviour
                 break;
 
             case EventType.KeyDown when current.keyCode == KeyCode.Tab:
-                _editingCross = !_editingCross;
+                _editingElement = (_editingElement + 1) % 3;
                 current.Use();
                 break;
 
@@ -1286,10 +1331,23 @@ public sealed class PleasureObserver : MonoBehaviour
     private void Adjust(Func<OverlayPlacement, OverlayPlacement> change)
     {
         PleasureOverlayLayout layout = PleasureRuntime.Overlay;
-        PleasureRuntime.Overlay = _editingCross
-            ? layout with { Cross = change(layout.Cross) }
-            : layout with { Gauge = change(layout.Gauge) };
+        PleasureRuntime.Overlay = _editingElement switch
+        {
+            1 => layout with { Cross = change(layout.Cross) },
+            2 => layout with { Milk = change(layout.Milk) },
+            _ => layout with { Gauge = change(layout.Gauge) },
+        };
     }
+
+    /// <summary>Which element the editor is on, and where it sits.</summary>
+    [HideFromIl2Cpp]
+    private (string Name, OverlayPlacement Placement) Selected(PleasureOverlayLayout layout) =>
+        _editingElement switch
+        {
+            1 => ("cross", layout.Cross),
+            2 => ("milk gauge", layout.Milk),
+            _ => ("gauge", layout.Gauge),
+        };
 
     [HideFromIl2Cpp]
     private void ToggleEditing()
@@ -1317,7 +1375,9 @@ public sealed class PleasureObserver : MonoBehaviour
         PleasureRuntime.Log?.LogInfo(
             $"Layout saved: GaugeCentreX={layout.Gauge.CentreX:F3}, GaugeBottomOffset={layout.Gauge.BottomOffset:F3}, "
             + $"GaugeSize={layout.Gauge.Size:F3}, CrossCentreX={layout.Cross.CentreX:F3}, "
-            + $"CrossBottomOffset={layout.Cross.BottomOffset:F3}, CrossSize={layout.Cross.Size:F3}.");
+            + $"CrossBottomOffset={layout.Cross.BottomOffset:F3}, CrossSize={layout.Cross.Size:F3}, "
+            + $"MilkCentreX={layout.Milk.CentreX:F3}, MilkBottomOffset={layout.Milk.BottomOffset:F3}, "
+            + $"MilkSize={layout.Milk.Size:F3}.");
     }
 
     [HideFromIl2Cpp]
@@ -1343,11 +1403,10 @@ public sealed class PleasureObserver : MonoBehaviour
         }
 
         PleasureOverlayLayout layout = PleasureRuntime.Overlay;
-        OverlayPlacement selected = _editingCross ? layout.Cross : layout.Gauge;
-        string name = _editingCross ? "cross" : "gauge";
+        (string name, OverlayPlacement selected) = Selected(layout);
 
         GUI.Box(new Rect(12f, 12f, 520f, 96f), GUIContent.none);
-        GUI.Label(new Rect(24f, 20f, 500f, 22f), $"Editing the {name}    Tab: switch element");
+        GUI.Label(new Rect(24f, 20f, 500f, 22f), $"Editing the {name}    Tab: gauge / cross / milk gauge");
         GUI.Label(new Rect(24f, 44f, 500f, 22f), "Drag: move    Wheel: resize    Enter: save    Escape: cancel");
         GUI.Label(
             new Rect(24f, 68f, 500f, 22f),
@@ -1426,33 +1485,62 @@ public sealed class PleasureObserver : MonoBehaviour
     }
 
     /// <summary>
-    /// The milking bar, drawn while an attempt runs.
+    /// The milk reservoir, drawn whenever there is any (SPEC003 FR-261).
     ///
-    /// Above the centre rather than tucked into a corner: what it is really reporting is how long
-    /// the player is standing still for, and that is worth having in the way.
+    /// Always on while it holds something, not only while milking: what it reports is how long the
+    /// next milking will take, and that is worth knowing before deciding whether now is the moment.
     /// </summary>
     [HideFromIl2Cpp]
-    private void DrawMilking()
+    private void DrawMilk()
     {
-        MilkingChannel? milking = PleasureRuntime.Milking;
-        if (milking is null || !milking.IsRunning)
+        MilkReservoir? milk = PleasureRuntime.Milk;
+        if (milk is null || (milk.Fill <= 0.001f && !milk.IsMilking))
         {
             return;
         }
 
-        float width = Screen.width * 0.22f;
-        float height = Screen.height * 0.012f;
-        float x = (Screen.width - width) / 2f;
-        float y = Screen.height * 0.62f;
+        OverlayPlacement placement = PleasureRuntime.Overlay.Milk;
+        float height = Screen.height;
+        float radius = height * placement.Size;
+        float x = Screen.width * placement.CentreX;
+        float y = height - (height * placement.BottomOffset);
 
-        OverlayPainter.Fill(new Rect(x - 2f, y - 2f, width + 4f, height + 4f), new Color(0f, 0f, 0f, 0.55f));
-        OverlayPainter.Fill(
-            new Rect(x, y, width * milking.Progress, height),
-            new Color(1f, 0.72f, 0.82f, 0.92f));
-        OverlayPainter.Text(
-            new Rect(x, y - 24f, width, 22f),
-            "Milking… (C to stop)",
-            new Color(1f, 0.94f, 0.96f, 1f));
+        RefreshMilk(milk.Fill, Resolution(radius * 2f));
+        if (_milkVessel is null)
+        {
+            return;
+        }
+
+        float diameter = radius * 2f;
+        OverlayPainter.Draw(new Rect(x - radius, y - radius, diameter, diameter), _milkVessel, Color.white);
+
+        // While milking the vessel pulses, so the difference between "there is milk" and "it is
+        // being taken out" is visible without reading a number.
+        if (milk.IsMilking)
+        {
+            var pulse = (float)((Math.Sin(Time.unscaledTimeAsDouble * 7d) + 1d) * 0.5d);
+            OverlayPainter.Draw(
+                new Rect(x - radius, y - radius, diameter, diameter),
+                _milkVessel,
+                new Color(1f, 1f, 1f, 0.25f + (pulse * 0.35f)));
+        }
+    }
+
+    [HideFromIl2Cpp]
+    private void RefreshMilk(float fill, int resolution)
+    {
+        double now = Time.unscaledTimeAsDouble;
+        bool moved = Math.Abs(fill - _milkFill) > 0.005f;
+        bool resized = _milkVessel is not null && _milkVessel.width != resolution;
+        if (_milkVessel is not null && !moved && !resized && now - _milkBuiltAt < 0.08d)
+        {
+            return;
+        }
+
+        _milkFill = fill;
+        _milkBuiltAt = now;
+        _milkPhase += 0.3f;
+        _milkVessel = PleasureArt.MilkVessel(resolution, fill, _milkPhase);
     }
 
     /// <summary>

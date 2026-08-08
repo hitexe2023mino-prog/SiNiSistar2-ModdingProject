@@ -13,7 +13,7 @@ namespace SiNiSistar2.Pleasure.Core;
 /// </summary>
 public sealed record SidecarDocument
 {
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     [JsonPropertyName("schemaVersion")]
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
@@ -34,6 +34,10 @@ public sealed record SidecarDocument
     /// </summary>
     [JsonPropertyName("breastAtMaxCount")]
     public int BreastAtMaxCount { get; init; }
+
+    /// <summary>How full the milk reservoir is (SPEC003 5.8). Added in schema 3.</summary>
+    [JsonPropertyName("milk")]
+    public float Milk { get; init; }
 
     public string Serialize() => JsonSerializer.Serialize(this, SerializerOptions);
 
@@ -96,6 +100,7 @@ public sealed record SidecarDocument
             Sensitivity = Math.Max(0f, document.Sensitivity),
             ClimaxCount = Math.Max(0, document.ClimaxCount),
             BreastAtMaxCount = Math.Max(0, document.BreastAtMaxCount),
+            Milk = Math.Clamp(document.Milk, 0f, 1f),
         });
     }
 }

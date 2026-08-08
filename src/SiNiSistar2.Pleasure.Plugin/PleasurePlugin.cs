@@ -37,6 +37,9 @@ public sealed class PleasurePlugin : BasePlugin
     private ConfigEntry<float>? _crossX;
     private ConfigEntry<float>? _crossY;
     private ConfigEntry<float>? _crossSize;
+    private ConfigEntry<float>? _milkX;
+    private ConfigEntry<float>? _milkY;
+    private ConfigEntry<float>? _milkSize;
     private string _gameBuildId = "unknown";
     private Harmony? _harmony;
     private PleasureObserver? _observer;
@@ -97,7 +100,10 @@ public sealed class PleasurePlugin : BasePlugin
             profile.Pleasure.DecayPerSecond);
         PleasureRuntime.Sensitivity = new SensitivityTrack(profile.Sensitivity.Cap);
         PleasureRuntime.SuperTimer = new BreastSuperTimer(profile.BreastSuper.Seconds);
-        PleasureRuntime.Milking = new MilkingChannel(profile.BreastSuper.MilkingSeconds);
+        PleasureRuntime.Milk = new MilkReservoir(
+            profile.BreastSuper.MilkFillPerSecond,
+            profile.BreastSuper.MilkDrainPerSecond,
+            profile.BreastSuper.MilkSuperMultiplier);
         PleasureRuntime.Breasts = new BreastEscalation(
             profile.BreastSuper.ApplicationsAtMaxLevel,
             profile.BreastSuper.SensitivityThreshold);
@@ -114,6 +120,9 @@ public sealed class PleasurePlugin : BasePlugin
             _crossX!.Value = layout.Cross.CentreX;
             _crossY!.Value = layout.Cross.BottomOffset;
             _crossSize!.Value = layout.Cross.Size;
+            _milkX!.Value = layout.Milk.CentreX;
+            _milkY!.Value = layout.Milk.BottomOffset;
+            _milkSize!.Value = layout.Milk.Size;
             Config.Save();
         };
 
@@ -206,8 +215,8 @@ public sealed class PleasurePlugin : BasePlugin
 
         Log.LogInfo(
             "Press F11 in game to apply Breast to the player, for checking the escalation. Press C "
-            + "while swollen to milk: it takes "
-            + $"{profile.BreastSuper.MilkingSeconds:F0}s, works anywhere, and being hit wastes it.");
+            + $"Press {profile.BreastSuper.MilkingKey} while swollen to milk: it empties the milk "
+            + "gauge, works anywhere, and being hit wastes it.");
 
         if (profile.ShowOverlay)
         {
@@ -362,13 +371,28 @@ public sealed class PleasurePlugin : BasePlugin
             0.8f,
             "Seconds of black over the transition. The body is rebuilt in place, so the player does "
             + "not move and the scene is not reloaded; the black only covers the swap.");
-        ConfigEntry<float> milkingSeconds = Config.Bind(
+        ConfigEntry<float> milkFill = Config.Bind(
             "BreastSuper",
-            "SelfMilkingSeconds",
-            6f,
-            "Seconds of self-milking, on the C key, before the swelling steps down. 0 switches the "
-            + "key off. It works anywhere: a safe place is not an area the game marks, it is any "
-            + "moment nothing is attacking. Being hit wastes the attempt.");
+            "MilkFillPerSecond",
+            0.02f,
+            "Milk gained per second while swollen, as a fraction of the gauge. 0.02 fills it in "
+            + "about 50 seconds. 0 means it never fills and milking has nothing to remove.");
+        ConfigEntry<float> milkDrain = Config.Bind(
+            "BreastSuper",
+            "MilkDrainPerSecond",
+            0.25f,
+            "Milk removed per second while milking. The swelling steps down when the gauge empties, "
+            + "so this and MilkFillPerSecond together decide how long milking takes. 0 switches "
+            + "milking off.");
+        ConfigEntry<float> milkSuper = Config.Bind(
+            "BreastSuper", "MilkSuperMultiplier", 2f, "How much faster BreastSuper fills the gauge.");
+        ConfigEntry<string> milkingKey = Config.Bind(
+            "BreastSuper",
+            "MilkingKey",
+            "F8",
+            "The key that milks, as a UnityEngine.KeyCode name. Not C: the game casts with it, and "
+            + "immediate-mode GUI cannot stop the game reading the keyboard for itself, so a shared "
+            + "key would do both.");
         ConfigEntry<string> milkingState = Config.Bind(
             "BreastSuper",
             "MilkingAnimationState",
@@ -442,6 +466,12 @@ public sealed class PleasurePlugin : BasePlugin
             "Overlay", "CrossBottomOffset", PleasureOverlayLayout.Default.Cross.BottomOffset, "Cross centre from the bottom.");
         _crossSize = Config.Bind(
             "Overlay", "CrossSize", PleasureOverlayLayout.Default.Cross.Size, "Cross height.");
+        _milkX = Config.Bind(
+            "Overlay", "MilkCentreX", PleasureOverlayLayout.Default.Milk.CentreX, "Milk gauge centre, fraction of width.");
+        _milkY = Config.Bind(
+            "Overlay", "MilkBottomOffset", PleasureOverlayLayout.Default.Milk.BottomOffset, "Milk gauge centre from the bottom.");
+        _milkSize = Config.Bind(
+            "Overlay", "MilkSize", PleasureOverlayLayout.Default.Milk.Size, "Milk gauge radius.");
         ConfigEntry<bool> showCross = Config.Bind(
             "Overlay",
             "ShowCross",
@@ -476,7 +506,10 @@ public sealed class PleasurePlugin : BasePlugin
             BreastSuperSeconds = breastSeconds.Value,
             BreastSuperCuredWithBreast = breastCured.Value,
             BreastSuperFadeSeconds = breastFade.Value,
-            SelfMilkingSeconds = milkingSeconds.Value,
+            MilkFillPerSecond = milkFill.Value,
+            MilkDrainPerSecond = milkDrain.Value,
+            MilkSuperMultiplier = milkSuper.Value,
+            MilkingKey = milkingKey.Value,
             MilkingAnimationState = milkingState.Value,
             BreastSuperMakeHaanjaCurable = breastHaanja.Value,
             BreastSuperCountBelowMaxLevel = breastBelowMax.Value,
@@ -492,6 +525,9 @@ public sealed class PleasurePlugin : BasePlugin
             CrossCentreX = _crossX.Value,
             CrossBottomOffset = _crossY.Value,
             CrossSize = _crossSize.Value,
+            MilkCentreX = _milkX.Value,
+            MilkBottomOffset = _milkY.Value,
+            MilkSize = _milkSize.Value,
             ShowCross = showCross.Value,
         };
     }

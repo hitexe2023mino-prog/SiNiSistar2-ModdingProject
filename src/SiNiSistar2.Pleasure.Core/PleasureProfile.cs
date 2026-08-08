@@ -40,11 +40,17 @@ public sealed record BreastSuperTuning(
     float Seconds,
     bool CuredWithBreast,
     float FadeSeconds,
-    float MilkingSeconds,
+    float MilkFillPerSecond,
+    float MilkDrainPerSecond,
+    float MilkSuperMultiplier,
+    string MilkingKey,
     string MilkingAnimationState)
 {
     public static BreastSuperTuning Disabled { get; } =
-        new(false, 0, 0f, false, false, false, 0f, false, 0f, 0f, "");
+        new(false, 0, 0f, false, false, false, 0f, false, 0f, 0f, 0f, 0f, "", "");
+
+    /// <summary>Whether milking can do anything.</summary>
+    public bool CanMilk => MilkDrainPerSecond > 0f;
 
     /// <summary>A count of zero means the escalation can never be reached, which is the shipped state.</summary>
     public bool HasEffect => Enabled && ApplicationsAtMaxLevel > 0;
@@ -69,12 +75,14 @@ public sealed record OverlayPlacement(float CentreX, float BottomOffset, float S
 public sealed record PleasureOverlayLayout(
     OverlayPlacement Gauge,
     OverlayPlacement Cross,
+    OverlayPlacement Milk,
     float FlashSeconds,
     bool ShowCross)
 {
     public static PleasureOverlayLayout Default { get; } = new(
         new OverlayPlacement(0.283f, 0.115f, 0.086f),
         new OverlayPlacement(0.283f, 0.275f, 0.129f),
+        new OverlayPlacement(0.375f, 0.135f, 0.070f),
         1.5f,
         true);
 }
@@ -189,6 +197,10 @@ public static class PleasureProfileFactory
                     options.CrossCentreX,
                     options.CrossBottomOffset,
                     Math.Max(0.01f, options.CrossSize)),
+                new OverlayPlacement(
+                    options.MilkCentreX,
+                    options.MilkBottomOffset,
+                    Math.Max(0.01f, options.MilkSize)),
                 Math.Max(0.01f, options.ClimaxOverlaySeconds),
                 options.ShowCross));
 
@@ -373,7 +385,10 @@ public static class PleasureProfileFactory
             Math.Max(0f, options.BreastSuperSeconds),
             options.BreastSuperCuredWithBreast,
             Math.Max(0f, options.BreastSuperFadeSeconds),
-            Math.Max(0f, options.SelfMilkingSeconds),
+            Math.Max(0f, options.MilkFillPerSecond),
+            Math.Max(0f, options.MilkDrainPerSecond),
+            Math.Max(1f, options.MilkSuperMultiplier),
+            (options.MilkingKey ?? string.Empty).Trim(),
             (options.MilkingAnimationState ?? string.Empty).Trim());
     }
 

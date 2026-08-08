@@ -88,7 +88,23 @@ public sealed record PleasureOptions
     /// seconds and is wasted if anything hits you is a decision about whether it is safe enough
     /// right now, which the player can get wrong.
     /// </summary>
-    public float SelfMilkingSeconds { get; init; } = 6f;
+    /// <summary>Milk gained per second while swollen. 0 means the reservoir never fills.</summary>
+    public float MilkFillPerSecond { get; init; } = 0.02f;
+
+    /// <summary>Milk removed per second while milking. 0 switches milking off.</summary>
+    public float MilkDrainPerSecond { get; init; } = 0.25f;
+
+    /// <summary>How much faster the escalated swelling fills.</summary>
+    public float MilkSuperMultiplier { get; init; } = 2f;
+
+    /// <summary>
+    /// The key that milks, as a <c>KeyCode</c> name.
+    ///
+    /// Not C, which the game already uses to cast. Immediate-mode GUI cannot stop the game reading
+    /// the keyboard for itself — it only consumes the event within its own layer — so a key shared
+    /// with an action would fire both, and "only while swollen" cannot be arranged from here.
+    /// </summary>
+    public string MilkingKey { get; init; } = "F8";
 
     /// <summary>
     /// The animator state played while milking. Empty leaves the animator alone.
@@ -156,6 +172,12 @@ public sealed record PleasureOptions
 
     /// <summary>Shows the cross that breaks as the climax limit is approached.</summary>
     public bool ShowCross { get; init; } = true;
+
+    public float MilkCentreX { get; init; } = PleasureOverlayLayout.Default.Milk.CentreX;
+
+    public float MilkBottomOffset { get; init; } = PleasureOverlayLayout.Default.Milk.BottomOffset;
+
+    public float MilkSize { get; init; } = PleasureOverlayLayout.Default.Milk.Size;
 }
 
 /// <summary>
