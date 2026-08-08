@@ -199,6 +199,19 @@ public sealed class PleasurePlugin : BasePlugin
             FindMethod(typeof(EventPlayerBase), "Update"),
             typeof(EventPatches),
             postfix: nameof(EventPatches.UpdatePostfix));
+        // The step the event calls 'Play Animation' asks for an animation by name through this
+        // label. Both take a parameter and return void, so a postfix on either carries nothing
+        // away (DEC-239). The async sibling returns a UniTask and is deliberately left alone.
+        applied += Patch(
+            "animator-trigger",
+            FindMethod(typeof(AnimatorTriggerLabel), "ExecutionOne"),
+            typeof(EventPatches),
+            postfix: nameof(EventPatches.AnimatorTriggerPostfix));
+        applied += Patch(
+            "player-action",
+            FindMethod(typeof(PlayerActionLabel), "ExecutionOne"),
+            typeof(EventPatches),
+            postfix: nameof(EventPatches.PlayerActionPostfix));
         applied += Patch(
             "animator-swap",
             FindMethod(typeof(Lelia), nameof(Lelia.ReplaceRuntimeAnimatorController)),

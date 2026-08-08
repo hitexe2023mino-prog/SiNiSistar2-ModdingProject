@@ -1,5 +1,6 @@
 using Il2CppInterop.Runtime;
 using SiNiSistar2.Event.EvSystem;
+using SiNiSistar2.EventLabel;
 using SiNiSistar2.Obj;
 using UnityEngine;
 using UnityEngine.Playables;
@@ -31,6 +32,8 @@ internal static class EventPatches
 {
     private static readonly HashSet<string> _played = new(StringComparer.Ordinal);
     private static readonly HashSet<string> _swapped = new(StringComparer.Ordinal);
+    private static readonly HashSet<string> _triggered = new(StringComparer.Ordinal);
+    private static readonly HashSet<string> _actions = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Names a scripted performance while it runs (SPEC003 付録A A-38, A-39).
@@ -115,6 +118,72 @@ internal static class EventPatches
         catch (Exception)
         {
             // A probe that can take the game down is worse than one that misses a swap.
+        }
+    }
+
+    /// <summary>
+    /// Names the animation an event asks for (SPEC003 付録A A-40).
+    ///
+    /// <c>RemoveBreastCollision</c> turned out to hold a step called <c>Play Animation</c>, and it
+    /// is a <c>HierarchyEventPlayer</c> with no animator and no timeline beneath it — so it does not
+    /// perform anything itself, it asks. <c>AnimatorTriggerParameter</c> is the shape of that
+    /// asking: a target animator, a layer, a time, and <c>m_PlayName</c> — the name of the thing to
+    /// play. That name is what four rounds of polling were looking for.
+    ///
+    /// <c>ExecutionOne</c> returns void, so a postfix on it can carry nothing away (DEC-239).
+    /// </summary>
+    internal static void AnimatorTriggerPostfix(AnimatorTriggerParameter __0)
+    {
+        try
+        {
+            if (!PleasureRuntime.Profile.ProbeMeasurements || __0 is null)
+            {
+                return;
+            }
+
+            string play = __0.m_PlayName ?? "(no name)";
+            if (_triggered.Count > 120 || !_triggered.Add(play))
+            {
+                return;
+            }
+
+            Animator? animator = __0.m_Animator;
+            PleasureRuntime.Log?.LogInfo(
+                $"A-40: an event asked for the animation '{play}' on layer {__0.m_LayerIndex} at "
+                + $"t={__0.m_PlayTime:0.00}, searched as {__0.m_SiNiSearchType}. The target animator "
+                + $"is {(animator is null ? "not set on the parameter (the event finds it at run time)"
+                    : $"'{Describe(animator.gameObject)}' on controller "
+                      + $"'{animator.runtimeAnimatorController?.name ?? "(none)"}'")}.");
+        }
+        catch (Exception)
+        {
+            // A probe that can take the game down is worse than one that misses a name.
+        }
+    }
+
+    /// <summary>Names an action an event asks the player to take (SPEC003 付録A A-40).</summary>
+    internal static void PlayerActionPostfix(PlayerActionParameter __0)
+    {
+        try
+        {
+            if (!PleasureRuntime.Profile.ProbeMeasurements || __0 is null)
+            {
+                return;
+            }
+
+            string action = __0.m_ActionType.ToString();
+            if (_actions.Count > 60 || !_actions.Add(action))
+            {
+                return;
+            }
+
+            PleasureRuntime.Log?.LogInfo(
+                $"A-40: an event asked the player for the action '{action}' "
+                + $"(bool={__0.m_VariousBool}, float={__0.m_VariousFloat:0.00}).");
+        }
+        catch (Exception)
+        {
+            // A probe that can take the game down is worse than one that misses an action.
         }
     }
 
