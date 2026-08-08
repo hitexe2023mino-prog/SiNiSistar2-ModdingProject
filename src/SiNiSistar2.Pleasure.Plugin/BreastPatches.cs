@@ -361,7 +361,7 @@ internal static class BreastPatches
             string portrait = one is null
                 ? "abnormalOne=(null)"
                 : $"portraitType={one.m_AbnormalPortraitType}, "
-                  + $"portraitParameter={(one.m_PortraitParameter is null ? "(null)" : "set")}";
+                  + $"portraitParameter={DescribeParameter(one.m_PortraitParameter)}";
 
             PleasureRuntime.Probe(
                 $"attached-{type}",
@@ -375,6 +375,47 @@ internal static class BreastPatches
             PleasureRuntime.Probe(
                 $"attached-{type}",
                 $"A-28: the attached {type} could not be read: {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Which portrait sprites a status actually carries (SPEC003 付録A A-28).
+    ///
+    /// "Set" and "null" are not the same finding, and neither is "set but every sprite in it is
+    /// null". Opening the gallery once made the portrait right afterwards, which is what a sprite
+    /// arriving late looks like — so the question is whether the art is missing or merely absent,
+    /// and only naming the individual sprites answers it.
+    /// </summary>
+    private static string DescribeParameter(PortraitParameter? parameter)
+    {
+        if (parameter is null)
+        {
+            return "(null)";
+        }
+
+        var present = new List<string>(4);
+        var missing = new List<string>(4);
+        Note("player", parameter.m_PortraitSprite_PlayerPortrait);
+        Note("breast", parameter.m_PortraitSprite_Breast);
+        Note("abnormal", parameter.m_PortraitSprite_Abnormal);
+        Note("other", parameter.m_PortraitSprite_Other);
+
+        return $"[present: {(present.Count == 0 ? "none" : string.Join("+", present))}; "
+            + $"null: {(missing.Count == 0 ? "none" : string.Join("+", missing))}]";
+
+        // Each slot is a PortraitSprite holding a base and a set of overwrites, not a Sprite, so
+        // "the slot exists" and "there is art in it" are two different questions.
+        void Note(string label, PortraitParameter.PortraitSprite? slot)
+        {
+            Sprite? sprite = slot?.m_BaseSprite;
+            if (sprite is null)
+            {
+                missing.Add(label);
+            }
+            else
+            {
+                present.Add($"{label}={sprite.name}");
+            }
         }
     }
 

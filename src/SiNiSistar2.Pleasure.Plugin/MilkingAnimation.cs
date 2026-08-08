@@ -40,6 +40,7 @@ internal static class MilkingAnimation
     private static readonly HashSet<string> _galleryClips = new(StringComparer.Ordinal);
     private static bool _reportedPaths;
     private static double _lastRequest;
+    private static double _lastSweep;
     private static AnimationClip? _clip;
 
     /// <summary>Starts the animation, or starts waiting for the clip that plays it.</summary>
@@ -103,22 +104,92 @@ internal static class MilkingAnimation
             }
 
             string key = $"{takeName}\n{name}";
-            if (!_galleryClips.Add(key))
+            if (_galleryClips.Add(key))
             {
-                return;
+                RuntimeAnimatorController? controller = animator.runtimeAnimatorController;
+                PleasureRuntime.Log?.LogInfo(
+                    $"A-27: the gallery take '{takeName}' has the player playing the clip '{name}' "
+                    + $"({clip.length:0.00}s, looping={clip.isLooping}) on controller "
+                    + $"'{controller?.name ?? "(none)"}'.");
             }
 
-            RuntimeAnimatorController? controller = animator.runtimeAnimatorController;
-            PleasureRuntime.Log?.LogInfo(
-                $"A-27: the gallery take '{takeName}' has the player playing the clip '{name}' "
-                + $"({clip.length:0.00}s, looping={clip.isLooping}) on controller "
-                + $"'{controller?.name ?? "(none)"}'. Put that name in "
-                + "BreastSuper.MilkingAnimationState if this is the milking take.");
+            SweepActors(takeName);
         }
         catch (Exception)
         {
             // A probe that can take the observer down is worse than one that misses a frame.
         }
+    }
+
+    /// <summary>
+    /// Records every animator in the scene during a gallery take (SPEC003 付録A A-27).
+    ///
+    /// Watching the player alone was not enough: through the milking take she plays <c>Idle</c> and
+    /// then <c>Breast2_Idle</c>, which are both standing still. An <c>EventPlayer</c> take is a
+    /// scripted performance with its own cast, so the milking is being animated on some other
+    /// object. Naming every animator that is playing something, with the path that identifies it,
+    /// is what turns "she is not doing it" into "this is who is".
+    ///
+    /// Throttled and de-duplicated: this walks the scene, and a line per frame would be unreadable
+    /// even if the cost were free.
+    /// </summary>
+    private static void SweepActors(string takeName)
+    {
+        double now = Time.unscaledTimeAsDouble;
+        if (now - _lastSweep < 0.25d || _galleryClips.Count > 120)
+        {
+            return;
+        }
+
+        _lastSweep = now;
+
+        var animators = UnityEngine.Object.FindObjectsOfType(Il2CppType.Of<Animator>());
+        for (var index = 0; index < animators.Length; index++)
+        {
+            var animator = animators[index]?.TryCast<Animator>();
+            if (animator is null || !animator.isActiveAndEnabled || animator.layerCount == 0)
+            {
+                continue;
+            }
+
+            var clips = animator.GetCurrentAnimatorClipInfo(0);
+            if (clips.Length == 0)
+            {
+                continue;
+            }
+
+            AnimationClip? clip = clips[0].clip;
+            string? name = clip?.name;
+            if (clip is null || string.IsNullOrEmpty(name))
+            {
+                continue;
+            }
+
+            string path = Describe(animator.gameObject);
+            if (!_galleryClips.Add($"{takeName}\n{path}\n{name}"))
+            {
+                continue;
+            }
+
+            PleasureRuntime.Log?.LogInfo(
+                $"A-27: during '{takeName}', '{path}' is playing the clip '{name}' "
+                + $"({clip.length:0.00}s, looping={clip.isLooping}) on controller "
+                + $"'{animator.runtimeAnimatorController?.name ?? "(none)"}'.");
+        }
+    }
+
+    /// <summary>The object's path in the hierarchy, which is what identifies one actor from another.</summary>
+    private static string Describe(GameObject gameObject)
+    {
+        var parts = new List<string>(6);
+        Transform? transform = gameObject.transform;
+        while (transform is not null && parts.Count < 6)
+        {
+            parts.Insert(0, transform.name);
+            transform = transform.parent;
+        }
+
+        return string.Join("/", parts);
     }
 
     /// <summary>Puts the controller and the pose back the way they were.</summary>
