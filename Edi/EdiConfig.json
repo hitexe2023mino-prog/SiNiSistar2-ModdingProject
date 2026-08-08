@@ -1,0 +1,56 @@
+{
+  "Edi": {
+    "Filler": false,
+    "Gallery": true,
+    "Reactive": false,
+    "UseChannels": true,
+    "Channels": [
+      "main",
+      "breast-left",
+      "breast-right",
+      "unassigned"
+    ],
+    "ExecuteOnReady": "",
+    "AutoLaunch": false,
+    "UseHttps": false,
+    "UseLogs": true,
+    "UseObsChapterGenerator": false,
+    "StopClearsFiller": true,
+    "UnassignedDeviceChannel": "unassigned"
+  },
+  "Gallery": {
+    "GalleryPath": "./Gallery",
+    "GenerateDefinitionFromChapters": false,
+    "GenerateChaptersFromDefinition": true,
+    "InproveLoopDetection": true,
+    "StrictVariantResolution": true
+  },
+  "GalleryBundler": {
+    "MinRepeatDuration": 7000,
+    "RepeatDuration": 2000,
+    "SpacerDuration": 5000,
+    "DisableBundler": false
+  },
+  "Devices": {
+    "Devices": {
+      "Vorze Piston": {
+        "Variant": "a10-main",
+        "Channel": "main",
+        "Min": 0,
+        "Max": 100
+      },
+      "Vorze UFO TW Rotate: 1": {
+        "Variant": "ufo-left",
+        "Channel": "breast-left",
+        "Min": 0,
+        "Max": 100
+      },
+      "Vorze UFO TW Rotate: 2": {
+        "Variant": "ufo-right",
+        "Channel": "breast-right",
+        "Min": 0,
+        "Max": 100
+      }
+    }
+  }
+}

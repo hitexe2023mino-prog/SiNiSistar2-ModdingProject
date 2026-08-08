@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <AssemblyName>SiNiSistar2.Edi.Plugin</AssemblyName>
+    <RootNamespace>SiNiSistar2.Edi.Plugin</RootNamespace>
+    <BepInExRoot Condition="'$(BepInExRoot)' == '' and '$(SINISISTAR2_BEPINEX_ROOT)' != ''">$(SINISISTAR2_BEPINEX_ROOT)</BepInExRoot>
+    <BepInExRoot Condition="'$(BepInExRoot)' == ''">$(MSBuildProjectDirectory)\..\..\BepInEx</BepInExRoot>
+    <RuntimePluginDir>$(MSBuildProjectDirectory)\..\..\BepInEx\plugins\community.sinisistar2.edi</RuntimePluginDir>
+  </PropertyGroup>
+
+  <Target Name="ValidateBepInExRoot" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(BepInExRoot)\core\BepInEx.Unity.IL2CPP.dll')" Text="Set BepInExRoot or SINISISTAR2_BEPINEX_ROOT to a generated SiNiSistar2 BepInEx directory." />
+    <Error Condition="!Exists('$(BepInExRoot)\interop\SiNiSistar2.dll')" Text="The selected BepInExRoot does not contain SiNiSistar2 interop assemblies. Start the game once with BepInEx 6 first." />
+  </Target>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SiNiSistar2.Edi.Core\SiNiSistar2.Edi.Core.csproj" />
+    <Reference Include="BepInEx.Core" HintPath="$(BepInExRoot)\core\BepInEx.Core.dll" Private="false" />
+    <Reference Include="BepInEx.Unity.IL2CPP" HintPath="$(BepInExRoot)\core\BepInEx.Unity.IL2CPP.dll" Private="false" />
+    <Reference Include="BepInEx.Unity.Common" HintPath="$(BepInExRoot)\core\BepInEx.Unity.Common.dll" Private="false" />
+    <Reference Include="Il2CppInterop.Runtime" HintPath="$(BepInExRoot)\core\Il2CppInterop.Runtime.dll" Private="false" />
+    <Reference Include="Il2Cppmscorlib" HintPath="$(BepInExRoot)\interop\Il2Cppmscorlib.dll" Private="false" />
+    <Reference Include="SiNiSistar2" HintPath="$(BepInExRoot)\interop\SiNiSistar2.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(BepInExRoot)\interop\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.AnimationModule" HintPath="$(BepInExRoot)\interop\UnityEngine.AnimationModule.dll" Private="false" />
+    <Reference Include="UnityEngine.UI" HintPath="$(BepInExRoot)\interop\UnityEngine.UI.dll" Private="false" />
+  </ItemGroup>
+
+  <Target Name="DeployToRepositoryRuntime" AfterTargets="Build">
+    <MakeDir Directories="$(RuntimePluginDir)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(RuntimePluginDir)" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\..\SiNiSistar2.Edi.Core\bin\$(Configuration)\net6.0\SiNiSistar2.Edi.Core.dll" DestinationFolder="$(RuntimePluginDir)" />
+  </Target>
+</Project>

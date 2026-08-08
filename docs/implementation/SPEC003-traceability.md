@@ -1,0 +1,141 @@
+# SPEC003 implementation traceability
+
+Normative source: [`docs/specifications/SPEC003.md`](../specifications/SPEC003.md). This document records implementation and verification only; it does not change the specification.
+
+In-game steps live in [`docs/testing/SPEC003-test-scenarios.md`](../testing/SPEC003-test-scenarios.md).
+
+## Stage
+
+The HP0 removal, the pleasure gauge, climaxes, the cross, the climax haze and the sidecar are implemented and running in game.  (FR-221) is the one requirement still untouched.
+
+Every tuning value still ships at no-change (FR-233), so a fresh install only removes the HP0 defeat until the values in  are set. The probe log remains on to settle the 付録A items that need play to answer.
+
+## Status meanings
+
+- **Tested** — implemented and covered by an automated test.
+- **Implemented / unverified** — code exists, in-game evidence outstanding.
+- **Probe** — the code present measures the question rather than answering it.
+- **Not started** — deliberately deferred to the next stage.
+
+## Automated coverage
+
+`dotnet test SiNiSistar2.Edi.sln -c Release` → 83 for this MOD, 89 for SPEC002, 143 for SPEC001, 0 failures.
+
+## 要件台帳
+
+| ID | 要件（要約） | 実装箇所 | 検証 | 状態 |
+|---|---|---|---|---|
+| FR-201 | GUID `community.sinisistar2.pleasure` のプラグイン | `PleasurePlugin` | ビルドと配置 | Tested |
+| FR-202 | ゲームバイナリ・アセット・セーブ・フラグ変数を書き換えない | 全体（実行時パッチと寄与のみ） | AC-201 実機 | Implemented / unverified |
+| FR-203 | 拘束中に `RemainHp1Msv` へ寄与しHPを1で止める | `PleasureObserver.UpdateHp0Suppression` | 3.1 の A-1、AC-202 | Implemented / unverified |
+| FR-204 | 拘束終了・シーン遷移・巻き戻しで寄与を解除 | `PleasureObserver.Suspend` / `UpdateHp0Suppression`、`InterventionLedger` | AC-203 実機 | Implemented / unverified |
+| FR-205 | HPダメージと演出を抑止しない | 寄与のみで値を書かない設計 | AC-202 実機 | Implemented / unverified |
+| FR-206 | 拘束外のHP0に介入しない | 寄与の条件を `bound` に限定 | AC-204 実機 | Implemented / unverified |
+| FR-207 | 拘束中かつ性的攻撃のときだけ快楽を上げる | `DamageProbePatches.OneDamagePostfix`、`PleasureMeter` | `PleasureMeterTests`（7件）、AC-205 実機 | Tested / unverified |
+| FR-208 | 5.3の順序で判別、不明は非性的 | `SexualAttackClassifier`、`EnemyAttackCatalog` | `SexualAttackClassifierTests`（6件）、`EnemyAttackCatalogTests`（4件） | Tested |
+| FR-209 | 感度が快楽の上昇量を増やす | `PleasureMeter.AddSexualHit` | `PleasureMeterTests.SensitivityIncreasesTheGainPerHit` | Tested |
+| FR-210 | 拘束外で減衰、拘束中は減衰しない | `PleasureObserver.DecayWhenFree`、`PleasureMeter.Decay` | `PleasureMeterTests`（2件）、AC-208 実機 | Tested / unverified |
+| FR-211 | 上限到達で1回だけ絶頂処理 | `PleasureMeter.ConsumeClimax`、`PleasureObserver.ConsumeClimax` | `PleasureMeterTests.AFullGaugeYieldsExactlyOneClimax` | Tested |
+| FR-212 | 絶頂演出はMOD描画、`timeScale` を変えない | `PleasureObserver.DrawClimaxFlash` / `DrawVignette`、`PleasureArt` | AC-210 実機 | Implemented / unverified |
+| FR-213 | 演出が出なくても状態変化と判定は行う | `PleasureObserver.ConsumeClimax`（演出に依存しない） | AC-211 | Implemented / unverified |
+| FR-214 | 限界は基礎値＋耐久から算出、読めなければ基礎値 | `ClimaxLimit.Compute`、`PleasureObserver.IsAtClimaxLimit` | `SensitivityAndClimaxTests`（4件）、3.3 の A-6 | Tested / unverified |
+| FR-215 | 限界到達でHP0抑止を解除し既存経路へ委ねる | `PleasureObserver.UpdateHp0Suppression` | AC-213 実機 | Implemented / unverified |
+| FR-216 | 限界以上の間は寄与を再登録しない | 同上（`atLimit` 判定） | AC-229 実機 | Implemented / unverified |
+| FR-217 | セーブポイント／オベリスクで絶頂回数を0へ、感度は戻さない | `SavePointPatches.ExecutionOneAsyncPostfix` | `SensitivityAndClimaxTests.ResettingTheCount...`、3.4 の A-7 | Tested / unverified |
+| FR-218 | 絶頂と性的被弾で感度が増える | `PleasureObserver.ConsumeClimax`、`DamageProbePatches` | `SensitivityAndClimaxTests` | Tested / unverified |
+| FR-219 | 感度を減少させる経路を持たない | `SensitivityTrack.Add`（非正を無視） | `SensitivityAndClimaxTests.SensitivityNeverFalls`、AC-215 実機 | Tested |
+| FR-220 | 感度は上限で頭打ち、減少ではない | `SensitivityTrack` | `SensitivityAndClimaxTests.TheCapStopsGrowth...` | Tested |
+| FR-221 | 条件成立で `BreastSuper` へ遷移、正規経路で付与 | `BreastEscalation`、`BreastPatches`、`PleasureObserver.ApplyPendingBreastSuper` | `BreastEscalationTests`（7件）、AC-217 実機 | Tested / unverified |
+| FR-240 | 最大レベルでの付与のみ計数、上限を読めなければ遷移しない | `BreastEscalation.Record`、`BreastPatches.MaxLevel`（読めなければ0） | `BreastEscalationTests.ApplicationsBelowTheMaximum...`、AC-235 実機 | Tested / unverified |
+| FR-241 | 治療手段を新設しない | 治療コードなし。`MakeHaanjaCurable` は `m_HaanjaCanCure` を立てるのみ | 3.8 の A-14、AC-237 実機 | Design-time |
+| FR-242 | `AbnormalData` の変更を記録しアンロードで戻す | `PleasureObserver.ApplyHaanjaCurableOverride`、`InterventionLedger` | AC-237 実機 | Implemented / unverified |
+| FR-244 | 付与経路を問わず計数、二重計上なし | `AbnormalList` の3経路と `AbnormalConditionLabel.ExecutionOne`、`BreastPatches.ClaimThisFrame`（フレーム単位で1回） | `BreastEscalationTests.TheSourceOfTheApplication...`、AC-238 実機 | Tested / unverified |
+| FR-245 | 適用前に `BreastSuper` の読み込みを要求 | `PleasureObserver.RequestBreastSuperLoad`（`AbnormalManager.PreloadResist`） | AC-217 実機 | Implemented / unverified |
+| FR-246 | 停止中は付与しない | `PleasureObserver.ApplyPendingBreastSuper`（`Time.timeScale <= 0` で保留） | 3.8 の A-16 | Implemented / unverified |
+| FR-247 | IL2CPP同一性はポインタで判定 | `BreastPatches.IsPlayer` | 3.8 実機 | Implemented / unverified |
+| FR-222 | 感度と絶頂回数をスロット単位で保存しセーブに同期 | `SidecarStore`、`PleasureRuntime.LoadSlot` / `SaveSlot`、`PleasureObserver.ProbeSaveSlot`、`SavePointPatches` | `SidecarStoreTests`（8件）、`SidecarDocumentTests`、AC-218 実機 | Tested / unverified |
+| FR-223 | 随伴ファイルの書き込みは原子的 | `SidecarStore.Save`（一時ファイル＋置換） | `SidecarStoreTests.SavingLeavesNoTemporaryFile` ほか | Tested |
+| FR-224 | ファイルがなければ初期値 | `SidecarDocument.Parse` | `SidecarDocumentTests` | Tested |
+| FR-225 | 非対応スキーマは読まず上書きしない | `SidecarDocument.Parse`、`SidecarStore`（スロットを施錠） | `SidecarStoreTests.ANewerSchemaLocksTheSlot...` | Tested |
+| FR-226 | 随伴ファイルの失敗でゲームを止めない | `SidecarStore`（失敗を戻り値で返す）、`PleasureRuntime.SaveSlot` | `SidecarStoreTests.AnUnwritableRoot...` ほか | Tested |
+| FR-227 | 他MODへ依存宣言しない | `PleasurePlugin`（`BepInDependency` なし） | AC-222 実機 | Implemented / unverified |
+| FR-228 | SPEC001が依存する面を変更しない | 参照なし | AC-223 実機 | Implemented / unverified |
+| FR-229 | SPEC002の管理面へ介入しない | 参照なし | AC-223 実機 | Implemented / unverified |
+| FR-230 | メインスレッドで完結、待機しない | `PleasureObserver`（同期処理のみ） | AC-224 実機 | Implemented / unverified |
+| FR-231 | 起動ログに構成を記録 | `PleasurePlugin.Load` | AC-225 実機 | Implemented / unverified |
+| FR-232 | 判定と直列化をゲーム非依存層へ | `SiNiSistar2.Pleasure.Core`（ゲーム参照ゼロ） | 83件がゲーム起動なしで実行 | Tested |
+| FR-233 | 未実測の既定は無変更相当、HP0抑止のみ例外 | `PleasureOptions` の既定値 | `PleasureProfileTests.ShippedDefaults...` | Tested |
+| FR-234 | `Enabled=false` でパッチも随伴ファイルもなし | `PleasurePlugin.Load` の早期 return | `PleasureProfileTests.DisablingTheMod...` | Tested |
+| FR-235 | 敵別分類を独立したカタログファイルへ、既存設定を種に | `EnemyAttackCatalogStore`、`EnemyAttackCatalog.SeedFrom`、`PleasurePlugin.LoadEnemyCatalog` | `EnemyAttackCatalogTests.TheOldConfigListsSeed...` ほか、AC-230 実機 | Tested / unverified |
+| FR-236 | ゲーム内編集画面、再起動なしで反映 | `EnemyCatalogEditor`（F10）、分類器がカタログを参照保持 | `EnemyAttackCatalogTests.AnEditAppliesWithoutRebuilding...`、AC-231 実機 | Tested / unverified |
+| FR-237 | `GalleryEnemyID` 全件を列挙し拘束経験のある敵を先頭に | `PleasurePlugin.KnownEnemyIds`、`EnemyAttackCatalog.AddMissing` / `Rows` | `EnemyAttackCatalogTests`（2件）、AC-232 実機 | Tested / unverified |
+| FR-238 | 保存と取り消しの区別、取り消しで開始時点へ | `EnemyCatalogEditor.Commit` / `Cancel`、`EnemyAttackCatalog.RestoreFrom` | `EnemyAttackCatalogTests.CancellingRestores...`、AC-233 実機 | Tested / unverified |
+| FR-243 | 旧スキーマ版の随伴ファイルを読む | `SidecarDocument.Parse`（新しい版のみ拒否） | `SidecarStoreTests.AnOlderSchemaIsRead...` | Tested |
+| FR-239 | カタログの原子的書き込み、非対応版を上書きしない、失敗で止めない | `EnemyAttackCatalogStore`、`JsonFile` | `EnemyAttackCatalogStoreTests`（6件） | Tested |
+
+## 判断記録
+
+| 項目 | 内容 |
+|---|---|
+| 論点 | 付録A の A-4（ゲームオーバーの発火手段）と A-5（HP0を経由するか） |
+| 選択 | 限界到達時に `RemainHp1Msv` の寄与を登録しないだけとし、ゲームオーバー処理を呼ばない |
+| 根拠 | interop 調査で `GameOverLabel.ExecutionOne(GameOverParameter)` と `HpControlType` を確認したが、自前で呼べば復帰処理・ペナルティ・演出の再現責任をMODが負う。抑止を外すだけなら、以降はゲーム自身が普段どおり走る |
+| 影響 | SPEC001 の `game-over` トリガーが従来どおり成立する。実測項目が2件減った |
+| 代替案 | `Lelia.RequestCommonDead` を立てる、`GameOverLabel` を自前で呼ぶ |
+
+| 項目 | 内容 |
+|---|---|
+| 論点 | 付録A の A-7（セーブポイントのアクティベート検出） |
+| 選択 | `SavePointAsyncLabel.ExecutionOneAsync` の postfix、`IsObeliskLabel` でオベリスクを判別 |
+| 根拠 | interop に当該メソッドと `IsObeliskLabel` が実在し、`SavePointMenu.SetObeliskMode(bool)` が裏付けになる。`SavePointSelector.IsObeliskActive` は地点の形態を表すもので作動イベントではない |
+| 影響 | 実測は「シーン設定時ではなく作動時に走ること」の確認だけに縮小した |
+| 代替案 | セーブ完了（`MainSaveData.IsAutoSave` で手動を判別）を契機にする |
+
+| 項目 | 内容 |
+|---|---|
+| 論点 | オベリスク限定でリセットすると、難易度によってリセット地点が消え得る |
+| 選択 | `ResetAtObeliskOnly` を設定として出し、既定を偽（どのセーブポイントでもリセット）とする |
+| 根拠 | `SavePointSelector.m_ChangeObeliskInHardMode` により、難易度でセーブポイントがオベリスクへ置き換わる。オベリスク限定を既定にすると、難易度によってはリセット手段のない構成が生まれる |
+| 影響 | ユーザーの「聖なる像など」という表現の範囲に収まる。限定したい場合は設定で切り替えられる |
+| 代替案 | オベリスク限定を既定にする、常に両方でリセットし設定を持たない |
+
+| 項目 | 内容 |
+|---|---|
+| 論点 | 実測前に全機構を実装するか、計測を先に回すか |
+| 選択 | HP0抑止と計測だけを実装し、快楽以降の値は無変更相当のまま出す |
+| 根拠 | A-2（拘束中の被弾を観測できるか）が否定されると、快楽の上昇契機ごと設計をやり直す必要がある。SPEC002 で `Execution` のパッチが当たらないことを実測ログで一度に特定できた経験と同じ形にした |
+| 影響 | 1回のプレイで A-1、A-2、A-3、A-6、A-7、A-9 がまとめて確定する |
+| 代替案 | 全機構を実装してから実機で調整する |
+
+| 項目 | 内容 |
+|---|---|
+| 論点 | 敵別の性的・非性的の宣言をどこに置き、どこから編集させるか |
+| 選択 | 設定文字列から独立したカタログファイルへ移し、`F10` のゲーム内画面から編集する。分類器はカタログを参照で保持する |
+| 根拠 | 対象は `GalleryEnemyID` 108件でカンマ区切りの1行に収まらない。さらに、その敵の攻撃が性的かどうかは画面を見て下す判断であり、ゲームを終了して編集し再起動する経路では対象が目の前にない状態で決めることになる |
+| 影響 | 編集が次の被弾から効く。`SexualEnemyIds` / `NonSexualEnemyIds` はカタログ新規作成時の種としてのみ残る |
+| 代替案 | `ConfigEntry` の文字列を増やす、外部エディタ用のCSVのみ、編集のたびにプロファイル再構築 |
+
+| 項目 | 内容 |
+|---|---|
+| 論点 | 編集画面をどのIMGUI呼び出しで作るか |
+| 選択 | `GUI.Label` と `GUI.Box` だけで描き、行の当たり判定を自前で行う |
+| 根拠 | `GUI.Button`、`GUI.BeginScrollView`、`GUI.TextField` はいずれも interop メタデータにあるが、`GUI.DrawTexture` も同様にありながら本ビルドでは実行時に `Method unstripping failed` を投げた。実機で成功が確認できている呼び出しだけに限る |
+| 影響 | スクロールと選択を自前で持つ分だけ実装が増えたが、実行時に失敗し得る面が増えない |
+| 代替案 | `GUI.Button` と `BeginScrollView` を使う、uGUI のキャンバスを立てる |
+
+| 項目 | 内容 |
+|---|---|
+| 論点 | アイテムを使っても何も起こらず、プローブも1行も出なかった |
+| 原因 | `ReferenceEquals` でプレイヤーの状態異常リストを判定していた。Il2CppInterop はHarmonyのpostfixへ独自のラッパーを渡すため常に偽になり、すべての付与が無言で捨てられていた |
+| 二次的な誤り | 診断の出力をその判定の**後ろ**に置いていたため、判定が壊れるとログが完全に沈黙した。「何も付与されていない」と「すべて捨てられた」が区別できない |
+| 選択 | ポインタ比較へ変更し（SPEC002 が既にそうしている）、診断は判定の前に出して付与先を注記する |
+| 併せて | `AbnormalConditionLabel.ExecutionOne` にもpostfixを追加した。IL2CPPのインライン化で `AddAbnormal` の呼び出しが消えている可能性があり、SPEC002 が `GachaGachaSystem.Execution` で同じ失敗を経験している |
+
+## 完了監査
+
+- **未着手の要件はない。** ただし FR-241（治療）は **Design-time** であり、既存の治療経路が `BreastSuper` へ届くかは実機の A-14 待ちである。届かないと判明した場合に限り `MakeHaanjaCurable` を既定で有効にする。それでも届かない場合は延期事項へ移す。
+- `BreastSuperChance`（確率付与）は廃止し、`BreastSuperAfterApplications`（最大レベルでの付与回数）へ置き換えた。要求が「一定回数受けた場合に遷移」であり、確率では回数を表現できない。
+- 新規の FR-235〜239 は Core 側を単体テストで、ゲーム内編集画面（`EnemyCatalogEditor`）を **Implemented / unverified** として扱う。実機確認は AC-230〜234 と 付録A A-13。
+- 実機で確認済み: HP0 抑止（A-1）、拘束中の被弾の観測（A-2）、状態異常の同伴（A-3）、耐久値（A-6）、セーブポイント検出（A-7）、スロット識別（A-9）。
+- SPEC001 と SPEC002 のファイルは未変更。`SiNiSistar2.Edi.sln` へは3プロジェクトの追加のみ。
+- 未検証項目は実機テストシナリオ3章へ引き継ぎ済み。
