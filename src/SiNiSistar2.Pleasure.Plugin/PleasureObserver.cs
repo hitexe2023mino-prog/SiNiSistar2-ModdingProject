@@ -362,6 +362,11 @@ public sealed class PleasureObserver : MonoBehaviour
             abnormals.RemoveAbnormal(AbnormalType.Breast);
         }
 
+        // Full from the moment it lands. The escalation is the body having more than it can hold,
+        // so a gauge that started empty there would say the opposite of what just happened — and it
+        // would make the escalated status the cheapest one to be rid of.
+        PleasureRuntime.Milk?.LoadFrom(1f);
+
         PleasureRuntime.SuperTimer?.Start();
         BeginTransition();
 
@@ -1428,7 +1433,7 @@ public sealed class PleasureObserver : MonoBehaviour
         if (original is null)
         {
             PleasureRuntime.Probe(
-                $"milking-clip-missing-{clipName}",
+                $"milking-clip-missing-{clipName}-{controllerName}",
                 $"A-23: no clip named '{clipName}' is in that table, so milking has no animation. "
                 + "Measured on this build: the player's field controller carries only the Breast2_* "
                 + "set, and the milking take belongs to the gallery. The MOD will not stand a "

@@ -29,12 +29,13 @@ internal static class PleasureArt
     /// sits inside the dial the game already draws instead of ringing it.
     /// </summary>
     /// <summary>
-    /// The milk reservoir: a breast-shaped vessel with white liquid pooling in it.
+    /// The milk reservoir: a pair of breasts in outline, filling with white from below.
     ///
-    /// Deliberately not another disc. The pleasure gauge is a disc because it sits inside the game's
-    /// circular dial; this one reports something about the body, and a shape that says so is read
-    /// without a legend. The silhouette is an ellipse with a small bulge at the foot, which is as
-    /// much form as a gauge this size can carry before it turns to mush.
+    /// Two, drawn as strokes with the nipples marked, rather than the single filled lobe this used
+    /// to be. The single lobe read as an abstract blob at gauge size — it needed a legend to say
+    /// what it was, which is exactly what a HUD element must not need. A pair in outline is
+    /// recognised immediately and leaves its interior free for the liquid, so the reading and the
+    /// subject are the same shape.
     /// </summary>
     internal static Texture2D MilkVessel(int size, float fill, float phase)
     {
@@ -42,17 +43,16 @@ internal static class PleasureArt
         var pixels = new Color32[size * size];
         float clamped = Math.Clamp(fill, 0f, 1f);
 
-        // Row 0 is the top of the drawn rectangle, so the surface descends as the vessel fills.
+        // Row 0 is the top of the drawn rectangle, so the surface descends as it fills.
         float surface = size * (1f - clamped);
 
-        float bodyX = size * 0.5f;
-        float bodyY = size * 0.44f;
-        float bodyRx = size * 0.40f;
-        float bodyRy = size * 0.43f;
-        float tipX = size * 0.5f;
-        float tipY = size * 0.90f;
-        float tipR = size * 0.085f;
-        float edge = Math.Max(1.5f, size * 0.035f);
+        float radius = size * 0.26f;
+        float centreY = size * 0.46f;
+        float leftX = size * 0.27f;
+        float rightX = size * 0.73f;
+        float stroke = Math.Max(1.6f, size * 0.055f);
+        float nippleR = Math.Max(1.5f, size * 0.055f);
+        float nippleY = centreY + (radius * 0.62f);
 
         for (var y = 0; y < size; y++)
         {
@@ -60,56 +60,63 @@ internal static class PleasureArt
             {
                 int index = (y * size) + x;
 
-                float bx = (x - bodyX) / bodyRx;
-                float by = (y - bodyY) / bodyRy;
-                float body = (float)Math.Sqrt((bx * bx) + (by * by));
+                float left = Distance(x, y, leftX, centreY);
+                float right = Distance(x, y, rightX, centreY);
+                float nearest = Math.Min(left, right);
 
-                float tx = x - tipX;
-                float ty = y - tipY;
-                float tip = (float)Math.Sqrt((tx * tx) + (ty * ty)) / tipR;
-
-                float shape = Math.Min(body, tip);
-                if (shape > 1f)
+                if (nearest > radius + (stroke * 0.5f))
                 {
                     pixels[index] = new Color32(0, 0, 0, 0);
                     continue;
                 }
 
-                bool rim = shape > 1f - (edge / Math.Max(bodyRx, 1f));
+                // The outline, drawn as a band about the circle rather than a filled edge, so both
+                // lobes keep their shape when the liquid is high.
+                bool outline = nearest > radius - (stroke * 0.5f);
+                if (outline)
+                {
+                    pixels[index] = new Color32(248, 236, 242, 235);
+                    continue;
+                }
+
+                float nipple = Math.Min(
+                    Distance(x, y, leftX, nippleY),
+                    Distance(x, y, rightX, nippleY));
+                if (nipple < nippleR)
+                {
+                    pixels[index] = new Color32(242, 186, 208, 245);
+                    continue;
+                }
 
                 float wave = (float)Math.Sin((x / (double)size * 6.28318) + phase) * size * 0.012f;
                 float localSurface = surface + wave;
-
                 if (y < localSurface)
                 {
-                    // Empty above the milk, but the outline stays: a vessel that vanishes when empty
-                    // is indistinguishable from one that is broken.
-                    pixels[index] = rim
-                        ? new Color32(236, 214, 222, 110)
-                        : new Color32(0, 0, 0, 0);
+                    pixels[index] = new Color32(0, 0, 0, 0);
                     continue;
                 }
 
-                if (rim)
-                {
-                    pixels[index] = new Color32(246, 232, 238, 210);
-                    continue;
-                }
-
-                float depth = Math.Clamp((y - localSurface) / Math.Max(1f, size * 0.6f), 0f, 1f);
+                float depth = Math.Clamp((y - localSurface) / Math.Max(1f, size * 0.5f), 0f, 1f);
                 bool meniscus = y - localSurface < size * 0.03f;
                 pixels[index] = meniscus
-                    ? new Color32(255, 255, 255, 245)
+                    ? new Color32(255, 255, 255, 248)
                     : new Color32(
                         252,
-                        (byte)(246 - (depth * 12f)),
-                        (byte)(238 - (depth * 22f)),
-                        (byte)(200 + (depth * 45f)));
+                        (byte)(248 - (depth * 10f)),
+                        (byte)(240 - (depth * 20f)),
+                        (byte)(205 + (depth * 45f)));
             }
         }
 
         Upload(texture, pixels, size, size);
         return texture;
+    }
+
+    private static float Distance(int x, int y, float cx, float cy)
+    {
+        float dx = x - cx + 0.5f;
+        float dy = y - cy + 0.5f;
+        return (float)Math.Sqrt((dx * dx) + (dy * dy));
     }
 
     internal static Texture2D LiquidDisc(int size, float fill, float phase)
