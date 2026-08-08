@@ -91,7 +91,14 @@ public sealed class PleasureObserver : MonoBehaviour
     [HideFromIl2Cpp]
     private static void ProbeGalleryTake()
     {
-        if (!PleasureRuntime.Profile.ProbeMeasurements)
+        // The same gate Poll uses. Reading a manager while the game has closed access logs an
+        // error of its own, once per frame, and moving this probe outside Poll took its gate off
+        // with it: 57 of them arrived during one scene load.
+        if (!PleasureRuntime.Profile.ProbeMeasurements
+            || ManagerList.IsForbiddenManagerAccessState
+            || !ManagerList.HasCompletedFirstInitialize
+            || ManagerList.Instance is null
+            || !ManagerList.HasDoneSceneSetUp)
         {
             return;
         }
