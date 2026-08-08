@@ -1243,7 +1243,7 @@ public sealed class PleasureObserver : MonoBehaviour
 
         // The crest is a wide banner rather than a disc, so its marker has to be too. A square ring
         // around it would say the element is a different size from the one being dragged.
-        float halfWidth = _editingElement == 3 ? half * LustCrestArt.AspectRatio : half;
+        float halfWidth = _editingElement == 3 ? half * CrestAspect() : half;
 
         var tint = new Color(1f, 0.85f, 0.35f, 0.85f);
         const float edge = 2f;
@@ -1843,7 +1843,7 @@ public sealed class PleasureObserver : MonoBehaviour
         // for the width and would then leave half of itself empty.
         float half = screen * placement.Size;
         float drawHeight = half * 2f;
-        float drawWidth = drawHeight * LustCrestArt.AspectRatio;
+        float drawWidth = drawHeight * CrestAspect();
         float x = Screen.width * placement.CentreX;
         float y = screen - (screen * placement.BottomOffset);
 
@@ -1855,7 +1855,13 @@ public sealed class PleasureObserver : MonoBehaviour
             // at the handful of moments it actually happens.
             _crestParts = revealed;
             _crestResolution = resolution;
-            _crest = LustCrestArt.Build(resolution, revealed);
+
+            // The real image when one has been provided; the drawn approximation otherwise. The
+            // requirement is exact overlay with the game's mark, and only projection achieves
+            // exactness (FR-270) - but a missing file must cost fidelity, not the mechanism.
+            _crest = LustCrestImage.Available
+                ? LustCrestImage.Build(resolution, revealed)
+                : LustCrestArt.Build(resolution, revealed);
         }
 
         var pulse = (float)((Math.Sin(Time.unscaledTimeAsDouble * 1.6d) + 1d) * 0.5d);
@@ -1865,6 +1871,11 @@ public sealed class PleasureObserver : MonoBehaviour
             _crest,
             new Color(1f, 1f, 1f, alpha));
     }
+
+    /// <summary>The width-over-height of whichever crest source is in use.</summary>
+    [HideFromIl2Cpp]
+    private static float CrestAspect() =>
+        LustCrestImage.Available ? LustCrestImage.Aspect : LustCrestArt.AspectRatio;
 
     [HideFromIl2Cpp]
     private void RefreshMilk(float fill, int resolution)
