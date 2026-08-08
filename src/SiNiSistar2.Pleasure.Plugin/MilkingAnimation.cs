@@ -4,6 +4,7 @@ using SiNiSistar2.Manager;
 using SiNiSistar2.Manager.Gallery;
 using SiNiSistar2.Obj;
 using UnityEngine;
+using UnityEngine.Playables;
 
 namespace SiNiSistar2.Pleasure.Plugin;
 
@@ -46,6 +47,7 @@ internal static class MilkingAnimation
     private static double _silentSince;
     private static bool _silenceLogged;
     private static readonly HashSet<string> _proxySeen = new(StringComparer.Ordinal);
+    private static readonly HashSet<string> _directorsSeen = new(StringComparer.Ordinal);
     private static bool _reportedPaths;
     private static double _lastRequest;
     private static int _sweeps;
@@ -203,6 +205,7 @@ internal static class MilkingAnimation
             {
                 _describeAsked = false;
                 DescribePlayer(scene);
+                DescribeDirectors(scene);
             }
 
             var read = 0;
@@ -222,6 +225,16 @@ internal static class MilkingAnimation
                 }
 
                 read += ReadTree(proxy, scene, "the stand-in in the player's place", swollen);
+            }
+
+            // Timelines, whether or not the game has called the moment cinematic. ProbeEventCast is
+            // gated on IsCinematicEvent, and there is no reading that says the milking scene sets
+            // it — the same mistake as the swelling gate, one level down. Two known paths, bounded.
+            ReportDirectors(lelia.gameObject, scene, "the player");
+            GameObject? events = GameObject.Find("Root/Event");
+            if (events is not null)
+            {
+                ReportDirectors(events, scene, "the scene's events");
             }
 
             if (read > 0)
@@ -460,8 +473,18 @@ internal static class MilkingAnimation
                 // animate, and that reading was then used to conclude the event was not the one
                 // being looked for. An event's performer is under it, not necessarily on it.
                 var found = child.gameObject.GetComponentsInChildren(Il2CppType.Of<Animator>(), true);
-                names.Add($"{child.name} ({found.Length} animator(s) beneath it)");
 
+                // Directors as well as animators. The game has
+                // SiNiSistar2.Event.EvSystem.PlayableDirectorPlayer, which wraps a PlayableDirector
+                // and carries a character move track — so a performance here can be a timeline
+                // rather than a state machine, and a timeline drives its animators through a
+                // playable graph, which GetCurrentAnimatorClipInfo cannot see. Counting only
+                // animators is what produced "0 animator(s) beneath it" for objects that may well
+                // be performing.
+                var directors = child.gameObject.GetComponentsInChildren(
+                    Il2CppType.Of<PlayableDirector>(), true);
+                names.Add(
+                    $"{child.name} ({found.Length} animator(s), {directors.Length} director(s) beneath it)");
             }
 
             if (!repeat)
@@ -521,6 +544,8 @@ internal static class MilkingAnimation
                 {
                     Report(animators[slot]?.TryCast<Animator>(), scene, child.name);
                 }
+
+                ReportDirectors(child.gameObject, scene, child.name);
             }
         }
         catch (Exception)
@@ -636,6 +661,97 @@ internal static class MilkingAnimation
         catch (Exception)
         {
             // Reading an animator must never be able to stop the observer.
+        }
+    }
+
+    /// <summary>
+    /// Names any timeline running beneath an object (SPEC003 付録A A-37).
+    ///
+    /// A <see cref="PlayableDirector"/> plays a timeline asset, and a timeline drives its animators
+    /// through a playable graph rather than through their state machines. An animator so driven
+    /// answers <c>GetCurrentAnimatorClipInfo</c> with nothing — it is animating and has no clip to
+    /// name. Every reading taken so far has been of that kind, which is why a performance that was
+    /// happening on screen produced no line at all.
+    ///
+    /// The asset's name is what identifies the performance here, in the place a clip name would
+    /// otherwise sit.
+    /// </summary>
+    private static void ReportDirectors(GameObject root, string scene, string who)
+    {
+        try
+        {
+            var directors = root.GetComponentsInChildren(Il2CppType.Of<PlayableDirector>(), false);
+            for (var index = 0; index < directors.Length && index < 8; index++)
+            {
+                var director = directors[index]?.TryCast<PlayableDirector>();
+                if (director is null)
+                {
+                    continue;
+                }
+
+                string asset = director.playableAsset?.name ?? "(no asset)";
+                string path = Describe(director.gameObject);
+                if (_directorsSeen.Count > 120 || !_directorsSeen.Add($"{scene}|{path}|{asset}"))
+                {
+                    continue;
+                }
+
+                PleasureRuntime.Log?.LogInfo(
+                    $"A-37: in '{scene}', '{who}' has a timeline on '{path}': asset '{asset}', "
+                    + $"state={director.state}, time={director.time:0.00} of {director.duration:0.00}s, "
+                    + $"wrap={director.extrapolationMode}.");
+            }
+        }
+        catch (Exception)
+        {
+            // Reading a director must never be able to stop the observer.
+        }
+    }
+
+    /// <summary>
+    /// Names every timeline in the scene, once, on request (SPEC003 付録A A-37).
+    ///
+    /// This does walk the scene, which DEC-236 forbids for animators. The reason that rule exists is
+    /// that the walk asked every animator it found what it was playing, at scene scale, including
+    /// animators that were never bound — and the game hung, twice. Nothing of that applies here: a
+    /// director is a rare component, so the set is a handful rather than thousands, and reading its
+    /// asset name and clock touches no animation binding at all. It is also press-driven and written
+    /// once, not a per-frame sweep. If it does turn out to cost anything, it goes, like the last one.
+    /// </summary>
+    private static void DescribeDirectors(string scene)
+    {
+        try
+        {
+            var directors = UnityEngine.Object.FindObjectsOfType(Il2CppType.Of<PlayableDirector>());
+            if (directors.Length == 0)
+            {
+                PleasureRuntime.Log?.LogInfo(
+                    $"A-37: '{scene}' has no PlayableDirector anywhere, so nothing here is being "
+                    + "played as a timeline.");
+                return;
+            }
+
+            var rows = new List<string>(directors.Length);
+            for (var index = 0; index < directors.Length && index < 24; index++)
+            {
+                var director = directors[index]?.TryCast<PlayableDirector>();
+                if (director is null)
+                {
+                    continue;
+                }
+
+                rows.Add(
+                    $"'{Describe(director.gameObject)}': asset '{director.playableAsset?.name ?? "(none)"}', "
+                    + $"state={director.state}, time={director.time:0.00} of {director.duration:0.00}s, "
+                    + $"active={director.isActiveAndEnabled}");
+            }
+
+            PleasureRuntime.Log?.LogInfo(
+                $"A-37: '{scene}' holds {directors.Length} timeline(s): {string.Join(" | ", rows)}.");
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Log?.LogWarning($"A-37: the timelines could not be named: {exception.Message}");
         }
     }
 
