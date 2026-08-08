@@ -1271,6 +1271,12 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
+        // The clip lives in a bundle that is not loaded during ordinary play, so the animation may
+        // arrive a moment after the keypress rather than with it (付録A A-25, A-26).
+        MilkingAnimation.Tick(
+            PleasureRuntime.Profile.BreastSuper.MilkingAnimationState,
+            PleasureRuntime.Profile.BreastSuper.MilkingAnimationSlot);
+
         if (milk.Tick(delta) != MilkOutcome.Emptied)
         {
             return;

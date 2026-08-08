@@ -1,4 +1,5 @@
 using Il2CppInterop.Runtime;
+using SiNiSistar2;
 using SiNiSistar2.Manager;
 using SiNiSistar2.Obj;
 using UnityEngine;
@@ -7,14 +8,21 @@ namespace SiNiSistar2.Pleasure.Plugin;
 
 /// <summary>
 /// Plays the game's own milking animation while the player is milking (SPEC003 FR-258, 付録A A-23,
-/// A-25).
+/// A-25, A-26).
 ///
-/// The first attempt asked the player's field controller for the milking state and was told there
-/// is none, and the reading was right: <c>Breast2_AnimatorOverride</c> maps 82 clips and the
-/// milking take is not among them. The conclusion drawn from it was wrong. A state and a clip are
-/// not the same thing. The field controller has no shortage of states; what it lacks is that clip
-/// in any of them. An override controller exists precisely to put a chosen clip into a chosen
-/// state, so the clip can be brought to the player rather than the player sent to the clip.
+/// Three measurements shaped this, in the order they were taken.
+///
+/// The player's field controller has no state for the milking take (A-23). That was read as "it
+/// cannot be played", which was wrong: a state and a clip are not the same thing, and the field
+/// controller has states to spare. An override controller puts a chosen clip into a chosen state,
+/// so the clip can be brought to the player rather than the player sent to the clip.
+///
+/// The clip is not in memory during ordinary play (A-25). It belongs to a gallery bundle, so it has
+/// to be asked for. The game's own <see cref="AssetBundleLoader"/> does that, and asking it is not
+/// the same as reaching around it.
+///
+/// The load is asynchronous, so milking starts without the animation and picks it up when it
+/// arrives. Waiting for the bundle before milking would put a load in front of a keypress.
 ///
 /// This is not the borrowing DEC-224 forbids. What is borrowed is a state name; what plays is the
 /// real milking clip. SPEC001 samples <c>GetCurrentAnimatorClipInfo</c> and reports the clip's
@@ -25,104 +33,35 @@ internal static class MilkingAnimation
 {
     private static RuntimeAnimatorController? _previous;
     private static int _returnState;
-    private static bool _reportedSearch;
+    private static bool _playing;
+    private static bool _wanted;
+    private static bool _reportedMissing;
+    private static bool _reportedPaths;
+    private static double _lastRequest;
+    private static AnimationClip? _clip;
 
-    /// <summary>
-    /// Starts the milking animation, and says why in the log when it cannot.
-    ///
-    /// Every exit reports. A silent failure here reads to the player as "the animation is broken",
-    /// which is the one thing the log has to be able to tell apart from "this build calls it
-    /// something else".
-    /// </summary>
+    /// <summary>Starts the animation, or starts waiting for the clip that plays it.</summary>
     internal static void Start(string clipName, string slotName)
     {
         _previous = null;
         _returnState = 0;
+        _playing = false;
+        _wanted = clipName.Length > 0;
 
-        if (clipName.Length == 0)
+        if (_wanted)
         {
-            return;
+            TryPlay(clipName, slotName);
         }
+    }
 
-        try
+    /// <summary>
+    /// Called every frame while milking, so the animation can begin the moment its bundle arrives.
+    /// </summary>
+    internal static void Tick(string clipName, string slotName)
+    {
+        if (_wanted && !_playing)
         {
-            Lelia? lelia = ManagerList.Object?.Lelia;
-            Animator? animator = lelia?.m_Animator;
-            if (lelia is null || animator is null)
-            {
-                PleasureRuntime.Log?.LogWarning("Milking has no animator to play on.");
-                return;
-            }
-
-            // A build that names a state after the clip needs none of what follows.
-            int direct = Animator.StringToHash(clipName);
-            if (animator.HasState(0, direct))
-            {
-                _returnState = animator.GetCurrentAnimatorStateInfo(0).fullPathHash;
-                animator.Play(direct, 0, 0f);
-                PleasureRuntime.Probe(
-                    $"milking-state-direct-{clipName}",
-                    $"A-23: milking plays the animator state '{clipName}' directly.");
-                return;
-            }
-
-            AnimationClip? clip = FindClip(clipName);
-            if (clip is null)
-            {
-                return;
-            }
-
-            int slot = Animator.StringToHash(slotName);
-            if (!animator.HasState(0, slot))
-            {
-                PleasureRuntime.Log?.LogWarning(
-                    $"A-25: the milking clip '{clipName}' was found, but layer 0 has no state "
-                    + $"'{slotName}' to play it in. Set BreastSuper.MilkingAnimationSlot to a state "
-                    + "name from the A-23 table.");
-                return;
-            }
-
-            RuntimeAnimatorController? current = animator.runtimeAnimatorController;
-            if (current is null)
-            {
-                PleasureRuntime.Log?.LogWarning("The player has no animator controller to override.");
-                return;
-            }
-
-            // Wrapping whatever is on the player, rather than a controller of our own, is what
-            // keeps the swollen body: the swelling is itself an override, and an override
-            // controller layered over it inherits every clip it does not replace.
-            // Built empty and pointed at the current controller afterwards. The interop assembly
-            // exposes only the parameterless constructor plus the pointer one Il2CppInterop adds,
-            // so the Unity constructor that takes a controller is not reachable from here.
-            var over = new AnimatorOverrideController
-            {
-                runtimeAnimatorController = current,
-                name = $"{current.name}+Milking",
-            };
-            string original = OriginalClipName(current, slotName);
-            over[original] = clip;
-
-            _previous = current;
-            _returnState = animator.GetCurrentAnimatorStateInfo(0).fullPathHash;
-
-            // Assigning the controller directly, and putting the old one back ourselves, rather
-            // than through Lelia.ReplaceRuntimeAnimatorController / ResumeRuntimeAnimatorController.
-            // Those restore the controller the game remembers, which is the unswollen one; leaving
-            // milking would then undress the swelling as a side effect.
-            animator.runtimeAnimatorController = over;
-            animator.Play(slot, 0, 0f);
-
-            PleasureRuntime.Probe(
-                $"milking-override-{clipName}",
-                $"A-25: milking plays the clip '{clipName}' through the state '{slotName}' "
-                + $"(slot '{original}'), layered over '{current.name}'.");
-        }
-        catch (Exception exception)
-        {
-            _previous = null;
-            _returnState = 0;
-            PleasureRuntime.Log?.LogWarning($"The milking animation could not be started: {exception.Message}");
+            TryPlay(clipName, slotName);
         }
     }
 
@@ -133,6 +72,8 @@ internal static class MilkingAnimation
         int state = _returnState;
         _previous = null;
         _returnState = 0;
+        _playing = false;
+        _wanted = false;
 
         try
         {
@@ -156,6 +97,90 @@ internal static class MilkingAnimation
         {
             PleasureRuntime.Log?.LogWarning(
                 $"The player could not be returned to their previous animation: {exception.Message}");
+        }
+    }
+
+    private static void TryPlay(string clipName, string slotName)
+    {
+        try
+        {
+            Lelia? lelia = ManagerList.Object?.Lelia;
+            Animator? animator = lelia?.m_Animator;
+            if (lelia is null || animator is null)
+            {
+                return;
+            }
+
+            // A build that names a state after the clip needs none of what follows.
+            int direct = Animator.StringToHash(clipName);
+            if (animator.HasState(0, direct))
+            {
+                _returnState = animator.GetCurrentAnimatorStateInfo(0).fullPathHash;
+                animator.Play(direct, 0, 0f);
+                _playing = true;
+                PleasureRuntime.Probe(
+                    $"milking-state-direct-{clipName}",
+                    $"A-23: milking plays the animator state '{clipName}' directly.");
+                return;
+            }
+
+            AnimationClip? clip = FindClip(clipName);
+            if (clip is null)
+            {
+                RequestClip(clipName);
+                return;
+            }
+
+            int slot = Animator.StringToHash(slotName);
+            if (!animator.HasState(0, slot))
+            {
+                _wanted = false;
+                PleasureRuntime.Log?.LogWarning(
+                    $"A-25: the milking clip '{clipName}' is loaded, but layer 0 has no state "
+                    + $"'{slotName}' to play it in. Set BreastSuper.MilkingAnimationSlot to a state "
+                    + "name from the A-23 table.");
+                return;
+            }
+
+            RuntimeAnimatorController? current = animator.runtimeAnimatorController;
+            if (current is null)
+            {
+                return;
+            }
+
+            // Wrapping whatever is on the player, rather than a controller of our own, is what
+            // keeps the swollen body: the swelling is itself an override, and an override
+            // controller layered over it inherits every clip it does not replace.
+            var over = new AnimatorOverrideController
+            {
+                runtimeAnimatorController = current,
+                name = $"{current.name}+Milking",
+            };
+            string original = OriginalClipName(current, slotName);
+            over[original] = clip;
+
+            _previous = current;
+            _returnState = animator.GetCurrentAnimatorStateInfo(0).fullPathHash;
+
+            // Assigning the controller directly, and putting the old one back ourselves, rather
+            // than through Lelia.ReplaceRuntimeAnimatorController / ResumeRuntimeAnimatorController.
+            // Those restore the controller the game remembers, which is the unswollen one; leaving
+            // milking would then undress the swelling as a side effect.
+            animator.runtimeAnimatorController = over;
+            animator.Play(slot, 0, 0f);
+            _playing = true;
+
+            PleasureRuntime.Probe(
+                $"milking-override-{clipName}",
+                $"A-25: milking plays the clip '{clipName}' through the state '{slotName}' "
+                + $"(slot '{original}'), layered over '{current.name}'.");
+        }
+        catch (Exception exception)
+        {
+            _previous = null;
+            _returnState = 0;
+            _wanted = false;
+            PleasureRuntime.Log?.LogWarning($"The milking animation could not be started: {exception.Message}");
         }
     }
 
@@ -202,13 +227,17 @@ internal static class MilkingAnimation
     /// <summary>
     /// Finds the milking clip among everything Unity has loaded (SPEC003 付録A A-25).
     ///
-    /// The clip belongs to a gallery scene, so whether it is in memory during ordinary play is a
-    /// measurement and not a thing to reason about. When it is missing the neighbours are listed:
-    /// "no clip called ResumeBreast" and "no clip with Breast in its name at all" are different
-    /// findings, and only the first one is worth changing a config value over.
+    /// The clip is remembered once found. A bundle the game unloads takes its clips with it, so the
+    /// remembered one is checked for having been collected rather than trusted.
     /// </summary>
     private static AnimationClip? FindClip(string clipName)
     {
+        if (_clip is not null && !_clip.WasCollected)
+        {
+            return _clip;
+        }
+
+        _clip = null;
         var near = new List<string>();
         var count = 0;
 
@@ -227,6 +256,7 @@ internal static class MilkingAnimation
                 count++;
                 if (string.Equals(name, clipName, StringComparison.Ordinal))
                 {
+                    _clip = clip;
                     return clip;
                 }
 
@@ -245,19 +275,132 @@ internal static class MilkingAnimation
             return null;
         }
 
-        // Once per session. This walks every loaded object, and a line per keypress would bury the
-        // one that matters.
-        if (!_reportedSearch)
+        // Once per session. This walks every loaded object, and a line per frame would bury the one
+        // that matters.
+        if (!_reportedMissing)
         {
-            _reportedSearch = true;
+            _reportedMissing = true;
             PleasureRuntime.Log?.LogInfo(
                 $"A-25: '{clipName}' is not among the {count} animation clip(s) loaded during play. "
                 + (near.Count == 0
-                    ? "No loaded clip has Resume, Breast or Milk in its name either, so the gallery "
-                      + "scene that owns it is not in memory."
+                    ? "No loaded clip has Resume, Breast or Milk in its name either."
                     : $"Clips with a related name: {string.Join(", ", near)}."));
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Asks the game to load the bundle the clip lives in (SPEC003 付録A A-26).
+    ///
+    /// Through <see cref="AssetBundleLoader"/>, which is how the game loads everything else: the
+    /// bundles are hash-named and have dependencies, so opening the files directly would mean
+    /// reimplementing the manifest. The virtual paths are searched for the clip's name first and for
+    /// the gallery scene that owns the swollen player's takes second, and every candidate is logged,
+    /// because a wrong guess at a path is otherwise indistinguishable from a bundle that has no such
+    /// clip in it.
+    /// </summary>
+    private static void RequestClip(string clipName)
+    {
+        double now = Time.unscaledTimeAsDouble;
+        if (now - _lastRequest < 3d)
+        {
+            return;
+        }
+
+        _lastRequest = now;
+
+        try
+        {
+            AssetBundleLoader loader = AssetBundleLoader.Instance;
+            if (loader is null)
+            {
+                return;
+            }
+
+            var candidates = new List<string>();
+            var seen = new List<string>();
+            foreach (BundleType type in new[]
+                     {
+                         BundleType.Scene, BundleType.Custom, BundleType.Enemy, BundleType.Location,
+                     })
+            {
+                CollectPaths(loader, type, clipName, candidates, seen);
+            }
+
+            if (!_reportedPaths)
+            {
+                _reportedPaths = true;
+                PleasureRuntime.Log?.LogInfo(
+                    $"A-26: bundle paths related to milking: {(seen.Count == 0 ? "(none)" : string.Join(", ", seen))}. "
+                    + $"Asking for: {(candidates.Count == 0 ? "(nothing)" : string.Join(", ", candidates))}.");
+            }
+
+            // Two at most. Each one is a file read and a chunk of memory, and if the clip is in
+            // neither then the answer is a wrong path rather than a shortage of attempts.
+            for (var index = 0; index < candidates.Count && index < 2; index++)
+            {
+                loader.LoadSimpleAsyncFromVirtualPath(candidates[index]);
+            }
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Log?.LogWarning(
+                $"A-26: the milking clip's bundle could not be requested: {exception.Message}");
+        }
+    }
+
+    /// <summary>Virtual paths worth trying, most specific first.</summary>
+    private static void CollectPaths(
+        AssetBundleLoader loader,
+        BundleType type,
+        string clipName,
+        List<string> candidates,
+        List<string> seen)
+    {
+        var paths = loader.GetAllVirtualPath(type);
+        if (paths is null)
+        {
+            return;
+        }
+
+        // Walked through the non-generic enumerator. The generated wrapper for the generic one
+        // inherits MoveNext rather than declaring it, so it is not there to call from here.
+        var enumerator = paths.GetEnumerator()?.TryCast<Il2CppSystem.Collections.IEnumerator>();
+        if (enumerator is null)
+        {
+            return;
+        }
+
+        while (enumerator.MoveNext())
+        {
+            string? path = enumerator.Current?.ToString();
+            if (string.IsNullOrEmpty(path))
+            {
+                continue;
+            }
+
+            bool named = path!.Contains(clipName, StringComparison.OrdinalIgnoreCase);
+            bool swollen = path.Contains("Breast2", StringComparison.OrdinalIgnoreCase)
+                || path.Contains("Player_Other", StringComparison.OrdinalIgnoreCase);
+            if (!named && !swollen)
+            {
+                continue;
+            }
+
+            if (seen.Count < 40)
+            {
+                seen.Add($"{type}:{path}");
+            }
+
+            if (named)
+            {
+                candidates.Insert(0, path);
+            }
+            else if (!candidates.Contains(path))
+            {
+                candidates.Add(path);
+            }
+        }
     }
 }
