@@ -221,7 +221,9 @@ internal static class PleasureRuntime
         ClimaxFlashUntil = 0d;
 
         string state = stored is not null
-            ? $"restored climaxes {Climaxes.Count}, sensitivity {Sensitivity?.Value ?? 0f:F2}"
+            ? $"restored climaxes {Climaxes.Count}, sensitivity {Sensitivity?.Value ?? 0f:F2}, "
+              + $"breast applications {Breasts?.Count ?? 0} "
+              + $"({Breasts?.Remaining ?? 0} more before BreastSuper)"
             : "no sidecar yet, starting from zero";
         string notice = load.Notice is null ? string.Empty : $" The stored file {load.Notice}.";
         Log?.LogInfo($"Slot '{slotKey}' ({reason}): {state}.{notice}");

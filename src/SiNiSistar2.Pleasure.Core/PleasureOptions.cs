@@ -88,6 +88,9 @@ public sealed record PleasureOptions
     /// </summary>
     public bool LogAllStatusChanges { get; init; }
 
+    /// <summary>Enables F11, which applies <c>Breast</c> to the player through the game's own path.</summary>
+    public bool EnableDebugKeys { get; init; }
+
     /// <summary>
     /// Records what the 付録A measurements need, each distinct finding once. On by default because
     /// the MOD ships in a state where measuring is the only thing it can usefully do.

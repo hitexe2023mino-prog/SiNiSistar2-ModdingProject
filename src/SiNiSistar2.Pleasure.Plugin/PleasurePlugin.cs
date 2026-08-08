@@ -186,7 +186,16 @@ public sealed class PleasurePlugin : BasePlugin
             + $"sensitivity={(profile.Sensitivity.HasEffect ? "on" : "off")}, "
             + $"climaxGameOver={profile.Climax.GameOverEnabled}, "
             + $"breastSuper={(profile.BreastSuper.HasEffect ? "on" : "off")}, "
-            + $"probe={profile.ProbeMeasurements}, patches={applied}.");
+            + $"probe={profile.ProbeMeasurements}, patches={applied}."
+            + (profile.BreastSuper.HasEffect
+                ? $" BreastSuper after {profile.BreastSuper.ApplicationsAtMaxLevel} further Breast "
+                  + "applications."
+                : string.Empty));
+
+        if (profile.EnableDebugKeys)
+        {
+            Log.LogInfo("Press F11 in game to apply Breast to the player, for checking the escalation.");
+        }
 
         if (profile.ShowOverlay)
         {
@@ -346,6 +355,12 @@ public sealed class PleasurePlugin : BasePlugin
             + "only once, so a status the save restored at load is never reported again, which "
             + "makes an item that applies it look as though it did nothing. Verbose; for "
             + "diagnosing what an item actually does.");
+        ConfigEntry<bool> debugKeys = Config.Bind(
+            "Diagnostics",
+            "EnableDebugKeys",
+            false,
+            "Enables F11, which applies Breast to the player through the game's own add path so the "
+            + "BreastSuper escalation can be checked without hunting for the item.");
         ConfigEntry<bool> probe = Config.Bind(
             "Diagnostics",
             "ProbeMeasurements",
@@ -409,6 +424,7 @@ public sealed class PleasurePlugin : BasePlugin
             BreastSuperCountBelowMaxLevel = breastBelowMax.Value,
             LogTransitions = logTransitions.Value,
             LogAllStatusChanges = logStatuses.Value,
+            EnableDebugKeys = debugKeys.Value,
             ProbeMeasurements = probe.Value,
             ShowOverlay = showOverlay.Value,
             GaugeCentreX = _gaugeX.Value,

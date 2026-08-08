@@ -690,6 +690,18 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
+        // F11 applies Breast through the game's own add path, so the escalation can be exercised
+        // without hunting for the item. Counting only advances once per frame per list, so one
+        // press is one application, exactly as a use of the item is.
+        if (current.type == EventType.KeyDown
+            && current.keyCode == KeyCode.F11
+            && PleasureRuntime.Profile.EnableDebugKeys)
+        {
+            ApplyBreastForDebugging();
+            current.Use();
+            return;
+        }
+
         if (current.type == EventType.KeyDown && current.keyCode == KeyCode.F10)
         {
             // Closing the layout editor first, so the two are never taking the same keys.
@@ -706,6 +718,38 @@ public sealed class PleasureObserver : MonoBehaviour
         if (_enemyEditor.HandleEvent(current))
         {
             current.Use();
+        }
+    }
+
+    /// <summary>
+    /// Applies <c>Breast</c> to the player on demand, for checking the escalation.
+    ///
+    /// Through <c>AbnormalList.AddAbnormal</c>, the same call an item or an enemy makes, so what is
+    /// exercised is the real path rather than a shortcut that would prove nothing.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void ApplyBreastForDebugging()
+    {
+        AbnormalList? abnormals = PleasureRuntime.PlayerAbnormals;
+        if (abnormals is null)
+        {
+            PleasureRuntime.Log?.LogWarning(
+                "F11: the player's status list is not available yet; load a save first.");
+            return;
+        }
+
+        try
+        {
+            int before = PleasureRuntime.Breasts?.Count ?? 0;
+            abnormals.AddAbnormal(AbnormalType.Breast, 1, null);
+            PleasureRuntime.Log?.LogInfo(
+                $"F11: Breast applied for debugging. Count was {before}, is now "
+                + $"{PleasureRuntime.Breasts?.Count ?? 0}; "
+                + $"{PleasureRuntime.Breasts?.Remaining ?? 0} more before BreastSuper.");
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Log?.LogWarning($"F11: Breast could not be applied: {exception.Message}");
         }
     }
 
