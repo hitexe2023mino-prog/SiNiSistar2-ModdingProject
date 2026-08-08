@@ -1241,12 +1241,16 @@ public sealed class PleasureObserver : MonoBehaviour
             _ => height * selected.Size,
         };
 
+        // The crest is a wide banner rather than a disc, so its marker has to be too. A square ring
+        // around it would say the element is a different size from the one being dragged.
+        float halfWidth = _editingElement == 3 ? half * LustCrestArt.AspectRatio : half;
+
         var tint = new Color(1f, 0.85f, 0.35f, 0.85f);
         const float edge = 2f;
-        OverlayPainter.Draw(new Rect(x - half, y - half, half * 2f, edge), OverlayPainter.Solid, tint);
-        OverlayPainter.Draw(new Rect(x - half, y + half - edge, half * 2f, edge), OverlayPainter.Solid, tint);
-        OverlayPainter.Draw(new Rect(x - half, y - half, edge, half * 2f), OverlayPainter.Solid, tint);
-        OverlayPainter.Draw(new Rect(x + half - edge, y - half, edge, half * 2f), OverlayPainter.Solid, tint);
+        OverlayPainter.Fill(new Rect(x - halfWidth, y - half, halfWidth * 2f, edge), tint);
+        OverlayPainter.Fill(new Rect(x - halfWidth, y + half - edge, halfWidth * 2f, edge), tint);
+        OverlayPainter.Fill(new Rect(x - halfWidth, y - half, edge, half * 2f), tint);
+        OverlayPainter.Fill(new Rect(x + halfWidth - edge, y - half, edge, half * 2f), tint);
     }
 
     /// <summary>
@@ -1832,12 +1836,18 @@ public sealed class PleasureObserver : MonoBehaviour
         }
 
         OverlayPlacement placement = PleasureRuntime.Overlay.Crest;
-        float height = Screen.height;
-        float radius = height * placement.Size;
-        float x = Screen.width * placement.CentreX;
-        float y = height - (height * placement.BottomOffset);
+        float screen = Screen.height;
 
-        int resolution = Resolution(radius * 2f);
+        // The mark is a wide banner, so its placement size is read as a half-height and the width
+        // follows from the shape rather than from the config. A square box would have to be sized
+        // for the width and would then leave half of itself empty.
+        float half = screen * placement.Size;
+        float drawHeight = half * 2f;
+        float drawWidth = drawHeight * LustCrestArt.AspectRatio;
+        float x = Screen.width * placement.CentreX;
+        float y = screen - (screen * placement.BottomOffset);
+
+        int resolution = Resolution(drawHeight);
         if (_crest is null || _crestParts != revealed || _crestResolution != resolution)
         {
             // Rebuilt only when a part is earned or the window changes size. The build walks every
@@ -1850,9 +1860,8 @@ public sealed class PleasureObserver : MonoBehaviour
 
         var pulse = (float)((Math.Sin(Time.unscaledTimeAsDouble * 1.6d) + 1d) * 0.5d);
         float alpha = 0.72f + (pulse * 0.20f);
-        float diameter = radius * 2f;
         OverlayPainter.Draw(
-            new Rect(x - radius, y - radius, diameter, diameter),
+            new Rect(x - (drawWidth * 0.5f), y - half, drawWidth, drawHeight),
             _crest,
             new Color(1f, 1f, 1f, alpha));
     }
@@ -1927,9 +1936,8 @@ public sealed class PleasureObserver : MonoBehaviour
 
         // The whole frame, faintly. This is what makes the moment arrive rather than creep in from
         // the corners, and it is kept low enough to read the game through.
-        OverlayPainter.Draw(
+        OverlayPainter.Fill(
             new Rect(0f, 0f, width, height),
-            OverlayPainter.Solid,
             new Color(1f, 0.45f, 0.72f, strength * 0.16f));
 
         const int bands = 14;
@@ -1949,10 +1957,10 @@ public sealed class PleasureObserver : MonoBehaviour
 
             var tint = new Color(1f, 0.38f, 0.68f, alpha);
             float depth = reach - (index * step);
-            OverlayPainter.Draw(new Rect(0f, 0f, width, depth), OverlayPainter.Solid, tint);
-            OverlayPainter.Draw(new Rect(0f, height - depth, width, depth), OverlayPainter.Solid, tint);
-            OverlayPainter.Draw(new Rect(0f, 0f, depth, height), OverlayPainter.Solid, tint);
-            OverlayPainter.Draw(new Rect(width - depth, 0f, depth, height), OverlayPainter.Solid, tint);
+            OverlayPainter.Fill(new Rect(0f, 0f, width, depth), tint);
+            OverlayPainter.Fill(new Rect(0f, height - depth, width, depth), tint);
+            OverlayPainter.Fill(new Rect(0f, 0f, depth, height), tint);
+            OverlayPainter.Fill(new Rect(width - depth, 0f, depth, height), tint);
         }
     }
 

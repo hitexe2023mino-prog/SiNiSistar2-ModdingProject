@@ -10,27 +10,63 @@ namespace SiNiSistar2.Pleasure.Plugin;
 /// it is rebuilt from curves, which also lets it come apart — which is the point. Corruption is not
 /// a bar; it is a mark that finishes itself.
 ///
-/// The parts are revealed from the outside in: the ring first, then the outermost flourish, then
-/// the horns, the inner curls, the heart, and last the core. Outside-in is what makes the last step
-/// read as an arrival: the heart is the thing the mark is about, and it is the thing that comes
-/// last.
+/// The shape follows the reference: a wide tribal banner rather than a ring. A heart at the centre
+/// with a smaller heart inside it and a flame rising between its lobes, flanked by symmetric arms
+/// that sweep out and end in points, with hooks standing above them. The first version was a circle
+/// with curls inside, which was wrong about the silhouette as well as the parts.
 ///
-/// Every part is a signed distance field, the same approach the milk gauge uses (DEC-231). Distance
-/// fields cost more to build than a stamped sprite, but they stay sharp at any HUD size and the
-/// glow falls out of the same number rather than needing a second pass. The whole shape was settled
-/// offscreen before any of it shipped.
+/// Two-tone, as the reference is: dark plum at the extremities and hot pink towards the middle.
+/// That falls out of the reveal order rather than being applied on top of it — each part is painted
+/// over the ones outside it, so the mark is darkest where it started and brightest where it ends.
+///
+/// The parts are revealed from the outside in: the wing tips first, then the arms, the hooks, the
+/// shoulders, the heart, and last the core. Outside-in is what makes the last step read as an
+/// arrival — the heart is the thing the mark is about, and it is the thing that comes last.
+///
+/// Everything is a tapered stroke whose width falls to zero at the tip, which is what makes a
+/// tribal point rather than a length of pipe. The whole shape was settled offscreen before any of
+/// it shipped (DEC-231); <c>scripts/crest_preview.py</c> is the same figure in numpy.
 /// </summary>
 internal static class LustCrestArt
 {
     /// <summary>How many parts the mark comes in. Corruption is divided into this many steps.</summary>
     internal const int PartCount = 6;
 
-    private static readonly Color Ink = new(1f, 0.376f, 0.698f, 1f);
-    private static readonly Color Halo = new(1f, 0.745f, 0.878f, 1f);
+    /// <summary>The banner is twice as wide as it is tall.</summary>
+    internal const float AspectRatio = 2f;
 
-    private static Vector2[][]? _strokes;
-    private static float[][]? _widths;
-    private static int[]? _partOf;
+    // Dark plum at the extremities, hot pink towards the middle, as the reference does.
+    private static readonly Color[] Tones =
+    {
+        new(0.424f, 0.071f, 0.267f, 1f),
+        new(0.588f, 0.094f, 0.361f, 1f),
+        new(0.769f, 0.133f, 0.478f, 1f),
+        new(0.886f, 0.204f, 0.580f, 1f),
+        new(0.980f, 0.306f, 0.659f, 1f),
+        new(1f, 0.588f, 0.804f, 1f),
+    };
+
+    private static Stroke[][]? _parts;
+
+    private readonly struct Stroke
+    {
+        internal Stroke(Vector2[] points, float from, float to, bool filled)
+        {
+            Points = points;
+            From = from;
+            To = to;
+            Filled = filled;
+        }
+
+        internal Vector2[] Points { get; }
+
+        internal float From { get; }
+
+        internal float To { get; }
+
+        /// <summary>Whether the inside of the curve counts, not only the curve itself.</summary>
+        internal bool Filled { get; }
+    }
 
     /// <summary>
     /// The mark with the first <paramref name="revealed"/> parts drawn.
@@ -39,44 +75,55 @@ internal static class LustCrestArt
     /// colour rather than a rebuild, and every part breathes together — which is what makes the mark
     /// read as one thing rather than a row of indicators.
     /// </summary>
-    internal static Texture2D Build(int size, int revealed)
+    internal static Texture2D Build(int height, int revealed)
     {
-        size = Math.Max(24, size);
+        height = Math.Max(24, height);
+        var width = (int)(height * AspectRatio);
         revealed = Math.Clamp(revealed, 0, PartCount);
         EnsureShape();
 
-        var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+        var texture = new Texture2D(width, height, TextureFormat.RGBA32, false)
         {
             filterMode = FilterMode.Bilinear,
             wrapMode = TextureWrapMode.Clamp,
         };
 
-        float feather = 2.4f / size;
-        var pixels = new Color[size * size];
-        for (var y = 0; y < size; y++)
-        {
-            // Texture rows run bottom-up; the shape is authored with y upwards, so this is a
-            // direct mapping rather than a flip.
-            float v = ((y / (float)(size - 1)) * 2f) - 1f;
-            for (var x = 0; x < size; x++)
-            {
-                float u = ((x / (float)(size - 1)) * 2f) - 1f;
-                float d = Distance(u, v, revealed);
+        float feather = 2.4f / height;
+        var pixels = new Color[width * height];
+        Stroke[][] parts = _parts!;
 
-                float a = Math.Clamp(0.5f - (d / (feather * 2f)), 0f, 1f);
-                float halo = Math.Clamp(0.5f - ((d - (feather * 2f)) / (feather * 10f)), 0f, 1f) * 0.45f;
-                if (a <= 0f && halo <= 0f)
+        for (var y = 0; y < height; y++)
+        {
+            // Texture rows run bottom-up and the shape is authored with y upwards, so this is a
+            // direct mapping. The vertical span is half the horizontal one: the banner is wide.
+            float v = (y / (float)(height - 1)) - 0.5f;
+            for (var x = 0; x < width; x++)
+            {
+                float u = ((x / (float)(width - 1)) * 2f) - 1f;
+
+                var colour = new Color(0f, 0f, 0f, 0f);
+                for (var k = 0; k < revealed; k++)
                 {
-                    pixels[(y * size) + x] = new Color(0f, 0f, 0f, 0f);
-                    continue;
+                    float d = PartDistance(parts[k], u, v);
+                    float a = Math.Clamp(0.5f - (d / (feather * 2f)), 0f, 1f);
+                    float halo = Math.Clamp(0.5f - ((d - (feather * 2f)) / (feather * 8f)), 0f, 1f) * 0.35f;
+                    float cover = Math.Clamp(a + (halo * 0.5f), 0f, 1f);
+                    if (cover <= 0f)
+                    {
+                        continue;
+                    }
+
+                    // Painted over rather than blended by distance: a part nearer the middle belongs
+                    // in front of the ones outside it, and that is what makes the two-tone read.
+                    Color tone = Tones[k];
+                    colour = new Color(
+                        (colour.r * (1f - cover)) + (tone.r * cover),
+                        (colour.g * (1f - cover)) + (tone.g * cover),
+                        (colour.b * (1f - cover)) + (tone.b * cover),
+                        Math.Max(colour.a, cover));
                 }
 
-                var colour = new Color(
-                    (Ink.r * a) + (Halo.r * halo),
-                    (Ink.g * a) + (Halo.g * halo),
-                    (Ink.b * a) + (Halo.b * halo),
-                    Math.Clamp(a + (halo * 0.5f), 0f, 1f));
-                pixels[(y * size) + x] = colour;
+                pixels[(y * width) + x] = colour;
             }
         }
 
@@ -85,49 +132,20 @@ internal static class LustCrestArt
         return texture;
     }
 
-    /// <summary>Distance to the nearest revealed part, negative inside it.</summary>
-    private static float Distance(float x, float y, int revealed)
+    private static float PartDistance(Stroke[] strokes, float x, float y)
     {
-        if (revealed <= 0)
-        {
-            return 1f;
-        }
-
         float best = 1f;
-
-        // The ring is analytic rather than a stroke: a circle costs two operations, and as a
-        // polyline it would be the most expensive part of the whole mark.
-        float radius = (float)Math.Sqrt((x * x) + (y * y));
-        float band = Math.Abs(radius - 0.93f) - 0.011f;
-        float angle = Math.Abs((float)Math.Atan2(y, x));
-        float gap = Math.Min(Math.Abs(angle - ((float)Math.PI / 2f)) - 0.30f, 0f);
-        best = Math.Max(band, (-gap * 4f) - 0.001f);
-
-        Vector2[][] strokes = _strokes!;
-        float[][] widths = _widths!;
-        int[] partOf = _partOf!;
-        for (var s = 0; s < strokes.Length; s++)
+        for (var i = 0; i < strokes.Length; i++)
         {
-            if (partOf[s] >= revealed)
-            {
-                continue;
-            }
-
-            best = Math.Min(best, StrokeDistance(x, y, strokes[s], widths[s]));
-        }
-
-        // The core is a filled heart rather than an outline, so it needs the inside of the curve as
-        // well as the curve. The polynomial's magnitude is not a distance, but its sign is sound.
-        if (revealed >= 6)
-        {
-            best = Math.Min(best, CoreDistance(x, y));
+            best = Math.Min(best, StrokeDistance(x, y, strokes[i]));
         }
 
         return best;
     }
 
-    private static float StrokeDistance(float x, float y, Vector2[] points, float[] width)
+    private static float StrokeDistance(float x, float y, Stroke stroke)
     {
+        Vector2[] points = stroke.Points;
         float best = 1f;
         int last = points.Length - 1;
         for (var i = 0; i < last; i++)
@@ -147,79 +165,82 @@ internal static class LustCrestArt
             // The width tapers along the run, which is what turns a stroked curve into a flourish
             // rather than a length of pipe.
             float u = (i + t) / last;
-            float w = width[0] + ((width[1] - width[0]) * u);
-            best = Math.Min(best, d - w);
+            best = Math.Min(best, d - (stroke.From + ((stroke.To - stroke.From) * u)));
         }
 
-        return best;
-    }
+        if (!stroke.Filled)
+        {
+            return best;
+        }
 
-    private static float CoreDistance(float x, float y)
-    {
-        const float scale = 0.21f;
+        // The core is a filled heart, so the inside counts too. The polynomial's magnitude is not a
+        // distance, but its sign is sound, which is all that is needed to flip the sign of one.
+        const float scale = 0.175f;
         const float centre = -0.03f;
-        float best = StrokeDistance(x, y, Heart(scale, centre), new[] { 0f, 0f });
-
         float hx = x / (scale * 0.98f);
         float hy = (y - centre) / (scale * 0.98f);
         float q = (hx * hx) + (hy * hy) - 1f;
-        float implicitValue = (q * q * q) - ((hx * hx) * (hy * hy * hy));
-        return implicitValue <= 0f ? -best : best;
+        return (q * q * q) - ((hx * hx) * (hy * hy * hy)) <= 0f ? -best : best;
     }
 
     /// <summary>
-    /// The strokes, built once. Every curve is authored in the same square the texture samples, so
-    /// nothing here depends on the size it is finally drawn at.
+    /// The strokes, built once. Every curve is authored in the same rectangle the texture samples,
+    /// so nothing here depends on the size it is finally drawn at.
     /// </summary>
     private static void EnsureShape()
     {
-        if (_strokes is not null)
+        if (_parts is not null)
         {
             return;
         }
 
-        var strokes = new List<Vector2[]>();
-        var widths = new List<float[]>();
-        var parts = new List<int>();
-
-        void Add(int part, Vector2[] stroke, float from, float to)
+        _parts = new[]
         {
-            strokes.Add(stroke);
-            widths.Add(new[] { from, to });
-            parts.Add(part);
+            // The far ends: a long point sweeping out and down, with a barb above it.
+            Pair(
+                (Bezier(new(0.58f, 0.02f), new(0.78f, 0.05f), new(0.92f, -0.04f), new(1.00f, -0.20f), 36), 0.048f, 0f),
+                (Bezier(new(0.70f, 0.04f), new(0.84f, 0.10f), new(0.90f, 0.05f), new(0.95f, 0.15f), 28), 0.024f, 0f)),
 
-            strokes.Add(Mirror(stroke));
-            widths.Add(new[] { from, to });
-            parts.Add(part);
-        }
+            // The main arms, and the downward flick beneath each.
+            Pair(
+                (Bezier(new(0.33f, 0.03f), new(0.48f, 0.10f), new(0.64f, 0.04f), new(0.82f, -0.05f), 36), 0.070f, 0.032f),
+                (Bezier(new(0.40f, -0.04f), new(0.54f, -0.14f), new(0.66f, -0.18f), new(0.78f, -0.28f), 32), 0.034f, 0f)),
 
-        // Part 1 is the ring, drawn analytically. Parts are numbered from zero here.
+            // The spikes standing above the arms, tallest nearest the heart.
+            Pair(
+                (Bezier(new(0.36f, 0.05f), new(0.44f, 0.22f), new(0.54f, 0.26f), new(0.50f, 0.38f), 32), 0.044f, 0f),
+                (Bezier(new(0.55f, 0.03f), new(0.66f, 0.14f), new(0.76f, 0.14f), new(0.75f, 0.25f), 28), 0.032f, 0f)),
 
-        // Part 2: the outermost flourish, a long sweep out to the ring that hooks back.
-        Add(1, Bezier(new(0.30f, 0.34f), new(0.62f, 0.74f), new(0.92f, 0.44f), new(0.70f, 0.18f), 40), 0.030f, 0.014f);
-        Add(1, Bezier(new(0.70f, 0.18f), new(0.58f, 0.02f), new(0.44f, 0.14f), new(0.53f, 0.25f), 28), 0.014f, 0.003f);
+            // The pair curling in against the heart, and the barbs under them.
+            Pair(
+                (Bezier(new(0.26f, 0.08f), new(0.36f, 0.24f), new(0.46f, 0.16f), new(0.36f, 0.04f), 32), 0.034f, 0f),
+                (Bezier(new(0.28f, -0.06f), new(0.38f, -0.14f), new(0.46f, -0.14f), new(0.50f, -0.24f), 28), 0.028f, 0f)),
 
-        // Part 3: the horns, rising from the heart's shoulder and curling inward at the top.
-        Add(2, Bezier(new(0.14f, 0.30f), new(0.30f, 0.66f), new(0.62f, 0.66f), new(0.58f, 0.40f), 40), 0.034f, 0.016f);
-        Add(2, Bezier(new(0.58f, 0.40f), new(0.55f, 0.24f), new(0.38f, 0.28f), new(0.44f, 0.40f), 28), 0.016f, 0.003f);
+            // The heart, and the flame rising from between its lobes.
+            new[]
+            {
+                new Stroke(Heart(0.34f, -0.05f), 0.032f, 0.032f, false),
+                new Stroke(Bezier(new(0f, 0.09f), new(0.05f, 0.24f), new(0.02f, 0.36f), new(0f, 0.50f), 26), 0.050f, 0f, false),
+                new Stroke(Mirror(Bezier(new(0f, 0.09f), new(0.05f, 0.24f), new(0.02f, 0.36f), new(0f, 0.50f), 26)), 0.050f, 0f, false),
+            },
 
-        // Part 4: the tight pair hugging the heart's shoulders.
-        Add(3, Bezier(new(0.08f, 0.14f), new(0.26f, 0.32f), new(0.40f, 0.14f), new(0.26f, 0.06f), 32), 0.022f, 0.004f);
+            // The smaller heart inside, filled: the brightest thing on the mark.
+            new[] { new Stroke(Heart(0.175f, -0.03f), 0f, 0f, true) },
+        };
+    }
 
-        // Part 5: the heart, and the tail hanging from its point. The tail belongs to the heart —
-        // on its own it reads as a stray comma floating in the ring.
-        strokes.Add(Heart(0.40f, -0.04f));
-        widths.Add(new[] { 0.028f, 0.028f });
-        parts.Add(4);
-        strokes.Add(Bezier(new(0f, -0.46f), new(0.05f, -0.56f), new(0f, -0.66f), new(0f, -0.70f), 20));
-        widths.Add(new[] { 0.026f, 0.004f });
-        parts.Add(4);
-
-        // Part 6 is the filled core, handled separately: it needs an inside, not a stroke.
-
-        _strokes = strokes.ToArray();
-        _widths = widths.ToArray();
-        _partOf = parts.ToArray();
+    /// <summary>One shape and its mirror image, which is how every flanking part is made.</summary>
+    private static Stroke[] Pair(
+        (Vector2[] Points, float From, float To) first,
+        (Vector2[] Points, float From, float To) second)
+    {
+        return new[]
+        {
+            new Stroke(first.Points, first.From, first.To, false),
+            new Stroke(Mirror(first.Points), first.From, first.To, false),
+            new Stroke(second.Points, second.From, second.To, false),
+            new Stroke(Mirror(second.Points), second.From, second.To, false),
+        };
     }
 
     private static Vector2[] Mirror(Vector2[] points)
@@ -250,7 +271,7 @@ internal static class LustCrestArt
 
     private static Vector2[] Heart(float scale, float centre)
     {
-        const int steps = 120;
+        const int steps = 110;
         var points = new Vector2[steps + 1];
         for (var i = 0; i <= steps; i++)
         {
