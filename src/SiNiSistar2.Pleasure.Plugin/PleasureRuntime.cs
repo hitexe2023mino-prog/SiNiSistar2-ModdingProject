@@ -265,6 +265,36 @@ internal static class PleasureRuntime
     /// Restoring rather than clearing is what makes loading an earlier save mean what it says: the
     /// values go back to where that save left them (SPEC003 4.4, FR-222).
     /// </summary>
+    /// <summary>
+    /// Called when the game reports no loaded save at all, which is where a new game begins.
+    ///
+    /// This is the boundary between playthroughs, and the only place the accumulated values are
+    /// cleared without a sidecar saying so. It has to be here rather than on an unknown key: an
+    /// unknown key is a save that has just been created, and clearing there throws the run away
+    /// (付録A A-44).
+    /// </summary>
+    internal static void EnterNoSlot()
+    {
+        if (CurrentSlotKey is null)
+        {
+            return;
+        }
+
+        CurrentSlotKey = null;
+        Corruption?.LoadFrom(0f);
+        Climaxes.ResetCount();
+        Breasts?.Reset();
+        Milk?.Reset();
+        Meter?.Reset();
+        PendingClimax = false;
+        PendingBreastSuper = false;
+        PendingLustCrest = false;
+        ClimaxFlashUntil = 0d;
+        Log?.LogInfo(
+            "No save is loaded, so this is a new run: corruption, climaxes, swelling and milk all "
+            + "start from zero. They attach to a slot when the game is first saved.");
+    }
+
     internal static void LoadSlot(string slotKey, string reason)
     {
         CurrentSlotKey = slotKey;
@@ -280,10 +310,16 @@ internal static class PleasureRuntime
         }
         else
         {
-            Corruption?.LoadFrom(0f);
-            Climaxes.ResetCount();
-            Breasts?.Reset();
-            Milk?.Reset();
+            // A key with no sidecar has never been seen before, and the only way to arrive at one
+            // is to have just created that save from the run in progress. Clearing here is what
+            // wiped a fresh playthrough's progress the moment it was first saved: the file name
+            // changed, the key changed with it, and the absent sidecar was read as "nothing yet"
+            // rather than "this is where the run in progress now lives" (付録A A-44).
+            //
+            // Starting a new game is the case that does need zeroing, and that is handled where it
+            // belongs: the game reports no loaded file at all, which EnterNoSlot answers.
+            Log?.LogInfo(
+                $"Slot '{slotKey}' has no sidecar yet; the run in progress carries into it.");
         }
 
         Meter?.Reset();

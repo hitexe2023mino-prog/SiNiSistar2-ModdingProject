@@ -191,13 +191,9 @@ internal static class LustCrestImage
                 }
             }
 
-            // The image is flipped here rather than per-sample: GetPixels rows run bottom-up while
-            // the draw maps v = 0 to the top of the mark.
-            var flipped = new Color[pixels.Length];
-            for (var y = 0; y < _height; y++)
-            {
-                Array.Copy(pixels, y * _width, flipped, (_height - 1 - y) * _width, _width);
-            }
+            // No flip. GetPixels hands back rows bottom-up and SetPixels takes them bottom-up, so
+            // the two cancel; flipping between them is what put the mark on its head.
+            Color[] flipped = pixels;
 
             // The content's bounding box, so margins in the file cost no screen space and the
             // aspect is the mark's own.

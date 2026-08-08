@@ -1130,6 +1130,10 @@ public sealed class PleasureObserver : MonoBehaviour
         {
             PleasureRuntime.LoadSlot(key, "the save slot became known");
         }
+        else
+        {
+            PleasureRuntime.EnterNoSlot();
+        }
         PleasureRuntime.Log?.LogInfo(
             $"[probe] A-9: save slot is SelectID={selectId}, LoadedFileName='{file ?? "(null)"}', "
             + $"IsAutoSave={main.IsAutoSave}, sidecar key='{SlotKey.Compose(selectId, file) ?? "(none)"}'.");
@@ -1336,12 +1340,16 @@ public sealed class PleasureObserver : MonoBehaviour
     }
 
     /// <summary>
-    /// Adds one crest part's worth of corruption, so the mark can be watched filling in.
+    /// Steps the corruption through the mark, one part per press, and back to nothing after the
+    /// last (SPEC003 FR-269).
     ///
-    /// Through the same gain path a sexual hit uses, so the crest multiplier applies and the crest
-    /// lands at its threshold exactly as it would in play. At the shipped tuning the mark takes
-    /// tens of climaxes to complete, which is far too long to sit through to find out whether a
-    /// curve is drawn correctly.
+    /// The wrap is the whole point. Corruption is one-way by design, and a debug key that is also
+    /// one-way can be used exactly once per playthrough — which makes it useless for the thing it
+    /// exists for. So the last press clears the track and takes the game's crest back off, leaving
+    /// the run where a fresh one starts. Nothing in play reaches this; it is a keypress.
+    ///
+    /// Every other press goes through the ordinary gain path, so the crest multiplier applies and
+    /// the mark lands at its threshold exactly as it would be earned.
     /// </summary>
     [HideFromIl2Cpp]
     private void CorruptForDebugging()
@@ -1353,6 +1361,17 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
+        if (corruption.IsAtCap)
+        {
+            corruption.LoadFrom(0f);
+            PleasureRuntime.PendingLustCrest = false;
+            RemoveLustCrestForDebugging();
+            PleasureRuntime.Log?.LogInfo(
+                "F8: corruption was at the cap, so it has been wound back to nothing and the lust "
+                + "crest taken off. The next press starts the mark again.");
+            return;
+        }
+
         float step = corruption.Cap / LustCrestArt.PartCount;
         PleasureRuntime.GainCorruption(step);
 
@@ -1360,7 +1379,27 @@ public sealed class PleasureObserver : MonoBehaviour
         PleasureRuntime.Log?.LogInfo(
             $"F8: corruption is {corruption.Value:0.##} of {corruption.Cap:0.##}; the crest shows "
             + $"{Math.Clamp(parts, 0, LustCrestArt.PartCount)} of {LustCrestArt.PartCount} parts. "
-            + $"The lust crest is {(PleasureRuntime.IsCrestWorn ? "worn" : "not worn")}.");
+            + $"The lust crest is {(PleasureRuntime.IsCrestWorn ? "worn" : "not worn")}. "
+            + "At the cap, one more press winds it all back.");
+    }
+
+    /// <summary>Takes the game's crest off, so the threshold can be crossed again.</summary>
+    [HideFromIl2Cpp]
+    private static void RemoveLustCrestForDebugging()
+    {
+        try
+        {
+            AbnormalList? abnormals = PleasureRuntime.PlayerAbnormals;
+            if (abnormals is not null && abnormals.Has(AbnormalType.LustMarkCurse))
+            {
+                abnormals.RemoveAbnormal(AbnormalType.LustMarkCurse);
+            }
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Log?.LogWarning(
+                $"The lust crest could not be taken off: {exception.Message}");
+        }
     }
 
     /// <summary>

@@ -146,9 +146,26 @@ public static class SlotKey
     /// used: the number alone is reused across playthroughs, and the name alone is not always
     /// available.
     /// </summary>
+    /// <summary>
+    /// What the game calls the loaded file when no save has been loaded at all.
+    ///
+    /// Every fresh game reports this, so it is not a slot — it is the absence of one. Treating it
+    /// as a slot gave every playthrough the same key, and the second new game inherited the first
+    /// one's corruption (SPEC003 付録A A-44).
+    /// </summary>
+    private const string NoFileSentinel = "FileEmpty";
+
     public static string? Compose(int selectId, string? loadedFileName)
     {
         if (selectId < 0 && string.IsNullOrWhiteSpace(loadedFileName))
+        {
+            return null;
+        }
+
+        if (string.Equals(
+                Path.GetFileNameWithoutExtension(loadedFileName ?? string.Empty).Trim(),
+                NoFileSentinel,
+                StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }

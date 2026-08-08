@@ -205,4 +205,24 @@ public sealed class SidecarStoreTests : IDisposable
         Assert.Equal(0.80f, parse.Document!.Corruption, 4);
         Assert.DoesNotContain("sensitivity", parse.Document.Serialize());
     }
+
+    /// <summary>
+    /// FR-265, 付録A A-44: the game reports "FileEmpty" whenever no save is loaded, which every
+    /// fresh playthrough passes through. Treating that as a slot gave them all one key, and the
+    /// second new game inherited the first one's corruption.
+    /// </summary>
+    [Theory]
+    [InlineData("FileEmpty")]
+    [InlineData("fileempty")]
+    [InlineData("FileEmpty.sav")]
+    public void TheNoSaveSentinelIsNotASlot(string fileName)
+    {
+        Assert.Null(SlotKey.Compose(0, fileName));
+    }
+
+    [Fact]
+    public void ARealFileIsStillASlot()
+    {
+        Assert.Equal("slot2-Save03", SlotKey.Compose(2, "Save03.sav"));
+    }
 }
