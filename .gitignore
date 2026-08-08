@@ -22,3 +22,4 @@ BepInEx/config/*.cfg
 
 # MOD-written save-adjacent data
 BepInEx/data/
+scripts/models/
