@@ -108,10 +108,27 @@ public sealed class PleasureObserver : MonoBehaviour
         {
             // The milking scene runs by itself in the field when a swollen player reaches the right
             // place, so that is where its clip can be learned (付録A A-32). One animator, no walk.
+            //
+            // Widened past IsCinematicEvent. Walking a swollen player around four maps produced
+            // only ordinary clips, and the milking scene did not fire — but there is no reading
+            // that says it would have been flagged cinematic if it had. Every distinct clip the
+            // player plays while the escalated swelling is worn is recorded instead, so the one
+            // that matters cannot be missed by having guessed the wrong flag. Still one animator
+            // and no walk (DEC-236), and distinct names only, of which a swollen player has few.
             ObjectManager? objects = ManagerList.Object;
-            if (objects is not null && objects.IsCinematicEvent)
+            bool swollen = false;
+            try
             {
-                MilkingAnimation.ProbeEvent(SceneManager.GetActiveScene().name);
+                swollen = PleasureRuntime.PlayerAbnormals?.Has(AbnormalType.BreastSuper) == true;
+            }
+            catch (Exception)
+            {
+                swollen = false;
+            }
+
+            if (swollen || (objects is not null && objects.IsCinematicEvent))
+            {
+                MilkingAnimation.ProbeEvent(SceneManager.GetActiveScene().name, swollen);
             }
 
             GaTakePlayer? player = ManagerList.Gallery?.CurrentTakePlayer;

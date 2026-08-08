@@ -209,10 +209,10 @@ public sealed class PleasurePlugin : BasePlugin
             + $"Press {profile.BreastSuper.MilkingKey} while BreastSuper is active to milk: it "
             + "empties the milk gauge, works anywhere, and being hit wastes it.");
         Log.LogInfo(
-            $"Press {MilkingAnimation.SweepKey} while the gallery plays a take to record every "
-            + "animator in the scene and the clip it is playing, which is how the milking "
-            + "performer is identified (SPEC003 付録A A-27). One sweep per press; it never runs "
-            + "on its own.");
+            $"Press {MilkingAnimation.SweepKey} while the gallery plays a take to read that take's "
+            + "own cast — its animator and its event players (SPEC003 付録A A-27). Every clip the "
+            + "player plays while the escalated swelling is worn is recorded without asking, which "
+            + "is how the milking scene will be named when it runs.");
 
         if (profile.ShowOverlay)
         {

@@ -143,7 +143,7 @@ internal static class MilkingAnimation
     /// first one and only while it is unregistered. The whole sequence is worth having, because an
     /// event that plays four clips in a row cannot be reproduced from the name of the first.
     /// </summary>
-    internal static void ProbeEvent(string scene)
+    internal static void ProbeEvent(string scene, bool swollen)
     {
         try
         {
@@ -162,14 +162,15 @@ internal static class MilkingAnimation
                 return;
             }
 
-            if (!_eventClips.Add($"{scene}|{name}"))
+            if (_eventClips.Count > 80 || !_eventClips.Add($"{scene}|{name}|{swollen}"))
             {
                 return;
             }
 
             PleasureRuntime.Log?.LogInfo(
-                $"A-32: during a scripted event in '{scene}', the player is playing the clip "
-                + $"'{name}' ({clip.length:0.00}s, looping={clip.isLooping}) on controller "
+                $"A-32: in '{scene}'{(swollen ? " while the escalated swelling is worn" : " during a scripted event")}, "
+                + $"the player is playing the clip '{name}' ({clip.length:0.00}s, "
+                + $"looping={clip.isLooping}) on controller "
                 + $"'{animator.runtimeAnimatorController.name}'.");
         }
         catch (Exception)
