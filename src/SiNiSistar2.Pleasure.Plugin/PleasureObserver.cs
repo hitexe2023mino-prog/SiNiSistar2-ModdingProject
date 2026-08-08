@@ -653,14 +653,10 @@ public sealed class PleasureObserver : MonoBehaviour
             }
 
             PleasureRuntime.PendingBreastSuperCure = false;
-            // Reset rather than the ordinary swelling's own parameter. Breast carries a parameter
-        // object with every sprite in it null (付録A A-28), so handing that over would install an
-        // empty override and blank the portrait. The swollen look comes from the condition flag.
-        PortraitRefresh.Refresh("return to Breast", null);
-        PleasureRuntime.Breasts?.Reset();
             if (present)
             {
                 abnormals.RemoveAbnormal(AbnormalType.BreastSuper);
+                PortraitRefresh.Refresh("return to Breast", null);
                 PleasureRuntime.SuperTimer?.Stop();
                 BeginTransition();
                 PleasureRuntime.Log?.LogInfo(
@@ -691,6 +687,7 @@ public sealed class PleasureObserver : MonoBehaviour
         // Back to Breast rather than to nothing. Enduring the escalation costs the ordinary
         // swelling, it does not cure it; otherwise waiting would be better than being cured.
         abnormals.RemoveAbnormal(AbnormalType.BreastSuper);
+        PortraitRefresh.Refresh("return to Breast", null);
         AbnormalManager? manager = ManagerList.Abnormal;
         AbnormalData? data = null;
         if (manager is not null && manager.TryGetData(AbnormalType.Breast, out data) && data is not null)
@@ -1363,6 +1360,7 @@ public sealed class PleasureObserver : MonoBehaviour
         // Down to Breast, not to nothing. Milking out of the escalation still leaves the swelling,
         // which is the same ladder the duration walks back down.
         abnormals.RemoveAbnormal(AbnormalType.BreastSuper);
+        PortraitRefresh.Refresh("return to Breast", null);
         PleasureRuntime.SuperTimer?.Stop();
         AbnormalManager? manager = ManagerList.Abnormal;
         AbnormalData? data = null;

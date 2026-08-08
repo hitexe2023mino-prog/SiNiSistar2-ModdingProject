@@ -23,6 +23,11 @@ namespace SiNiSistar2.Pleasure.Plugin;
 /// </summary>
 internal static class PortraitRefresh
 {
+    private static Sprite? _originalBreast;
+    private static bool _originalEnabled;
+    private static bool _remembered;
+
+
     /// <summary>
     /// Redraws every portrait, and records what changed the first time (SPEC003 付録A A-30).
     ///
@@ -75,7 +80,7 @@ internal static class PortraitRefresh
                 string changed = SpriteName(portrait);
                 portrait.UpdatePortrait();
                 string after = SpriteName(portrait);
-                string placed = Place(portrait);
+                string placed = Place(portrait, parameter is null);
 
                 PleasureRuntime.Probe(
                     $"portrait-refresh-{why}-{after}",
@@ -125,31 +130,58 @@ internal static class PortraitRefresh
     /// chooses a sprite. If it answers and the image disagrees, the image is set from the answer.
     /// If it does not answer, nothing is touched and the log says so.
     /// </summary>
-    private static string Place(Portrait portrait)
+    private static string Place(Portrait portrait, bool restoring)
     {
         try
         {
-            bool found = portrait.TryGetSprite(PortraitParts.Breast, out Sprite? resolved);
-            if (!found || resolved is null)
-            {
-                return "TryGetSprite(Breast) has no sprite to give, so the image was left alone.";
-            }
-
             var image = portrait.m_Breast;
             if (image is null)
             {
-                return $"TryGetSprite(Breast) resolves '{resolved.name}' but there is no image to put it in.";
+                return "There is no breast image on the portrait to put anything in.";
             }
 
-            if (ReferenceEquals(image.sprite, resolved))
+            bool found = portrait.TryGetSprite(PortraitParts.Breast, out Sprite? resolved);
+            if (found && resolved is not null)
             {
-                return $"TryGetSprite(Breast) resolves '{resolved.name}', which the image already shows.";
+                // Remembered before the first overwrite, not after. What was there is the art the
+                // game shows when this part has nothing of its own, and it is the only thing that
+                // can honestly be put back later.
+                if (!_remembered)
+                {
+                    _remembered = true;
+                    _originalBreast = image.sprite;
+                    _originalEnabled = image.enabled;
+                }
+
+                if (ReferenceEquals(image.sprite, resolved))
+                {
+                    return $"TryGetSprite(Breast) resolves '{resolved.name}', which the image already shows.";
+                }
+
+                image.sprite = resolved;
+                image.enabled = true;
+                return $"TryGetSprite(Breast) resolves '{resolved.name}', which was not in the image; "
+                    + "it has been put there.";
             }
 
-            image.sprite = resolved;
-            image.enabled = true;
-            return $"TryGetSprite(Breast) resolves '{resolved.name}', which was not in the image; it "
-                + "has been put there.";
+            // Ordinary swelling resolves nothing for this part: its parameter is empty and the
+            // swollen look comes from the condition flag (付録A A-28). Leaving the image alone here
+            // is what left the escalated art on screen after the escalation ended.
+            if (restoring && _remembered)
+            {
+                if (ReferenceEquals(image.sprite, _originalBreast))
+                {
+                    return "TryGetSprite(Breast) resolves nothing and the image is already back to "
+                        + "what it held before the escalation.";
+                }
+
+                image.sprite = _originalBreast;
+                image.enabled = _originalEnabled;
+                return "TryGetSprite(Breast) resolves nothing, so the image has been put back to "
+                    + $"'{_originalBreast?.name ?? "(nothing)"}', which it held before the escalation.";
+            }
+
+            return "TryGetSprite(Breast) has no sprite to give, so the image was left alone.";
         }
         catch (Exception exception)
         {
