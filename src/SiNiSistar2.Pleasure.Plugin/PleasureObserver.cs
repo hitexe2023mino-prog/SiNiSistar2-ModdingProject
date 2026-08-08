@@ -1,5 +1,6 @@
 using Il2CppInterop.Runtime.Attributes;
 using SiNiSistar2.Manager;
+using SiNiSistar2.Drama;
 using SiNiSistar2.Obj;
 using SiNiSistar2.Pleasure.Core;
 using UnityEngine;
@@ -123,6 +124,7 @@ public sealed class PleasureObserver : MonoBehaviour
 
         DrawGauge();
         DrawClimaxFlash();
+        DrawTransitionFade();
         DrawEditorChrome();
     }
 
@@ -349,10 +351,113 @@ public sealed class PleasureObserver : MonoBehaviour
             abnormals.RemoveAbnormal(AbnormalType.Breast);
         }
 
+        PleasureRuntime.SuperTimer?.Start();
+        BeginTransition(abnormals);
+
         PleasureRuntime.Log?.LogInfo(
             $"Breast escalated to BreastSuper (Breast "
             + $"{(PleasureRuntime.Profile.BreastSuper.ReplaceBreast ? "removed" : "kept")}). "
             + $"Sensitivity {PleasureRuntime.Sensitivity?.Value ?? 0f:F2}.");
+    }
+
+    /// <summary>
+    /// Rebuilds the body and portrait after a status transition, and covers the moment with black.
+    ///
+    /// <c>AbnormalList.AllObjectSetUp</c> is the game's own "set everything up from the current
+    /// status list" call, which is what makes the change visible without reloading the scene. That
+    /// matters more than the black does: reloading to see a debuff land would move the player, and
+    /// the requirement was explicitly to stay where they are.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void BeginTransition(AbnormalList abnormals)
+    {
+        float seconds = PleasureRuntime.Profile.BreastSuper.FadeSeconds;
+        if (seconds > 0f)
+        {
+            PleasureRuntime.TransitionFadeUntil = Time.timeAsDouble + seconds;
+        }
+
+        try
+        {
+            abnormals.AllObjectSetUp();
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Log?.LogWarning(
+                $"The body could not be rebuilt after the transition: {exception.Message}. The "
+                + "status is applied; its appearance may not update until the next scene change.");
+        }
+    }
+
+    /// <summary>
+    /// Takes <c>BreastSuper</c> back down to <c>Breast</c>: on the game's own cure, or when the
+    /// duration runs out (SPEC003 5.8, FR-253, FR-254).
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void UpdateBreastSuperLife(PlayerStatusManager status, double delta)
+    {
+        AbnormalList? abnormals = status.AbnormalList;
+        if (abnormals is null)
+        {
+            return;
+        }
+
+        bool present;
+        try
+        {
+            present = abnormals.Has(AbnormalType.BreastSuper);
+        }
+        catch (Exception)
+        {
+            return;
+        }
+
+        if (PleasureRuntime.PendingBreastSuperCure)
+        {
+            PleasureRuntime.PendingBreastSuperCure = false;
+            PleasureRuntime.Breasts?.Reset();
+            if (present)
+            {
+                abnormals.RemoveAbnormal(AbnormalType.BreastSuper);
+                PleasureRuntime.SuperTimer?.Stop();
+                BeginTransition(abnormals);
+                PleasureRuntime.Log?.LogInfo(
+                    "BreastSuper was removed along with Breast by the game's own cure.");
+            }
+
+            return;
+        }
+
+        if (!present)
+        {
+            PleasureRuntime.SuperTimer?.Stop();
+            return;
+        }
+
+        BreastSuperTimer? timer = PleasureRuntime.SuperTimer;
+        if (timer is null || !timer.HasDuration)
+        {
+            return;
+        }
+
+        timer.Start();
+        if (!timer.Tick(delta))
+        {
+            return;
+        }
+
+        // Back to Breast rather than to nothing. Enduring the escalation costs the ordinary
+        // swelling, it does not cure it; otherwise waiting would be better than being cured.
+        abnormals.RemoveAbnormal(AbnormalType.BreastSuper);
+        AbnormalManager? manager = ManagerList.Abnormal;
+        AbnormalData? data = null;
+        if (manager is not null && manager.TryGetData(AbnormalType.Breast, out data) && data is not null)
+        {
+            abnormals.AddAbnormal(data, 1, null);
+        }
+
+        BeginTransition(abnormals);
+        PleasureRuntime.Log?.LogInfo("BreastSuper subsided back to Breast after its duration.");
     }
 
     /// <summary>
@@ -532,6 +637,12 @@ public sealed class PleasureObserver : MonoBehaviour
         double now = Time.timeAsDouble;
         double delta = _lastFrameTime <= 0d ? 0d : now - _lastFrameTime;
         _lastFrameTime = now;
+
+        PlayerStatusManager? status = ManagerList.PlayerStatus;
+        if (status is not null)
+        {
+            UpdateBreastSuperLife(status, delta);
+        }
 
         // Decaying inside a hold would let the player wait out the danger (SPEC003 5.2).
         if (!bound && delta > 0d)
@@ -723,6 +834,16 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
+        if (current.type == EventType.KeyDown
+            && current.keyCode == KeyCode.C
+            && !_enemyEditor.IsOpen
+            && !_editing)
+        {
+            TryStartBreastCure();
+            current.Use();
+            return;
+        }
+
         if (current.type == EventType.KeyDown && current.keyCode == KeyCode.F10)
         {
             // Closing the layout editor first, so the two are never taking the same keys.
@@ -771,6 +892,53 @@ public sealed class PleasureObserver : MonoBehaviour
         catch (Exception exception)
         {
             PleasureRuntime.Log?.LogWarning($"F11: Breast could not be applied: {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Starts the game's own milking cure, where the scene provides it (SPEC003 5.8, FR-255).
+    ///
+    /// The MOD does not reproduce the scene. It looks for the event the game already has —
+    /// <c>Root/Event/BreastCure</c>, seen in the log when the cure ran — and asks it to start, which
+    /// is the same thing walking up to it and interacting does. That is why this only works where
+    /// the event exists: it is the game's content, in the place the game put it, and the places it
+    /// put it are the safe ones.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void TryStartBreastCure()
+    {
+        AbnormalList? abnormals = PleasureRuntime.PlayerAbnormals;
+        if (abnormals is null || !abnormals.Has(AbnormalType.BreastSuper))
+        {
+            return;
+        }
+
+        try
+        {
+            GameObject? cure = GameObject.Find("Root/Event/BreastCure") ?? GameObject.Find("BreastCure");
+            if (cure is null)
+            {
+                PleasureRuntime.Log?.LogInfo(
+                    "C: no BreastCure event is present in this scene, so there is nothing to start "
+                    + "here. The cure exists where the game placed it.");
+                return;
+            }
+
+            var trigger = cure.GetComponentInChildren<InteractiveEventTrigger>(true);
+            if (trigger is null)
+            {
+                PleasureRuntime.Log?.LogInfo(
+                    $"C: '{cure.name}' was found but carries no InteractiveEventTrigger, so the MOD "
+                    + "has no way to start it.");
+                return;
+            }
+
+            trigger.OnStartInteractive();
+            PleasureRuntime.Log?.LogInfo($"C: started the BreastCure event on '{cure.name}'.");
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Log?.LogWarning($"C: the cure event could not be started: {exception.Message}");
         }
     }
 
@@ -1004,6 +1172,33 @@ public sealed class PleasureObserver : MonoBehaviour
         // Blooms quickly and fades slowly, which reads as a pulse instead of a light switching on.
         float strength = progress > 0.75f ? (1f - progress) / 0.25f : progress / 0.75f;
         DrawVignette(Math.Clamp(strength, 0f, 1f));
+    }
+
+    /// <summary>
+    /// Black over the moment the status changes, fading back in.
+    ///
+    /// Drawn by the MOD rather than through the game's fader: the fader belongs to the event system,
+    /// and driving it from outside an event would leave it holding state nobody clears. A rectangle
+    /// costs nothing and cannot strand the screen dark.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void DrawTransitionFade()
+    {
+        double remaining = PleasureRuntime.TransitionFadeUntil - Time.timeAsDouble;
+        if (remaining <= 0d)
+        {
+            return;
+        }
+
+        float seconds = Math.Max(0.01f, PleasureRuntime.Profile.BreastSuper.FadeSeconds);
+        var progress = (float)Math.Clamp(remaining / seconds, 0d, 1d);
+
+        // Full black for the first third, then back to clear. The body is rebuilt on the frame the
+        // fade starts, so what the black hides is the swap itself.
+        float alpha = progress > 0.66f ? 1f : progress / 0.66f;
+        OverlayPainter.Fill(
+            new Rect(0f, 0f, Screen.width, Screen.height),
+            new Color(0f, 0f, 0f, Math.Clamp(alpha, 0f, 1f)));
     }
 
     [HideFromIl2Cpp]

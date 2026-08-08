@@ -67,6 +67,21 @@ public sealed record PleasureOptions
     public bool BreastSuperReplacesBreast { get; init; } = true;
 
     /// <summary>
+    /// Seconds <c>BreastSuper</c> lasts before subsiding back to <c>Breast</c>. 0 never subsides.
+    /// </summary>
+    public float BreastSuperSeconds { get; init; }
+
+    /// <summary>
+    /// Whether the game's own <c>Breast</c> cure also removes <c>BreastSuper</c>. The cure is an
+    /// authored list of statuses and the escalated one is not in it, so without this the MOD would
+    /// have added a status the game cannot take away.
+    /// </summary>
+    public bool BreastSuperCuredWithBreast { get; init; } = true;
+
+    /// <summary>Seconds of black over the transition. 0 draws nothing.</summary>
+    public float BreastSuperFadeSeconds { get; init; } = 0.8f;
+
+    /// <summary>
     /// Counts every <c>Breast</c> application rather than only those at the maximum level. A
     /// debugging aid: it makes the escalation reachable by using the item that applies swelling a
     /// few times, without having to reach the ceiling first.

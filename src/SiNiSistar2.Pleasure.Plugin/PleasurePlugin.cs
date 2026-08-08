@@ -96,6 +96,7 @@ public sealed class PleasurePlugin : BasePlugin
             profile.Pleasure.SensitivityScale,
             profile.Pleasure.DecayPerSecond);
         PleasureRuntime.Sensitivity = new SensitivityTrack(profile.Sensitivity.Cap);
+        PleasureRuntime.SuperTimer = new BreastSuperTimer(profile.BreastSuper.Seconds);
         PleasureRuntime.Breasts = new BreastEscalation(
             profile.BreastSuper.ApplicationsAtMaxLevel,
             profile.BreastSuper.SensitivityThreshold);
@@ -202,7 +203,10 @@ public sealed class PleasurePlugin : BasePlugin
                   + "applications."
                 : string.Empty));
 
-        Log.LogInfo("Press F11 in game to apply Breast to the player, for checking the escalation.");
+        Log.LogInfo(
+            "Press F11 in game to apply Breast to the player, for checking the escalation. Press C "
+            + "while BreastSuper is active to start the game's own milking cure, where the scene "
+            + "provides it.");
 
         if (profile.ShowOverlay)
         {
@@ -338,6 +342,25 @@ public sealed class PleasurePlugin : BasePlugin
             "BreastSuperReplacesBreast",
             true,
             "Remove Breast as BreastSuper is applied, so the two do not stack.");
+        ConfigEntry<float> breastSeconds = Config.Bind(
+            "BreastSuper",
+            "BreastSuperSeconds",
+            0f,
+            "Seconds BreastSuper lasts before subsiding back to Breast. 0 never subsides. Enduring "
+            + "it costs the ordinary swelling rather than curing it.");
+        ConfigEntry<bool> breastCured = Config.Bind(
+            "BreastSuper",
+            "CuredWithBreast",
+            true,
+            "Remove BreastSuper when the game's own cure removes Breast. The cure is an authored "
+            + "list of statuses and the escalated one is not in it, so without this the MOD would "
+            + "have added a status the game cannot take away.");
+        ConfigEntry<float> breastFade = Config.Bind(
+            "BreastSuper",
+            "TransitionFadeSeconds",
+            0.8f,
+            "Seconds of black over the transition. The body is rebuilt in place, so the player does "
+            + "not move and the scene is not reloaded; the black only covers the swap.");
         ConfigEntry<bool> breastBelowMax = Config.Bind(
             "BreastSuper",
             "CountBelowMaxLevel",
@@ -435,6 +458,9 @@ public sealed class PleasurePlugin : BasePlugin
             BreastSuperAfterApplications = breastAfter.Value,
             BreastSuperSensitivityThreshold = breastThreshold.Value,
             BreastSuperReplacesBreast = breastReplaces.Value,
+            BreastSuperSeconds = breastSeconds.Value,
+            BreastSuperCuredWithBreast = breastCured.Value,
+            BreastSuperFadeSeconds = breastFade.Value,
             BreastSuperMakeHaanjaCurable = breastHaanja.Value,
             BreastSuperCountBelowMaxLevel = breastBelowMax.Value,
             LogTransitions = logTransitions.Value,

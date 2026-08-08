@@ -65,6 +65,15 @@ internal static class PleasureRuntime
     /// </summary>
     internal static bool PendingBreastSuper { get; set; }
 
+    /// <summary>Counts down <c>BreastSuper</c> back to <c>Breast</c> (SPEC003 5.8).</summary>
+    internal static BreastSuperTimer? SuperTimer { get; set; }
+
+    /// <summary>Set when the game's own cure removes <c>Breast</c>, consumed by the observer.</summary>
+    internal static bool PendingBreastSuperCure { get; set; }
+
+    /// <summary>Game time at which the transition's black stops being drawn.</summary>
+    internal static double TransitionFadeUntil { get; set; }
+
     /// <summary>The player's own status list, used to tell player-received from enemy-received.</summary>
     internal static AbnormalList? PlayerAbnormals { get; set; }
 

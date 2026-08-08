@@ -51,6 +51,17 @@ internal static class AbnormalLabelPatches
                 PleasureRuntime.Probe($"label-{change}-{string.Join("+", names)}", $"A-15: {message}");
             }
 
+            // The game's own cure is an authored list of statuses and the escalated one is not in
+            // it: BreastSuper carries haanjaCanCure=True, but that only reaches the generic Haanja
+            // sweep, while Breast is cured by a named Remove. Without this the MOD would have added
+            // a status the game has no way to take away (FR-253).
+            if (change == AbnormalChangeType.Remove
+                && PleasureRuntime.Profile.BreastSuper.CuredWithBreast
+                && names.Contains(nameof(AbnormalType.Breast)))
+            {
+                PleasureRuntime.PendingBreastSuperCure = true;
+            }
+
             // Only an add can escalate. The label's other change types remove, cap or level down.
             if (change != AbnormalChangeType.Add)
             {
