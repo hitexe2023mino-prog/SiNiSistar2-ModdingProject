@@ -150,6 +150,14 @@ public sealed class PleasurePlugin : BasePlugin
             typeof(BreastPatches),
             postfix: nameof(BreastPatches.AddOrRemovePostfix));
         applied += Patch(
+            "breast-condition-label",
+            AccessTools.Method(
+                typeof(AbnormalConditionLabel),
+                "ExecutionOne",
+                new[] { typeof(AbnormalConditionParameter) }),
+            typeof(AbnormalLabelPatches),
+            postfix: nameof(AbnormalLabelPatches.ExecutionOnePostfix));
+        applied += Patch(
             "save-point",
             AccessTools.Method(typeof(SavePointAsyncLabel), nameof(SavePointAsyncLabel.ExecutionOneAsync)),
             typeof(SavePointPatches),

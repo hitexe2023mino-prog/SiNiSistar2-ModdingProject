@@ -285,6 +285,19 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
+        // Held while the game is frozen. Opening the item menu stops the game, and MonoBehaviour
+        // Update keeps running at a time scale of zero, so without this the status would be added
+        // underneath an open menu — to a UI that has already drawn its list and is not going to
+        // redraw it. The flag survives, so it lands as soon as play resumes.
+        if (Time.timeScale <= 0f)
+        {
+            PleasureRuntime.Probe(
+                "breastsuper-deferred",
+                "The BreastSuper escalation is waiting for the game to resume; the time scale is 0, "
+                + "which is what an open menu looks like.");
+            return;
+        }
+
         PleasureRuntime.PendingBreastSuper = false;
 
         AbnormalList? abnormals = status.AbnormalList;

@@ -49,8 +49,10 @@ Every tuning value still ships at no-change (FR-233), so a fresh install only re
 | FR-240 | 最大レベルでの付与のみ計数、上限を読めなければ遷移しない | `BreastEscalation.Record`、`BreastPatches.MaxLevel`（読めなければ0） | `BreastEscalationTests.ApplicationsBelowTheMaximum...`、AC-235 実機 | Tested / unverified |
 | FR-241 | 治療手段を新設しない | 治療コードなし。`MakeHaanjaCurable` は `m_HaanjaCanCure` を立てるのみ | 3.8 の A-14、AC-237 実機 | Design-time |
 | FR-242 | `AbnormalData` の変更を記録しアンロードで戻す | `PleasureObserver.ApplyHaanjaCurableOverride`、`InterventionLedger` | AC-237 実機 | Implemented / unverified |
-| FR-244 | 付与経路を問わず計数、二重計上なし | `AbnormalList` の3経路すべてにpostfix、`BreastPatches.ClaimThisFrame`（フレーム単位で1回） | `BreastEscalationTests.TheSourceOfTheApplication...`、AC-238 実機 | Tested / unverified |
+| FR-244 | 付与経路を問わず計数、二重計上なし | `AbnormalList` の3経路と `AbnormalConditionLabel.ExecutionOne`、`BreastPatches.ClaimThisFrame`（フレーム単位で1回） | `BreastEscalationTests.TheSourceOfTheApplication...`、AC-238 実機 | Tested / unverified |
 | FR-245 | 適用前に `BreastSuper` の読み込みを要求 | `PleasureObserver.RequestBreastSuperLoad`（`AbnormalManager.PreloadResist`） | AC-217 実機 | Implemented / unverified |
+| FR-246 | 停止中は付与しない | `PleasureObserver.ApplyPendingBreastSuper`（`Time.timeScale <= 0` で保留） | 3.8 の A-16 | Implemented / unverified |
+| FR-247 | IL2CPP同一性はポインタで判定 | `BreastPatches.IsPlayer` | 3.8 実機 | Implemented / unverified |
 | FR-222 | 感度と絶頂回数をスロット単位で保存しセーブに同期 | `SidecarStore`、`PleasureRuntime.LoadSlot` / `SaveSlot`、`PleasureObserver.ProbeSaveSlot`、`SavePointPatches` | `SidecarStoreTests`（8件）、`SidecarDocumentTests`、AC-218 実機 | Tested / unverified |
 | FR-223 | 随伴ファイルの書き込みは原子的 | `SidecarStore.Save`（一時ファイル＋置換） | `SidecarStoreTests.SavingLeavesNoTemporaryFile` ほか | Tested |
 | FR-224 | ファイルがなければ初期値 | `SidecarDocument.Parse` | `SidecarDocumentTests` | Tested |
@@ -120,6 +122,14 @@ Every tuning value still ships at no-change (FR-233), so a fresh install only re
 | 根拠 | `GUI.Button`、`GUI.BeginScrollView`、`GUI.TextField` はいずれも interop メタデータにあるが、`GUI.DrawTexture` も同様にありながら本ビルドでは実行時に `Method unstripping failed` を投げた。実機で成功が確認できている呼び出しだけに限る |
 | 影響 | スクロールと選択を自前で持つ分だけ実装が増えたが、実行時に失敗し得る面が増えない |
 | 代替案 | `GUI.Button` と `BeginScrollView` を使う、uGUI のキャンバスを立てる |
+
+| 項目 | 内容 |
+|---|---|
+| 論点 | アイテムを使っても何も起こらず、プローブも1行も出なかった |
+| 原因 | `ReferenceEquals` でプレイヤーの状態異常リストを判定していた。Il2CppInterop はHarmonyのpostfixへ独自のラッパーを渡すため常に偽になり、すべての付与が無言で捨てられていた |
+| 二次的な誤り | 診断の出力をその判定の**後ろ**に置いていたため、判定が壊れるとログが完全に沈黙した。「何も付与されていない」と「すべて捨てられた」が区別できない |
+| 選択 | ポインタ比較へ変更し（SPEC002 が既にそうしている）、診断は判定の前に出して付与先を注記する |
+| 併せて | `AbnormalConditionLabel.ExecutionOne` にもpostfixを追加した。IL2CPPのインライン化で `AddAbnormal` の呼び出しが消えている可能性があり、SPEC002 が `GachaGachaSystem.Execution` で同じ失敗を経験している |
 
 ## 完了監査
 

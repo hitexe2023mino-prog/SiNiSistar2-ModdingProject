@@ -51,26 +51,28 @@ internal static class BreastPatches
         }
     }
 
-    private static void Observe(AbnormalList? list, AbnormalType type, string entryPoint)
+    internal static void Observe(AbnormalList? list, AbnormalType type, string entryPoint)
     {
         try
         {
-            // Enemies have status lists too. Only the player's is of any interest here.
-            if (list is null || !ReferenceEquals(list, PleasureRuntime.PlayerAbnormals))
+            if (list is null)
             {
                 return;
             }
 
-            // Every status, not only Breast. "The item does nothing" has two very different causes
-            // — the MOD never saw the application, or the item applies something other than Breast
-            // — and reporting only Breast cannot tell them apart. Once per status type, so a hold
-            // that reapplies a status every frame does not fill the log (A-15).
-            PleasureRuntime.Probe(
-                $"status-{type}",
-                $"A-15: {type} was added to the player through {entryPoint}; it is now at level "
-                + $"{SafeLevel(list, type)}.");
+            bool isPlayer = IsPlayer(list);
 
-            if (type != AbnormalType.Breast)
+            // Reported whoever it belongs to, and annotated. Filtering first is what made the last
+            // attempt silent: the filter was wrong, so it dropped every application and the log
+            // could not distinguish "nothing was applied" from "everything was discarded". A
+            // diagnostic must not be gated on the thing it is diagnosing.
+            PleasureRuntime.Probe(
+                $"status-{type}-{isPlayer}",
+                $"A-15: {type} was added through {entryPoint} to "
+                + $"{(isPlayer ? "the player" : "something other than the player")}; level "
+                + $"{SafeLevel(list, type)}, timeScale {Time.timeScale}.");
+
+            if (!isPlayer || type != AbnormalType.Breast)
             {
                 return;
             }
@@ -133,6 +135,36 @@ internal static class BreastPatches
         catch (Exception exception)
         {
             PleasureRuntime.Log?.LogWarning($"Breast escalation failed for this application: {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Whether this is the player's status list.
+    ///
+    /// Compared by native pointer, not by reference. Il2CppInterop hands a Harmony postfix its own
+    /// managed wrapper for the instance, so two wrappers around the same native object are not the
+    /// same object to <c>ReferenceEquals</c> — which silently rejected every application. SPEC002's
+    /// <c>DifficultyRuntime.IsPlayerList</c> already compares this way.
+    /// </summary>
+    private static bool IsPlayer(AbnormalList list)
+    {
+        try
+        {
+            AbnormalList? player = PleasureRuntime.PlayerAbnormals;
+            if (player is null)
+            {
+                PleasureRuntime.Probe(
+                    "player-abnormals-unknown",
+                    "A-15 caution: a status was added before the MOD had resolved the player's own "
+                    + "status list, so it could not be attributed.");
+                return false;
+            }
+
+            return list.Pointer == player.Pointer;
+        }
+        catch (Exception)
+        {
+            return false;
         }
     }
 
