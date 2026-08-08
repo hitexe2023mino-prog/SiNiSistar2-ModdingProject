@@ -60,14 +60,68 @@ internal static class PleasureRuntime
     internal static bool PendingLustCrest { get; set; }
 
     /// <summary>
+    /// The crest's own level ceiling, read from the game once it is known.
+    ///
+    /// Read rather than assumed: it is three in this build, and a number the MOD wrote down would
+    /// be a number that stops being true when the game changes it.
+    /// </summary>
+    internal static int CrestMaxLevel { get; set; } = 1;
+
+    /// <summary>
     /// Whether the crest has ever been received in this run (SPEC003 FR-272).
     ///
-    /// Once true it stays true until the run ends, and the observer puts the status back whenever
-    /// it finds it missing. The crest is a curse, and the game's cures are written for statuses
-    /// that were meant to be curable; letting one of them lift this would make the mark removable
-    /// by treating something else entirely.
+    /// Sublimated means the curse reached its last level, which is where it stops being a curse
+    /// that can be lifted and becomes the mark itself (FR-273). Below that it is curable and the
+    /// MOD leaves a cure alone; at it, the observer puts the status back whenever it finds it
+    /// missing, because the game's cures are written for statuses that were meant to be curable.
+    ///
+    /// Once true it stays true until the run ends.
     /// </summary>
-    internal static bool CrestReceived { get; set; }
+    internal static bool CrestSublimated { get; set; }
+
+    /// <summary>What level of the crest the player is carrying, or 0 for none.</summary>
+    internal static int CrestLevel
+    {
+        get
+        {
+            try
+            {
+                return PlayerAbnormals?.GetAbnormalLevel(AbnormalType.LustMarkCurse) ?? 0;
+            }
+            catch (Exception)
+            {
+                return 0;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The level the corruption has earned, from the point the mark first appears to the cap.
+    ///
+    /// The crest is a levelled status — three of them — and the corruption is a continuum, so the
+    /// span above the threshold is divided into as many steps as the status has. The last step
+    /// lands exactly at the cap, which is also where the drawn mark completes: the picture finishes
+    /// and the thing it pictures finishes with it (FR-273).
+    /// </summary>
+    internal static int EarnedCrestLevel(int maxLevel)
+    {
+        CorruptionTrack? track = Corruption;
+        CorruptionTuning tuning = Profile.Corruption;
+        if (track is null || track.Cap <= 0f || maxLevel <= 0 || !tuning.MarksTheBody)
+        {
+            return 0;
+        }
+
+        float fraction = track.Value / track.Cap;
+        if (fraction < tuning.CrestAtFraction)
+        {
+            return 0;
+        }
+
+        float span = Math.Max(1e-4f, 1f - tuning.CrestAtFraction);
+        var level = 1 + (int)Math.Floor((fraction - tuning.CrestAtFraction) / span * maxLevel);
+        return Math.Clamp(level, 1, maxLevel);
+    }
 
     /// <summary>
     /// Whether the game's lust crest is on the player right now (SPEC003 FR-267).
@@ -114,7 +168,10 @@ internal static class PleasureRuntime
             return;
         }
 
-        if (track.Value / track.Cap >= tuning.CrestAtFraction && !IsCrestWorn)
+        // Pending whenever the corruption has earned more of the mark than the body is carrying.
+        // Asking about the level rather than mere presence is what lets the curse climb with the
+        // corruption instead of appearing once and staying at its first step.
+        if (EarnedCrestLevel(CrestMaxLevel) > CrestLevel)
         {
             PendingLustCrest = true;
         }
@@ -299,7 +356,7 @@ internal static class PleasureRuntime
         PendingClimax = false;
         PendingBreastSuper = false;
         PendingLustCrest = false;
-        CrestReceived = false;
+        CrestSublimated = false;
         ClimaxFlashUntil = 0d;
         Log?.LogInfo(
             "No save is loaded, so this is a new run: corruption, climaxes, swelling, milk and the "
@@ -320,7 +377,7 @@ internal static class PleasureRuntime
             Climaxes.LoadFrom(stored.ClimaxCount);
             Breasts?.LoadFrom(stored.BreastAtMaxCount);
             Milk?.LoadFrom(stored.Milk);
-            CrestReceived = stored.LustCrest;
+            CrestSublimated = stored.LustCrest;
         }
         else
         {
@@ -381,7 +438,7 @@ internal static class PleasureRuntime
             Climaxes.Count,
             Breasts?.Count ?? 0,
             Milk?.Fill ?? 0f,
-            CrestReceived);
+            CrestSublimated);
         if (failure is not null)
         {
             Log?.LogWarning($"Slot '{CurrentSlotKey}' could not be written ({reason}): {failure}");

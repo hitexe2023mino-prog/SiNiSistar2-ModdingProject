@@ -46,6 +46,7 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _breastSuperReported;
     private bool _breastSuperRequested;
     private bool _crestRequested;
+    private bool _lustReported;
     private double _crestLoadAsked;
     private double _crestWaitLogged;
     private double _swellingOverlapSince;
@@ -328,6 +329,7 @@ public sealed class PleasureObserver : MonoBehaviour
         PleasureRuntime.IsSwollen = IsSwollen(status);
         ReportInteractionLock(status);
         ReportSelfCheck(status);
+        ReportLustStatuses();
         ReportBreastCureSurface(status);
         ApplyPendingBreastSuper(status);
         ApplyPendingLustCrest(status);
@@ -430,10 +432,10 @@ public sealed class PleasureObserver : MonoBehaviour
     [HideFromIl2Cpp]
     private void ApplyPendingLustCrest(PlayerStatusManager status)
     {
-        // Put back whenever it is missing. The crest does not come off for the rest of the run
-        // (FR-272), so the fact that it was received is what is remembered, not the status: a cure
-        // written for something else must not be able to lift it.
-        if (PleasureRuntime.CrestReceived && !PleasureRuntime.IsCrestWorn)
+        // Put back only once it has sublimated. Below the last level the mark is a curse and a cure
+        // is meant to lift it (FR-273); at the last level it stops being a curse and becomes the
+        // mark, and no cure written for something else should take that off.
+        if (PleasureRuntime.CrestSublimated && !PleasureRuntime.IsCrestWorn)
         {
             PleasureRuntime.PendingLustCrest = true;
         }
@@ -472,21 +474,51 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        abnormals.AddAbnormal(data, 1, null);
-        PleasureRuntime.PendingLustCrest = false;
-        PleasureRuntime.CrestReceived = true;
+        // The ceiling comes from the game, once. It is three in this build, and a number written
+        // here would be one that stops being true when the game changes it.
+        PleasureRuntime.CrestMaxLevel = Math.Max(1, data.MaxLevel);
 
-        if (!abnormals.Has(AbnormalType.LustMarkCurse))
+        int target = PleasureRuntime.CrestSublimated
+            ? PleasureRuntime.CrestMaxLevel
+            : PleasureRuntime.EarnedCrestLevel(PleasureRuntime.CrestMaxLevel);
+        int before = PleasureRuntime.CrestLevel;
+        if (target <= before)
+        {
+            PleasureRuntime.PendingLustCrest = false;
+            return;
+        }
+
+        // Added one step at a time, the way the game itself raises a level. Bounded by the ceiling
+        // so a status that refuses to climb cannot turn this into a loop.
+        for (var step = 0; step < PleasureRuntime.CrestMaxLevel && PleasureRuntime.CrestLevel < target; step++)
+        {
+            abnormals.AddAbnormal(data, 1, null);
+        }
+
+        PleasureRuntime.PendingLustCrest = false;
+        int now = PleasureRuntime.CrestLevel;
+        if (now <= before)
         {
             PleasureRuntime.Log?.LogWarning(
-                "The lust crest was applied and the status list still reports it absent. The "
-                + "corruption keeps accumulating; only the game's own status is missing.");
+                "The lust crest was applied and its level did not move. The corruption keeps "
+                + "accumulating; only the game's own status is missing.");
+            return;
+        }
+
+        if (now >= PleasureRuntime.CrestMaxLevel && !PleasureRuntime.CrestSublimated)
+        {
+            PleasureRuntime.CrestSublimated = true;
+            PleasureRuntime.Log?.LogInfo(
+                $"The lust crest reached {now}/{PleasureRuntime.CrestMaxLevel} and has sublimated: "
+                + "it is no longer a curse to be lifted, and no cure will take it off for the rest "
+                + "of this run. A new game starts a new run and clears it (FR-273).");
             return;
         }
 
         PleasureRuntime.Log?.LogInfo(
-            "The corruption has marked the body: the lust crest is now worn. Corruption is gained "
-            + $"{PleasureRuntime.Profile.Corruption.ScaleFor(true):0.##}x faster while it is.");
+            $"The corruption has marked the body: the lust crest is at {now}/"
+            + $"{PleasureRuntime.CrestMaxLevel}. It can still be cured at this level. Corruption is "
+            + $"gained {PleasureRuntime.Profile.Corruption.ScaleFor(true):0.##}x faster while it is worn.");
     }
 
     /// <summary>
@@ -1195,6 +1227,68 @@ public sealed class PleasureObserver : MonoBehaviour
             + $"IsAutoSave={main.IsAutoSave}, sidecar key='{SlotKey.Compose(selectId, file) ?? "(none)"}'.");
     }
 
+    /// <summary>
+    /// Names the game's own lust statuses, once (SPEC003 付録A A-45).
+    ///
+    /// The crest turned out to be a levelled status — it reads "淫紋の呪い 1/3" in game — and the
+    /// sublimated form it is meant to become at 3/3 may be a different status again. The enum has
+    /// three candidates and their identifiers do not settle which is which, so the game is asked:
+    /// each one's level ceiling, its curability, and the name the player actually sees.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void ReportLustStatuses()
+    {
+        if (_lustReported || !PleasureRuntime.Profile.ProbeMeasurements)
+        {
+            return;
+        }
+
+        AbnormalManager? manager = ManagerList.Abnormal;
+        if (manager is null)
+        {
+            return;
+        }
+
+        _lustReported = true;
+        foreach (AbnormalType type in new[]
+                 {
+                     AbnormalType.LustMarkCurse, AbnormalType.Lustfull, AbnormalType.Lustfull_Forever,
+                 })
+        {
+            try
+            {
+                AbnormalData? data = null;
+                if (!manager.TryGetData(type, out data) || data is null)
+                {
+                    manager.LoadAbnormalData(type, ManagerList.RootTokenSource.Token);
+                    PleasureRuntime.Log?.LogInfo(
+                        $"A-45: {type} has no data loaded yet; the game has been asked for it.");
+                    _lustReported = false;
+                    continue;
+                }
+
+                string shown = "(unreadable)";
+                try
+                {
+                    shown = ManagerList.Localize?.GetLcText(data.AbnormalNameID) ?? "(no name)";
+                }
+                catch (Exception)
+                {
+                    // A missing localisation is not worth losing the rest of the reading over.
+                }
+
+                PleasureRuntime.Log?.LogInfo(
+                    $"A-45: {type} is '{shown}' (nameID={data.AbnormalNameID}), "
+                    + $"maxLevel={data.MaxLevel}, haanjaCanCure={data.HaanjaCanCure}, "
+                    + $"physicalConditionFlag={data.PhysicalConditionFlag}.");
+            }
+            catch (Exception exception)
+            {
+                PleasureRuntime.Log?.LogWarning($"A-45: {type} could not be read: {exception.Message}");
+            }
+        }
+    }
+
     [HideFromIl2Cpp]
     private void ReportSelfCheck(PlayerStatusManager status)
     {
@@ -1421,7 +1515,7 @@ public sealed class PleasureObserver : MonoBehaviour
         {
             corruption.LoadFrom(0f);
             PleasureRuntime.PendingLustCrest = false;
-            PleasureRuntime.CrestReceived = false;
+            PleasureRuntime.CrestSublimated = false;
             RemoveLustCrestForDebugging();
             PleasureRuntime.Log?.LogInfo(
                 "F8: corruption was at the cap, so it has been wound back to nothing and the lust "
