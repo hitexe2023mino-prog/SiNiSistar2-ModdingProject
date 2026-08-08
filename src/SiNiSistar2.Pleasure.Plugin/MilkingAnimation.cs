@@ -40,6 +40,7 @@ internal static class MilkingAnimation
     private static bool _reportedFound;
     private static readonly HashSet<string> _galleryClips = new(StringComparer.Ordinal);
     private static readonly HashSet<string> _eventClips = new(StringComparer.Ordinal);
+    private static readonly List<(string Name, Animator Animator)> _eventCast = new();
     private static bool _reportedPaths;
     private static double _lastRequest;
     private static int _sweeps;
@@ -193,6 +194,7 @@ internal static class MilkingAnimation
     /// </summary>
     internal static void ProbeEventObjects(string scene)
     {
+        _eventCast.Clear();
         try
         {
             GameObject? root = GameObject.Find("Root/Event");
@@ -211,6 +213,14 @@ internal static class MilkingAnimation
                 Transform child = parent.GetChild(index);
                 var animator = child.gameObject.GetComponent(Il2CppType.Of<Animator>())?.TryCast<Animator>();
                 names.Add(child.name + (animator is null ? string.Empty : " (has an animator)"));
+
+                // Kept so the clip can be read as the event plays. An animator that has just been
+                // created is not playing the take yet, so reading only at the start would report
+                // the pose it was built in.
+                if (animator is not null && _eventCast.Count < 8)
+                {
+                    _eventCast.Add((child.name, animator));
+                }
             }
 
             PleasureRuntime.Log?.LogInfo(
@@ -222,6 +232,19 @@ internal static class MilkingAnimation
             PleasureRuntime.Log?.LogWarning($"A-33: the running event could not be named: {exception.Message}");
         }
     }
+
+    /// <summary>Reads the event's own cast while it plays. At most eight objects, none of them searched for.</summary>
+    internal static void ProbeEventCast(string scene)
+    {
+        for (var index = 0; index < _eventCast.Count; index++)
+        {
+            (string name, Animator animator) = _eventCast[index];
+            Report(animator, scene, $"the event object '{name}'");
+        }
+    }
+
+    /// <summary>Forgets the cast when the event ends, so a stale animator is never read.</summary>
+    internal static void ForgetEventCast() => _eventCast.Clear();
 
     /// <summary>
     /// Reads the take's own cast (SPEC003 付録A A-27, A-31).

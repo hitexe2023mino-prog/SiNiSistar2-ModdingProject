@@ -128,16 +128,25 @@ public sealed class PleasureObserver : MonoBehaviour
             }
 
             bool cinematic = objects is not null && objects.IsCinematicEvent;
+            string scene = SceneManager.GetActiveScene().name;
             if (cinematic && !_eventWasRunning)
             {
-                MilkingAnimation.ProbeEventObjects(SceneManager.GetActiveScene().name);
+                MilkingAnimation.ProbeEventObjects(scene);
+            }
+            else if (cinematic)
+            {
+                MilkingAnimation.ProbeEventCast(scene);
+            }
+            else if (_eventWasRunning)
+            {
+                MilkingAnimation.ForgetEventCast();
             }
 
             _eventWasRunning = cinematic;
 
             if (swollen || cinematic)
             {
-                MilkingAnimation.ProbeEvent(SceneManager.GetActiveScene().name, swollen);
+                MilkingAnimation.ProbeEvent(scene, swollen);
             }
 
             GaTakePlayer? player = ManagerList.Gallery?.CurrentTakePlayer;
