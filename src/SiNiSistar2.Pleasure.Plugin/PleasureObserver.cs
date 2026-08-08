@@ -433,10 +433,18 @@ public sealed class PleasureObserver : MonoBehaviour
     [HideFromIl2Cpp]
     private void ApplyPendingLustCrest(PlayerStatusManager status)
     {
-        // Put back only once it has sublimated. Below the last level the mark is a curse and a cure
-        // is meant to lift it (FR-273); at the last level it stops being a curse and becomes the
-        // mark, and no cure written for something else should take that off.
-        if (PleasureRuntime.CrestSublimated && !PleasureRuntime.IsCrestWorn)
+        // Asked every pass, not only when corruption is gained. What decides whether the mark
+        // belongs on the body is the corruption standing there now, so a cure taken while the
+        // corruption still demands a stock is undone at once: lifting a symptom does not remove the
+        // cause. A cure taken with no corruption behind it holds, because then nothing demands it —
+        // which is the difference between the two cases (FR-274).
+        //
+        // The first version only looked on the frame corruption rose, so a cure at a standing
+        // corruption stuck until the next gain.
+        int owed = PleasureRuntime.CrestSublimated
+            ? PleasureRuntime.CrestMaxLevel
+            : PleasureRuntime.EarnedCrestLevel(PleasureRuntime.CrestMaxLevel);
+        if (owed > PleasureRuntime.CrestLevel)
         {
             PleasureRuntime.PendingLustCrest = true;
         }
@@ -446,7 +454,11 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        if (Time.timeScale <= 0f || PleasureRuntime.IsBound || PleasureRuntime.IsDefeatPerformance)
+        // Not while the game is holding the screen. A cure runs inside a drama, and re-marking the
+        // body in the middle of one would be arguing with the scene as it plays. The debt does not
+        // expire — it is settled on the first ordinary frame afterwards.
+        if (Time.timeScale <= 0f || PleasureRuntime.IsBound || PleasureRuntime.IsDefeatPerformance
+            || ManagerList.Object?.IsCinematicEvent == true)
         {
             return;
         }
@@ -472,8 +484,9 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
-        // The ceiling comes from the game, once. It is three in this build, and a number written
-        // here would be one that stops being true when the game changes it.
+        // The ceiling comes from the game, once. A number written here would be one that stops
+        // being true when the game changes it. Recomputed after reading it, because the first pass
+        // through this method is also the first time the real ceiling is known.
         PleasureRuntime.CrestMaxLevel = Math.Max(1, data.MaxLevel);
 
         int target = PleasureRuntime.CrestSublimated

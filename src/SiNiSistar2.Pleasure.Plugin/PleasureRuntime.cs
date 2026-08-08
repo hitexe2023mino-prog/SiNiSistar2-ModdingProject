@@ -167,19 +167,10 @@ internal static class PleasureRuntime
 
         track.Add(amount * Profile.Corruption.ScaleFor(IsCrestWorn));
 
-        CorruptionTuning tuning = Profile.Corruption;
-        if (!tuning.MarksTheBody || track.Cap <= 0f || PendingLustCrest)
-        {
-            return;
-        }
-
-        // Pending whenever the corruption has earned more of the mark than the body is carrying.
-        // Asking about the level rather than mere presence is what lets the curse climb with the
-        // corruption instead of appearing once and staying at its first step.
-        if (EarnedCrestLevel(CrestMaxLevel) > CrestLevel)
-        {
-            PendingLustCrest = true;
-        }
+        // Nothing about the crest is decided here any more. Whether the body owes a stock is a
+        // question about the corruption standing now, not about the moment it last rose, and the
+        // observer asks it every pass (FR-274). Deciding it in both places meant two answers that
+        // could disagree, and the one here was the one that could not see a cure.
     }
 
     internal static ClimaxLedger Climaxes { get; } = new();

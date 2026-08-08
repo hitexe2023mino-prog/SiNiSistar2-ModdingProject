@@ -113,4 +113,41 @@ public sealed class CorruptionAndClimaxTests
         // A limit of zero is not "immediately fatal"; it means no limit has been configured.
         Assert.False(ledger.IsAtLimit(0));
     }
+
+    /// <summary>
+    /// FR-274: what the body owes is a question about the corruption standing now, so it answers
+    /// the same whether or not a cure has just been taken. Corruption below the threshold owes
+    /// nothing, which is what lets a cure hold when nothing is driving the mark.
+    /// </summary>
+    /// <remarks>
+    /// The fractions are the ones a cap of twelve actually produces — 6/12, 8/12, 10/12, 12/12 —
+    /// rather than rounded stand-ins. A first draft of this test used 0.83 for 10/12 and failed:
+    /// the boundary is at 0.8333, and a test that misses it by a hundredth is testing the rounding
+    /// rather than the rule (DEC-252).
+    /// </remarks>
+    [Theory]
+    [InlineData(0f, 0)]
+    [InlineData(4f / 12f, 0)]
+    [InlineData(6f / 12f, 1)]
+    [InlineData(8f / 12f, 2)]
+    [InlineData(10f / 12f, 3)]
+    [InlineData(12f / 12f, 4)]
+    public void TheDebtFollowsTheCorruptionStandingNow(float fraction, int expected)
+    {
+        Assert.Equal(expected, EarnedLevel(fraction, threshold: 0.5f, maxLevel: 4));
+    }
+
+    /// <summary>The same arithmetic the runtime uses, kept here so the boundaries are pinned.</summary>
+    private static int EarnedLevel(float fraction, float threshold, int maxLevel)
+    {
+        if (fraction < threshold)
+        {
+            return 0;
+        }
+
+        float span = Math.Max(1e-4f, 1f - threshold);
+        float steps = Math.Max(1, maxLevel - 1);
+        var level = 1 + (int)Math.Floor(((fraction - threshold) / span * steps) + 1e-4f);
+        return Math.Clamp(level, 1, maxLevel);
+    }
 }
