@@ -171,25 +171,6 @@ public sealed record PleasureOptions
     /// </summary>
     public float CorruptionCrestGainScale { get; init; } = 2f;
 
-    /// <summary>
-    /// Seconds the camera keeps moving after a climax. 0 leaves the camera alone.
-    ///
-    /// Shorter than the haze on purpose. The haze says what happened and can linger; the shake is
-    /// the moment itself, and a camera that keeps moving after the moment has passed reads as a
-    /// fault rather than a feeling.
-    /// </summary>
-    public float ClimaxShakeSeconds { get; init; } = 0.45f;
-
-    /// <summary>
-    /// How far the camera moves at the height of the shake, as a fraction of what is on screen.
-    ///
-    /// A fraction rather than world units: world units mean nothing without knowing how much of the
-    /// world is visible, and the first version was set in them at a value that turned out to be
-    /// under a percent of the frame. Still small — this is a game the player has to keep reading
-    /// while it happens, and the shake is there to be felt rather than watched.
-    /// </summary>
-    public float ClimaxShakeStrength { get; init; } = 0.035f;
-
     /// <summary>Shows the cross that breaks as the climax limit is approached.</summary>
     public bool ShowCross { get; init; } = true;
 

@@ -63,8 +63,6 @@ public sealed class PleasureObserver : MonoBehaviour
     private Texture2D? _crest;
     private int _crestParts = -1;
     private int _crestResolution;
-    private Vector3 _shakeOffset;
-    private Vector3 _shakeLeftAt;
 
 
     public PleasureObserver(IntPtr pointer)
@@ -130,84 +128,6 @@ public sealed class PleasureObserver : MonoBehaviour
         {
             // The gallery is absent for most of a session, and that is not a fault.
         }
-    }
-
-    /// <summary>
-    /// Moves the camera for a moment when a climax lands (SPEC003 FR-268).
-    ///
-    /// In <c>LateUpdate</c> because that is where Cinemachine writes the camera transform. Running
-    /// before the brain means the offset is overwritten and nothing is seen; running after means it
-    /// shows. Either is acceptable, and neither can leave the camera displaced, because the brain
-    /// rebuilds the transform from its own state every frame rather than reading it back.
-    ///
-    /// The exception is a camera nothing else drives, where the additions would accumulate into a
-    /// permanent drift. So the previous offset is taken back whenever the transform is still
-    /// exactly where this left it — if nobody else wrote to it, this one did, and it undoes itself.
-    /// That is what keeps a cosmetic effect from becoming a broken camera.
-    /// </summary>
-    public void LateUpdate()
-    {
-        try
-        {
-            ShakeCamera();
-        }
-        catch (Exception)
-        {
-            // A shake that can take the observer down is not worth having.
-        }
-    }
-
-    [HideFromIl2Cpp]
-    private void ShakeCamera()
-    {
-        ClimaxTuning climax = PleasureRuntime.Profile.Climax;
-        Camera? camera = Camera.main;
-        if (camera is null)
-        {
-            _shakeOffset = Vector3.zero;
-            return;
-        }
-
-        Transform transform = camera.transform;
-        if (_shakeOffset != Vector3.zero && transform.position == _shakeLeftAt)
-        {
-            transform.position -= _shakeOffset;
-        }
-
-        _shakeOffset = Vector3.zero;
-        if (!climax.Shakes)
-        {
-            return;
-        }
-
-        double remaining = PleasureRuntime.ClimaxShakeUntil - Time.unscaledTimeAsDouble;
-        if (remaining <= 0d)
-        {
-            return;
-        }
-
-        // Squared decay: it arrives at full strength and leaves quickly, which is what an impact
-        // does. Two frequencies rather than one, so it reads as a shudder instead of a buzz, and
-        // the vertical is the smaller of the two because a horizontal camera is easier to read.
-        var t = (float)Math.Clamp(remaining / climax.ShakeSeconds, 0d, 1d);
-
-        // Measured against the camera rather than in world units. World units mean nothing without
-        // knowing how much of the world is on screen, and the first version was set in them: 0.09
-        // against an orthographic half-height of several units is under a percent of the frame,
-        // which is a number that reads as "nothing happened". As a fraction of what is visible it
-        // means the same thing at any zoom.
-        float span = camera.orthographic
-            ? camera.orthographicSize
-            : Math.Abs(transform.position.z) * 0.2f;
-        float amount = climax.ShakeStrength * Math.Max(0.5f, span) * t * t;
-        double now = Time.unscaledTimeAsDouble;
-        _shakeOffset = new Vector3(
-            (float)Math.Sin(now * 43d) * amount,
-            (float)Math.Sin((now * 29d) + 1.7d) * amount * 0.6f,
-            0f);
-
-        transform.position += _shakeOffset;
-        _shakeLeftAt = transform.position;
     }
 
     /// <summary>
@@ -1185,11 +1105,6 @@ public sealed class PleasureObserver : MonoBehaviour
 
         PleasureRuntime.ClimaxFlashUntil =
             Time.timeAsDouble + PleasureRuntime.Profile.Climax.OverlaySeconds;
-
-        // Unscaled, unlike the haze. The moment can land while the game is slowed, and a shake that
-        // stretches with the time scale stops reading as an impact.
-        PleasureRuntime.ClimaxShakeUntil =
-            Time.unscaledTimeAsDouble + PleasureRuntime.Profile.Climax.ShakeSeconds;
 
         PleasureRuntime.Log?.LogInfo(
             $"Climax {PleasureRuntime.Climaxes.Count}; corruption "

@@ -356,21 +356,6 @@ public sealed class PleasurePlugin : BasePlugin
             + "it drives land on whole numbers: the drawn mark has six parts and the crest has four "
             + "stocks above the threshold. Raise it for a finer scale — every boundary stays "
             + "proportional.");
-        ConfigEntry<float> shakeSeconds = Config.Bind(
-            "Climax",
-            "ClimaxShakeSeconds",
-            0.45f,
-            "Seconds the camera keeps moving after a climax. 0 leaves the camera alone. Shorter "
-            + "than the haze on purpose: a camera still moving after the moment has passed reads "
-            + "as a fault rather than a feeling.");
-        ConfigEntry<float> shakeStrength = Config.Bind(
-            "Climax",
-            "ClimaxShakeStrength",
-            0.035f,
-            "How far the camera moves at the height of the shake, as a fraction of what is on "
-            + "screen. A fraction rather than world units, which mean nothing without knowing how "
-            + "much of the world is visible. Small: the game still has to be readable while it "
-            + "happens.");
         ConfigEntry<float> crestAt = Config.Bind(
             "Corruption",
             "CorruptionCrestAtFraction",
@@ -531,8 +516,6 @@ public sealed class PleasurePlugin : BasePlugin
             CorruptionPerSexualHit = perHit.Value,
             CorruptionGainScale = gainScale.Value,
             CorruptionCap = cap.Value,
-            ClimaxShakeSeconds = shakeSeconds.Value,
-            ClimaxShakeStrength = shakeStrength.Value,
             CorruptionCrestAtFraction = crestAt.Value,
             CorruptionCrestGainScale = crestScale.Value,
             BreastSuperAfterApplications = breastAfter.Value,

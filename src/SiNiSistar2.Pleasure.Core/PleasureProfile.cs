@@ -16,14 +16,9 @@ public sealed record ClimaxTuning(
     int LimitBase,
     float LimitPerDurability,
     bool GameOverEnabled,
-    bool ResetAtObeliskOnly,
-    float ShakeSeconds,
-    float ShakeStrength)
+    bool ResetAtObeliskOnly)
 {
-    public static ClimaxTuning Disabled { get; } = new(false, 0f, 0, 0f, false, false, 0f, 0f);
-
-    /// <summary>Whether the camera moves at all when a climax lands.</summary>
-    public bool Shakes => ShakeSeconds > 0f && ShakeStrength > 0f;
+    public static ClimaxTuning Disabled { get; } = new(false, 0f, 0, 0f, false, false);
 }
 
 /// <summary>Tuning for the one-way corruption track (SPEC003 5.7).</summary>
@@ -315,9 +310,7 @@ public static class PleasureProfileFactory
             options.ClimaxLimitBase,
             options.ClimaxLimitPerDurability,
             options.EnableClimaxGameOver,
-            options.ResetAtObeliskOnly,
-            Math.Max(0f, options.ClimaxShakeSeconds),
-            Math.Max(0f, options.ClimaxShakeStrength));
+            options.ResetAtObeliskOnly);
     }
 
     private static CorruptionTuning BuildCorruption(PleasureOptions options, List<string> errors)

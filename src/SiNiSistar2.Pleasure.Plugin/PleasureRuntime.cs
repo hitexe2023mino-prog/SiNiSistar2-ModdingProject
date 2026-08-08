@@ -53,9 +53,6 @@ internal static class PleasureRuntime
 
     internal static CorruptionTrack? Corruption { get; set; }
 
-    /// <summary>Unscaled time at which the climax shake stops (SPEC003 FR-268).</summary>
-    internal static double ClimaxShakeUntil { get; set; }
-
     /// <summary>Set when the corruption has earned the crest, consumed by the observer.</summary>
     internal static bool PendingLustCrest { get; set; }
 
