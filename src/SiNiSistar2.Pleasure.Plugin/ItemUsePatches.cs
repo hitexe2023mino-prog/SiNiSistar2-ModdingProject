@@ -1,4 +1,6 @@
+using SiNiSistar2.Manager;
 using SiNiSistar2.Obj;
+using SiNiSistar2.Pleasure.Core;
 
 namespace SiNiSistar2.Pleasure.Plugin;
 
@@ -16,9 +18,12 @@ internal static class ItemUsePatches
     {
         try
         {
+            // The count and the swelling are printed with it, every time. "The item does nothing"
+            // has causes the status lines cannot separate — an empty stack, or a condition inside
+            // the item's own event — and a use with no context after it left both open.
             PleasureRuntime.Log?.LogInfo(
-                $"[status] InventoryHandler.PlayItemEvent ran for item {__0}. Any status it applies "
-                + "should follow on the next lines.");
+                $"[status] InventoryHandler.PlayItemEvent ran for item {__0}; {Describe(__0)}. "
+                + "Any status it applies should follow on the next lines.");
         }
         catch (Exception exception)
         {
@@ -85,6 +90,36 @@ internal static class ItemUsePatches
         {
             PleasureRuntime.Log?.LogWarning($"Item usability could not be overridden: {exception.Message}");
         }
+    }
+
+    /// <summary>How many are left, and what the player is already wearing.</summary>
+    private static string Describe(ItemID id)
+    {
+        var parts = new List<string>(2);
+        try
+        {
+            InventoryHandler? inventory = ManagerList.PlayerStatus?.m_InventoryHandler;
+            parts.Add(inventory is null ? "stock unknown" : $"stock {inventory.GetItemCount(id)}");
+        }
+        catch (Exception)
+        {
+            parts.Add("stock unreadable");
+        }
+
+        try
+        {
+            AbnormalList? abnormals = PleasureRuntime.PlayerAbnormals;
+            parts.Add(abnormals is null
+                ? "swelling unknown"
+                : $"Breast={abnormals.Has(AbnormalType.Breast)}, "
+                  + $"BreastSuper={abnormals.Has(AbnormalType.BreastSuper)}");
+        }
+        catch (Exception)
+        {
+            parts.Add("swelling unreadable");
+        }
+
+        return string.Join(", ", parts);
     }
 
     private static bool IsForced(ItemID id)

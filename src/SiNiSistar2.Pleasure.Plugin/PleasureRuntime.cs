@@ -90,6 +90,9 @@ internal static class PleasureRuntime
     /// </summary>
     internal static bool GameplayStarted { get; set; }
 
+    /// <summary>Whether <c>Breast</c> or <c>BreastSuper</c> is worn. Set by the observer each frame.</summary>
+    internal static bool IsSwollen { get; set; }
+
     /// <summary>True while the player is held. Set by the observer each frame.</summary>
     internal static bool IsBound { get; set; }
 
@@ -313,6 +316,7 @@ internal static class PleasureRuntime
     {
         PlayerAbnormals = null;
         GameplayStarted = false;
+        IsSwollen = false;
         IsBound = false;
         IsDefeatPerformance = false;
         BinderEnemyId = null;

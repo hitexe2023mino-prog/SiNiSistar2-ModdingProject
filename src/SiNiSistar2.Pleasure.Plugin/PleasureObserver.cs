@@ -45,6 +45,7 @@ public sealed class PleasureObserver : MonoBehaviour
     private bool _breastSuperRequested;
     private int _milkingReturnState;
     private KeyCode _milkingKey = KeyCode.None;
+    private double _swellingOverlapSince;
     private Texture2D? _milkVessel;
     private float _milkFill = -1f;
     private float _milkPhase;
@@ -192,6 +193,7 @@ public sealed class PleasureObserver : MonoBehaviour
 
         _gameplayActive = true;
         PleasureRuntime.GameplayStarted = true;
+        PleasureRuntime.IsSwollen = IsSwollen(status);
         ReportSelfCheck(status);
         ReportBreastCureSurface(status);
         ApplyPendingBreastSuper(status);
@@ -389,6 +391,21 @@ public sealed class PleasureObserver : MonoBehaviour
         }
     }
 
+    [HideFromIl2Cpp]
+    private static bool IsSwollen(PlayerStatusManager status)
+    {
+        try
+        {
+            AbnormalList? abnormals = status.AbnormalList;
+            return abnormals is not null
+                && (abnormals.Has(AbnormalType.Breast) || abnormals.Has(AbnormalType.BreastSuper));
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     /// <summary>
     /// Keeps <c>Breast</c> and <c>BreastSuper</c> from being worn at once (SPEC003 FR-263).
     ///
@@ -425,13 +442,43 @@ public sealed class PleasureObserver : MonoBehaviour
         {
             if (!abnormals.Has(AbnormalType.BreastSuper) || !abnormals.Has(AbnormalType.Breast))
             {
+                _swellingOverlapSince = 0d;
                 return;
             }
 
+            // Given a moment before acting, and never more than once a second.
+            //
+            // Removing a status is not free: the game rebuilds what depends on it, and doing that
+            // repeatedly under an interaction is the shape of failure this MOD has already caused
+            // twice. An overlap that lasts a frame or two is something the game is in the middle of
+            // arranging, not something to fight.
+            double now = Time.unscaledTimeAsDouble;
+            if (_swellingOverlapSince <= 0d)
+            {
+                _swellingOverlapSince = now;
+                return;
+            }
+
+            if (now - _swellingOverlapSince < 1d)
+            {
+                return;
+            }
+
+            _swellingOverlapSince = now;
+
             abnormals.RemoveAbnormal(AbnormalType.Breast);
+
+            // Absorbed rather than discarded. Deleting it outright made the item that applies
+            // swelling look broken while the escalated status was worn: it ran, and nothing
+            // happened. Turning the application into milk keeps it meaningful — the swelling was
+            // reinforced, so there is more to get through before it can be milked away.
+            MilkReservoir? milk = PleasureRuntime.Milk;
+            bool absorbed = milk is not null && milk.Fill < 1f;
+            milk?.AddFromHit();
+
             PleasureRuntime.Log?.LogInfo(
-                "Breast was re-applied while BreastSuper is worn; the ordinary swelling is removed "
-                + "so the two do not overlap.");
+                "Breast was re-applied while BreastSuper is worn. The ordinary swelling is removed "
+                + $"so the two do not overlap{(absorbed ? $", and the application went into the milk gauge ({milk!.Fill:P0})" : string.Empty)}.");
         }
         catch (Exception exception)
         {
@@ -1548,7 +1595,12 @@ public sealed class PleasureObserver : MonoBehaviour
     private void DrawMilk()
     {
         MilkReservoir? milk = PleasureRuntime.Milk;
-        if (milk is null || (milk.Fill <= 0.001f && !milk.IsMilking))
+
+        // Drawn whenever the player is swollen, empty or not. Hiding an empty gauge is the mistake
+        // the pleasure gauge already taught: a gauge that vanishes when it reads zero cannot be told
+        // apart from one that is broken, and this one reads zero exactly when the player has just
+        // been cured and wants to see that it worked.
+        if (milk is null || (!PleasureRuntime.IsSwollen && milk.Fill <= 0.001f && !milk.IsMilking))
         {
             return;
         }
