@@ -32,6 +32,8 @@ public sealed class RuntimeObserver : MonoBehaviour
     private string[] _activeStatuses = Array.Empty<string>();
     private string _eventInstanceId = string.Empty;
     private string? _galleryActorDisplayName;
+    private string? _authoringUrl;
+    private KeyCode _authoringKey = KeyCode.None;
     private int _enumeratedTakePlayerId;
     private int _enumeratedCategoryId;
     private bool _actorFallbackLogged;
@@ -56,7 +58,9 @@ public sealed class RuntimeObserver : MonoBehaviour
         TriggerCatalog catalog,
         LiveTriggerState live,
         float pollInterval,
-        ManualLogSource log)
+        ManualLogSource log,
+        string? authoringUrl = null,
+        KeyCode authoringKey = KeyCode.None)
     {
         _coordinator = coordinator;
         _diagnostics = diagnostics;
@@ -66,12 +70,38 @@ public sealed class RuntimeObserver : MonoBehaviour
         _live = live;
         _pollInterval = pollInterval;
         _log = log;
+        _authoringUrl = authoringUrl;
+        _authoringKey = authoringKey;
 
         foreach (AbnormalType type in Enum.GetValues(typeof(AbnormalType)))
         {
             string id = type.ToString();
             diagnostics.RegisterStatus(id, type == AbnormalType.Breast ? "膨乳" : id);
         }
+    }
+
+    /// <summary>
+    /// Reads the authoring GUI hotkey (SPEC001 FR-061).
+    ///
+    /// Key presses are taken from the IMGUI event rather than from an input poll: this build drives
+    /// its own input, and the IMGUI event is the route the sibling MOD's screens have already been
+    /// proven on. Nothing is drawn here — the GUI is a web page, not an overlay.
+    /// </summary>
+    public void OnGUI()
+    {
+        if (_authoringKey == KeyCode.None)
+        {
+            return;
+        }
+
+        UnityEngine.Event current = UnityEngine.Event.current;
+        if (current is null || current.type != EventType.KeyDown || current.keyCode != _authoringKey)
+        {
+            return;
+        }
+
+        current.Use();
+        AuthoringGuiLauncher.Open(_authoringUrl, _log, $"{_authoringKey} was pressed");
     }
 
     public void Update()
@@ -420,14 +450,19 @@ public sealed class RuntimeObserver : MonoBehaviour
 
     private EventObservation? ObserveGameplay(ObjectManager objects, Lelia lelia)
     {
-        if (lelia.IsHold && lelia.Bind?.BinderEnemy is { } binder
-            && TryReadAnimator(lelia.m_Animator, out AnimatorSample holdSample))
+        if (lelia.IsHold && TryReadAnimator(lelia.m_Animator, out AnimatorSample holdSample))
         {
             // No general hold state machine is exposed by this build, so the animator state name
             // is the stage name (SPEC001 3章 stageId, FR-033 degradation).
+            //
+            // The binder is no longer a precondition. It used to be — the hold was only observed
+            // when Bind.BinderEnemy was non-null — and since that property only sees binders that
+            // are EnemyObjects, holds by ParasiteTentacle, ParasiteBullet and StoneEye produced no
+            // trigger at all: no playback, no catalog row, not even an unregistered-trigger warning
+            // (SPEC001 FR-059).
             return CreateObservation(
                 "hold",
-                binder.GalleryEnemyID.ToString(),
+                BinderActorId.Resolve(lelia) ?? BinderActorId.Unidentified,
                 holdSample,
                 "loop",
                 holdSample.AnimationId);
@@ -437,7 +472,7 @@ public sealed class RuntimeObserver : MonoBehaviour
         // triggers and keep the default stage id (SPEC001 3章).
         if (lelia.IsHP0 && TryReadAnimator(lelia.m_Animator, out AnimatorSample gameOverSample))
         {
-            string actor = lelia.Bind?.BinderEnemy?.GalleryEnemyID.ToString() ?? "lelia";
+            string actor = BinderActorId.Resolve(lelia) ?? "lelia";
             return CreateObservation("game-over", actor, gameOverSample, "reaction", EventKey.DefaultStageId);
         }
 

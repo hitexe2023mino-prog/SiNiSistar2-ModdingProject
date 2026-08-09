@@ -6,6 +6,12 @@ In-game steps live in [`docs/testing/SPEC003-test-scenarios.md`](../testing/SPEC
 
 ## Stage
 
+**v1.2（2026-08-09）。** 敵の同定モデルを改訂した。拘束相手は `GalleryEnemyID` → `EnemyID` → 正規化オブジェクト名の順で名指し、`None` は識別子として扱わない。編集画面は両列挙体を列挙し、拘束時に取得した表示名を併記する。不具合報告「大口のワームの性的／非性的攻撃が設定不可」の修正であり、`m_GalleryEnemyID` が未設定の敵がすべて `None` の1行を共有していたのが原因である。
+
+**CHG-017（同日、レビュー指摘）。** 拘束相手を `Bind.BinderEnemy` だけで見ていたため、`EnemyObject` でない拘束者（`ParasiteTentacle`、`ParasiteBullet`、`StoneEye`）の拘束は依然として名指せなかった。`Bind.Binder`（`IBinder`）を入口に加えて解決する。同型の不具合が SPEC001 側にもあり、そちらは CHG-037 で直した。
+
+**v1.2 で実機確認が要る2点。** A-53（拘束相手がどの順で解決されるか。とくに `m_EnemyID` が設定されているか）と A-54（表示名を取得できるか）。どちらも `[probe] binder-source-*` の1行に出る。順3まで落ちてもカタログは機能する。
+
 **v1.1（2026-08-09）。** 拘束中の敗北条件の置き換え方を改訂した。性的被弾はHPを削らず、絶頂限界の到達がその場でHPを `0` にする。v1.0 の `RemainHp1Msv` 寄与は撤去した。快楽ゲージ、絶頂、堕落・淫紋、母乳ゲージ、サイドカーは v1.0 のまま動いている。
 
 **v1.1 で実機確認が要る2点。** A-50（`BattleMainParameter.DontSub` が減算を止めるか）と A-51（HPを `0` にできるか、そこからゲームの死亡経路が走るか）。どちらも実装側にフォールバックがあり、どの手段が効いたかは `[probe]` 行に出る。
@@ -48,7 +54,7 @@ Every tuning value ships at no-change (FR-233) **without exception**: `SuppressS
 | FR-277 | `RemainHp1Msv` へ寄与しない | 当該経路と寄与キーを撤去 | AC-203 実機 | Implemented / unverified |
 | FR-278 | 快楽が上がらない設定では抑止しない | `PleasureProfile.BlocksSexualHpDamage` | `PleasureProfileTests`（3件）、AC-242 実機 | Tested / unverified |
 | FR-279 | `EnableClimaxGameOver` が偽なら致死化しない。事実は記録する | `ClimaxLethality.ShouldBeLethal`、`ApplyClimaxLimit` のログ | `ClimaxLethalityTests.TheLimitDoesNothingWhenTheGameOverIsOff`、AC-244 実機 | Tested / unverified |
-| FR-217 | セーブポイント／オベリスクで絶頂回数を0へ、感度は戻さない | `SavePointPatches.ExecutionOneAsyncPostfix` | `SensitivityAndClimaxTests.ResettingTheCount...`、3.4 の A-7 | Tested / unverified |
+| FR-217 | セーブポイント／オベリスクで絶頂回数を0へ、感度は戻さない | `SavePointPatches.SetObeliskModePostfix` | `SensitivityAndClimaxTests.ResettingTheCount...`、3.4 の A-7 | Tested / unverified |
 | FR-218 | 絶頂と性的被弾で感度が増える | `PleasureObserver.ConsumeClimax`、`DamageProbePatches` | `SensitivityAndClimaxTests` | Tested / unverified |
 | FR-219 | 感度を減少させる経路を持たない | `SensitivityTrack.Add`（非正を無視） | `SensitivityAndClimaxTests.SensitivityNeverFalls`、AC-215 実機 | Tested |
 | FR-220 | 感度は上限で頭打ち、減少ではない | `SensitivityTrack` | `SensitivityAndClimaxTests.TheCapStopsGrowth...` | Tested |
@@ -75,7 +81,11 @@ Every tuning value ships at no-change (FR-233) **without exception**: `SuppressS
 | FR-234 | `Enabled=false` でパッチも随伴ファイルもなし | `PleasurePlugin.Load` の早期 return | `PleasureProfileTests.DisablingTheMod...` | Tested |
 | FR-235 | 敵別分類を独立したカタログファイルへ、既存設定を種に | `EnemyAttackCatalogStore`、`EnemyAttackCatalog.SeedFrom`、`PleasurePlugin.LoadEnemyCatalog` | `EnemyAttackCatalogTests.TheOldConfigListsSeed...` ほか、AC-230 実機 | Tested / unverified |
 | FR-236 | ゲーム内編集画面、再起動なしで反映 | `EnemyCatalogEditor`（F10）、分類器がカタログを参照保持 | `EnemyAttackCatalogTests.AnEditAppliesWithoutRebuilding...`、AC-231 実機 | Tested / unverified |
-| FR-237 | `GalleryEnemyID` 全件を列挙し拘束経験のある敵を先頭に | `PleasurePlugin.KnownEnemyIds`、`EnemyAttackCatalog.AddMissing` / `Rows` | `EnemyAttackCatalogTests`（2件）、AC-232 実機 | Tested / unverified |
+| FR-237 | `GalleryEnemyID` と `EnemyID` の全件（`None` 除く）＋発見した `obj:` 行を列挙し、拘束経験のある敵を先頭に | `PleasurePlugin.KnownEnemyIds`（両列挙体）、`EnemyAttackCatalog.AddMissing` / `Rows` | `EnemyAttackCatalogTests.GalleryDecisionsSurviveTheWiderNamespace`、`MetEnemiesSortAheadOfUnmetOnes`、AC-232 実機 | Tested / unverified |
+| FR-280 | 敵識別子を `GalleryEnemyID` → `EnemyID` → `obj:` 正規化名の順に解決。拘束相手は `Bind.Binder` を含める | `BinderIdentityResolver.Resolve` / `Captor`（`Bind.Binder` を `SiNiObject` へ、必要なら `EnemyObject` へ TryCast）、`EnemyIds.FromObjectName`、`PleasureObserver.ResolveBinder` | `EnemyIdFromObjectNameTests`（3件）。順の実測は A-53（`[probe] binder-source-*`）、AC-249 実機 | Implemented / probe |
+| FR-281 | `None` を識別子として扱わない。引かない、書かない、既存行は破棄 | `EnemyIds.IsUsable`、`EnemyAttackCatalog.Absorb` / `Set` / `MarkSeen` / `AddMissing`、`PleasurePlugin.LoadEnemyCatalog` の警告 | `EnemyAttackCatalogTests.UnsetIsNotAnIdentifier`、`ALeftoverUnsetRowIsDroppedAndReported`、AC-246 実機 | Tested / unverified |
+| FR-282 | 拘束時に表示名を取得しカタログへ保存。取得できなくても分類を妨げない | `BinderIdentityResolver.DisplayNameOf`（`DisplayEnemyNameID` → `LocalizeManager.GetLcText`）、`EnemyAttackCatalog.MarkSeen`、`EnemyCatalogEditor.DrawRow` | `EnemyAttackCatalogTests.TheDisplayNameIsLearnedOnSighting...`、`TheFileHoldsTheFieldsTheSpecificationLists`。実機は A-54、AC-247 | Tested / unverified |
+| FR-283 | v1.1 までの `GaID_` 行を無効化・改名しない。`schemaVersion` は `1` のまま | 解決順の先頭が `GalleryEnemyID`（`BinderIdentityResolver`）、`EnemyAttackDocument.CurrentSchemaVersion = 1` | `EnemyAttackCatalogTests.GalleryDecisionsSurviveTheWiderNamespace`、AC-248 実機 | Tested / unverified |
 | FR-238 | 保存と取り消しの区別、取り消しで開始時点へ | `EnemyCatalogEditor.Commit` / `Cancel`、`EnemyAttackCatalog.RestoreFrom` | `EnemyAttackCatalogTests.CancellingRestores...`、AC-233 実機 | Tested / unverified |
 | FR-243 | 旧スキーマ版の随伴ファイルを読む | `SidecarDocument.Parse`（新しい版のみ拒否） | `SidecarStoreTests.AnOlderSchemaIsRead...` | Tested |
 | FR-239 | カタログの原子的書き込み、非対応版を上書きしない、失敗で止めない | `EnemyAttackCatalogStore`、`JsonFile` | `EnemyAttackCatalogStoreTests`（6件） | Tested |
@@ -117,9 +127,9 @@ Every tuning value ships at no-change (FR-233) **without exception**: `SuppressS
 | 項目 | 内容 |
 |---|---|
 | 論点 | 付録A の A-7（セーブポイントのアクティベート検出） |
-| 選択 | `SavePointAsyncLabel.ExecutionOneAsync` の postfix、`IsObeliskLabel` でオベリスクを判別 |
-| 根拠 | interop に当該メソッドと `IsObeliskLabel` が実在し、`SavePointMenu.SetObeliskMode(bool)` が裏付けになる。`SavePointSelector.IsObeliskActive` は地点の形態を表すもので作動イベントではない |
-| 影響 | 実測は「シーン設定時ではなく作動時に走ること」の確認だけに縮小した |
+| 選択 | `SavePointMenu.SetObeliskMode(bool)` の postfix、引数でオベリスクを判別 |
+| 根拠 | 当初は `SavePointAsyncLabel.ExecutionOneAsync` の postfix だったが、同メソッドは `UniTask`（構造体）を返し、IL2CPP で構造体返しメソッドへ detour を張ると戻り値が壊れる。実機ではセーブダイアログが開いた瞬間に自動で閉じ、セーブもレベルアップも不能になった。`SetObeliskMode` は void 返しで、メニューが開くたびに走り、オベリスク判別を引数で運ぶ |
+| 影響 | 発火時点が「ラベル実行開始時」から「メニュー表示時」へ移ったが、いずれも像の作動と同時であり FR-217 の意味は変わらない。教訓: この実行環境では void 返しのメソッドだけをパッチ対象にする |
 | 代替案 | セーブ完了（`MainSaveData.IsAutoSave` で手動を判別）を契機にする |
 
 | 項目 | 内容 |

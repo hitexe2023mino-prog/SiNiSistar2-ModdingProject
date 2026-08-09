@@ -30,6 +30,21 @@ const el = (id) => document.getElementById(id);
 
 const keyOf = (t) => `${t.context}|${t.actorId}|${t.animationId}|${t.phase}|${t.stageId}`;
 
+const keyPayload = (t) => ({
+  context: t.context,
+  actorId: t.actorId,
+  animationId: t.animationId,
+  phase: t.phase,
+  stageId: t.stageId,
+});
+
+// Matches EventKey.ToString() on the MOD side, which is how link results name their targets.
+const keyText = (t) => `${t.context}/${t.actorId}/${t.animationId}/${t.phase}/${t.stageId}`;
+
+// A stage that has not been played, or whose binder could not be named, can never be mapped, so it
+// is not offered as a target either (FR-060).
+const isAuthorable = (t) => t.animationId !== '*' && t.actorId !== 'unidentified-binder';
+
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 function setStatus(kind, text) {
@@ -60,19 +75,22 @@ async function loadCatalog() {
   renderCatalog();
 }
 
+function matchesNeedle(t, needle) {
+  if (!needle) {
+    return true;
+  }
+  return [
+    t.actorDisplayName, t.actorId, t.displayName, t.stageId, t.animationId, t.context,
+    // So "#2" and "2" both find the stage shown as 2 in the game.
+    typeof t.displayNumber === 'number' ? `#${t.displayNumber}` : null,
+  ]
+    .filter(Boolean)
+    .some((value) => String(value).toLowerCase().includes(needle));
+}
+
 function visibleTriggers() {
   const needle = el('filter').value.trim().toLowerCase();
-  if (!needle) {
-    return state.triggers;
-  }
-  return state.triggers.filter((t) =>
-    [
-      t.actorDisplayName, t.actorId, t.displayName, t.stageId, t.animationId, t.context,
-      // So "#2" and "2" both find the stage shown as 2 in the game.
-      typeof t.displayNumber === 'number' ? `#${t.displayNumber}` : null,
-    ]
-      .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(needle)));
+  return needle ? state.triggers.filter((t) => matchesNeedle(t, needle)) : state.triggers;
 }
 
 // Prefer the game's own localized names; fall back to the internal identifiers.
@@ -137,6 +155,16 @@ function renderCatalog() {
       const badge = document.createElement('span');
       badge.className = 'badge static';
       badge.textContent = '未再生';
+      name.append(badge);
+    }
+
+    if ((trigger.sharedWith || []).length > 0) {
+      const badge = document.createElement('span');
+      badge.className = 'badge shared';
+      badge.textContent = trigger.isLinked
+        ? `共有 ← ${trigger.sharedWith.length + 1}段階`
+        : `共有 → ${trigger.sharedWith.length + 1}段階`;
+      badge.title = `同じ波形を再生する段階:\n${trigger.sharedWith.join('\n')}`;
       name.append(badge);
     }
 
@@ -238,6 +266,7 @@ function selectFiller(filler) {
     + `\nDefinitions.csv: EndTime=${filler.definitionEndTime ?? 'なし'}`
     + ` / Loop=${filler.definitionLoop ?? '?'}`;
   el('duration').value = state.duration;
+  el('linkInfo').hidden = true;
   setStatus('', '');
 
   renderFillers();
@@ -406,7 +435,43 @@ async function selectTrigger(trigger) {
 
   renderCatalog();
   renderVariantBar();
+  renderLinkInfo();
   draw();
+}
+
+// The waveform on screen may belong to several stages at once. Editing it then changes all of
+// them, so that has to be visible before the first point is dragged.
+function renderLinkInfo() {
+  const node = el('linkInfo');
+  const trigger = state.selected;
+  const shared = trigger ? (trigger.sharedWith || []) : [];
+  if (!trigger || shared.length === 0) {
+    node.hidden = true;
+    node.replaceChildren();
+    return;
+  }
+
+  node.hidden = false;
+  node.replaceChildren();
+
+  const label = document.createElement('span');
+  label.textContent = trigger.isLinked
+    ? `この段階は別の段階の波形を共有しています（全 ${shared.length + 1} 段階）。ここでの編集は共有している段階すべてに反映されます。`
+    : `この波形は他の ${shared.length} 段階でも再生されます。編集はそれら全てに反映されます。`;
+  node.append(label);
+
+  if (trigger.isLinked) {
+    const unlink = document.createElement('button');
+    unlink.type = 'button';
+    unlink.textContent = 'リンク解除（この段階専用の波形にする）';
+    unlink.addEventListener('click', unlinkSelected);
+    node.append(unlink);
+  }
+
+  const list = document.createElement('div');
+  list.className = 'sharedList';
+  list.textContent = `同じ波形の段階:\n${shared.join('\n')}`;
+  node.append(list);
 }
 
 function renderVariantBar() {
@@ -840,12 +905,15 @@ async function save() {
     }
     lines.push(`マッピング更新: ${body.mappingUpdated ? '完了' : '未実施'}`);
     lines.push(`繰り返し再生: ${el('repeat').checked ? 'する' : 'しない（1回で停止）'}`);
+    if ((trigger.sharedWith || []).length > 0) {
+      lines.push(`この波形を共有する他の ${trigger.sharedWith.length} 段階にも反映されました。`);
+    }
     if ((body.motionWarnings || []).length > 0) {
       lines.push('', '動きの注意（保存は完了しています）:');
       lines.push(...body.motionWarnings);
     }
     setStatus(body.motionWarnings && body.motionWarnings.length ? 'warn' : 'ok', lines.join('\n'));
-    await loadCatalog();
+    await refreshSelectedFromCatalog();
     return;
   }
 
@@ -999,6 +1067,210 @@ async function copyFromSelected() {
   draw();
 }
 
+// ------------------------------------------------- applying to other stages
+
+// Which stage the event picks depends on what the player was doing when it started — idle, walking,
+// falling — while the motion on screen is all but the same. 共有 states that once: the stages play
+// one waveform, and a later correction reaches all of them. 複製 is for the cases where they should
+// drift apart afterwards.
+const applyTargets = new Set();
+
+function applyMode() {
+  const chosen = document.querySelector('input[name="applyMode"]:checked');
+  return chosen ? chosen.value : 'link';
+}
+
+function setApplyStatus(kind, text) {
+  const node = el('applyStatus');
+  node.className = `status ${kind}`;
+  node.textContent = text;
+}
+
+function openApplyDialog() {
+  if (isFillerMode()) {
+    setStatus('warn', 'fillerはトリガーではないため、他の段階へ適用できません。');
+    return;
+  }
+
+  const trigger = state.selected;
+  if (!trigger) {
+    return;
+  }
+
+  // The MOD applies what is on disk, not what is on the canvas, because EDI can only play a
+  // gallery it has already read (6.7-6).
+  if ((trigger.authoredVariants || []).length === 0) {
+    setStatus('warn', 'この段階にはまだ保存済みの波形がありません。先に保存してください。');
+    return;
+  }
+
+  applyTargets.clear();
+  el('applyFilter').value = '';
+  el('applyApprove').checked = false;
+  setApplyStatus('', '');
+  renderApplyList();
+  el('applyDialog').showModal();
+}
+
+function renderApplyList() {
+  const list = el('applyList');
+  const needle = el('applyFilter').value.trim().toLowerCase();
+  const source = state.selected;
+  list.replaceChildren();
+
+  const candidates = state.triggers.filter((t) =>
+    keyOf(t) !== keyOf(source) && isAuthorable(t) && matchesNeedle(t, needle));
+
+  if (candidates.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = '該当する段階がありません。';
+    list.append(empty);
+    return;
+  }
+
+  for (const trigger of candidates) {
+    const key = keyOf(trigger);
+    const label = document.createElement('label');
+
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = applyTargets.has(key);
+    box.addEventListener('change', () => {
+      if (box.checked) {
+        applyTargets.add(key);
+      } else {
+        applyTargets.delete(key);
+      }
+    });
+
+    const text = document.createElement('div');
+    const name = document.createElement('div');
+    name.textContent = `${numberLabel(trigger)} ${actorLabel(trigger)} — ${stageLabel(trigger)}`;
+    const sub = document.createElement('div');
+    sub.className = 'sub';
+    const clip = trigger.clipLengthSeconds
+      ? `${Math.round(trigger.clipLengthSeconds * 1000)}ms`
+      : '長さ未取得';
+    const held = trigger.isLinked
+      ? '既に他段階と共有中'
+      : (trigger.authoredVariants || []).length
+        ? `作成済: ${trigger.authoredVariants.join(', ')}`
+        : '未作成';
+    sub.textContent = `${trigger.animationId} · ${trigger.phase} · ${clip} · ${held}`;
+    text.append(name, sub);
+
+    label.append(box, text);
+    list.append(label);
+  }
+}
+
+async function applyToTargets() {
+  const source = state.selected;
+  const targets = state.triggers.filter((t) => applyTargets.has(keyOf(t)));
+  if (targets.length === 0) {
+    setApplyStatus('warn', '適用先の段階を1つ以上選んでください。');
+    return;
+  }
+
+  const mode = applyMode();
+  const { ok, body } = await api('/api/link', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      source: keyPayload(source),
+      targets: targets.map(keyPayload),
+      mode,
+      approveMismatch: el('applyApprove').checked,
+    }),
+  });
+
+  if (!body) {
+    setApplyStatus('err', '適用要求に失敗しました。');
+    return;
+  }
+
+  const label = (targetText) => {
+    const trigger = state.triggers.find((t) => keyText(t) === targetText);
+    return trigger ? `${numberLabel(trigger)} ${actorLabel(trigger)} / ${stageLabel(trigger)}` : targetText;
+  };
+
+  const done = (body.targets || []).filter((outcome) => outcome.success);
+  const failed = (body.targets || []).filter((outcome) => !outcome.success);
+  const lines = [];
+  if (body.errors && body.errors.length) {
+    lines.push(...body.errors);
+  }
+  if (done.length) {
+    lines.push(
+      mode === 'link'
+        ? `${done.length}段階を ${body.gallery} へ共有しました:`
+        : `${done.length}段階へ複製しました:`);
+    lines.push(...done.map((outcome) => `  ${label(outcome.target)}`));
+  }
+  for (const outcome of failed) {
+    lines.push(`${label(outcome.target)}: ${[...outcome.errors, ...outcome.warnings].join(' / ')}`);
+  }
+  if (failed.some((outcome) => outcome.errors.length === 0 && outcome.warnings.length > 0)) {
+    lines.push('差異を意図している場合は下のチェックを入れて再実行してください。');
+  }
+
+  await refreshSelectedFromCatalog();
+
+  if (ok && body.success) {
+    el('applyDialog').close();
+    setStatus('ok', lines.join('\n'));
+    return;
+  }
+
+  setApplyStatus(failed.length && done.length ? 'warn' : 'err', lines.join('\n'));
+  renderApplyList();
+}
+
+async function unlinkSelected() {
+  const trigger = state.selected;
+  const { ok, body } = await api('/api/unlink', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      key: keyPayload(trigger),
+      repeat: el('repeat').checked,
+      approveLoopMismatch: el('approveLoop').checked,
+    }),
+  });
+
+  if (!body) {
+    setStatus('err', 'リンク解除の要求に失敗しました。');
+    return;
+  }
+
+  if (ok && body.success) {
+    await refreshSelectedFromCatalog();
+    setStatus('ok',
+      `リンクを解除しました。この段階は専用の波形 ${body.gallery} を持ちます。\n`
+      + `${body.writtenPaths.join('\n')}`);
+    return;
+  }
+
+  const lines = [...(body.errors || []), ...(body.loopWarnings || [])];
+  setStatus('err', lines.join('\n') || 'リンクを解除できませんでした。');
+}
+
+// The mapping changed but the canvas did not, so the row is refreshed in place instead of being
+// re-selected, which would throw away unsaved edits.
+async function refreshSelectedFromCatalog() {
+  const key = state.selected ? keyOf(state.selected) : null;
+  await loadCatalog();
+  if (key) {
+    const refreshed = state.triggers.find((t) => keyOf(t) === key);
+    if (refreshed) {
+      state.selected = refreshed;
+    }
+  }
+  renderCatalog();
+  renderLinkInfo();
+}
+
 function attachControls() {
   el('reload').addEventListener('click', loadCatalog);
   el('filter').addEventListener('input', renderCatalog);
@@ -1086,6 +1358,10 @@ function attachControls() {
   });
 
   el('copyFrom').addEventListener('click', openCopyDialog);
+  el('applyTo').addEventListener('click', openApplyDialog);
+  el('applyFilter').addEventListener('input', renderApplyList);
+  el('applyCancel').addEventListener('click', () => el('applyDialog').close());
+  el('applyConfirm').addEventListener('click', applyToTargets);
   el('copyConfirm').addEventListener('click', () => { window.setTimeout(copyFromSelected, 0); });
   el('save').addEventListener('click', () => (isFillerMode() ? saveFiller() : save()));
   el('preview').addEventListener('click', preview);

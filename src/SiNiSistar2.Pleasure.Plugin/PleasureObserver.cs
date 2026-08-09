@@ -244,8 +244,10 @@ public sealed class PleasureObserver : MonoBehaviour
 
         _wasDead = dead;
         _lastMaxDurability = status.m_MaxDurability;
-        PleasureRuntime.BinderEnemyId = ResolveBinderId(lelia);
-        RecordSighting(PleasureRuntime.BinderEnemyId);
+        BinderIdentity? binder = ResolveBinder(lelia);
+        PleasureRuntime.BinderEnemyId = binder?.Id;
+        PleasureRuntime.BinderDisplayName = binder?.DisplayName;
+        RecordSighting(binder);
 
         _gameplayActive = true;
         PleasureRuntime.GameplayStarted = true;
@@ -1637,18 +1639,34 @@ public sealed class PleasureObserver : MonoBehaviour
     }
 
     /// <summary>
-    /// Notes that this enemy has been met, so the editor can offer the handful that matter ahead of
-    /// the hundred that do not. Written through on the first sighting only.
+    /// Notes that this enemy has been met and what it is called, so the editor can offer the handful
+    /// that matter ahead of the two hundred that do not (SPEC003 FR-282). Written through only when
+    /// the catalogue learned something: the first sighting, or a display name that has changed.
     /// </summary>
     [HideFromIl2Cpp]
-    private static void RecordSighting(string? enemyId)
+    private static void RecordSighting(BinderIdentity? binder)
     {
-        if (enemyId is null || !PleasureRuntime.Enemies.MarkSeen(enemyId))
+        if (binder is null)
         {
             return;
         }
 
-        PleasureRuntime.SaveEnemies($"first sighting of {enemyId}");
+        // A-53: which of 5.3.1's tiers actually answers. If most captors fall through to the object
+        // name, the catalogue grows a row per enemy met rather than matching a listed one, and that
+        // is worth knowing before trusting the list.
+        PleasureRuntime.Probe(
+            $"binder-source-{binder.Id}",
+            $"A-53: captor '{binder.Id}' was identified by its {binder.Source}"
+            + (binder.DisplayName is null
+                ? "; no display name was available (A-54)."
+                : $"; the game calls it '{binder.DisplayName}' (A-54)."));
+
+        if (!PleasureRuntime.Enemies.MarkSeen(binder.Id, binder.DisplayName))
+        {
+            return;
+        }
+
+        PleasureRuntime.SaveEnemies($"sighting of {binder.DisplayName ?? binder.Id}");
     }
 
     /// <summary>
@@ -2113,17 +2131,7 @@ public sealed class PleasureObserver : MonoBehaviour
     }
 
     [HideFromIl2Cpp]
-    private static string? ResolveBinderId(Lelia lelia)
-    {
-        try
-        {
-            return lelia.Bind?.BinderEnemy?.GalleryEnemyID.ToString();
-        }
-        catch (Exception)
-        {
-            return null;
-        }
-    }
+    private static BinderIdentity? ResolveBinder(Lelia lelia) => BinderIdentityResolver.Resolve(lelia);
 
     [HideFromIl2Cpp]
     private void Suspend()
@@ -2134,6 +2142,8 @@ public sealed class PleasureObserver : MonoBehaviour
         _gameplayActive = false;
         PleasureRuntime.IsBound = false;
         PleasureRuntime.BinderEnemyId = null;
+        PleasureRuntime.BinderDisplayName = null;
+        BinderIdentityResolver.Forget();
         _wasBound = false;
     }
 }

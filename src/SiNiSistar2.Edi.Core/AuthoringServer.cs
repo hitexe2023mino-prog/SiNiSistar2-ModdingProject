@@ -252,6 +252,14 @@ public sealed class AuthoringServer : IAsyncDisposable
                 await HandleSaveAsync(context, request).ConfigureAwait(false);
                 return;
 
+            case "/api/link" when request.HttpMethod == "POST":
+                await HandleLinkAsync(context, request).ConfigureAwait(false);
+                return;
+
+            case "/api/unlink" when request.HttpMethod == "POST":
+                await HandleUnlinkAsync(context, request).ConfigureAwait(false);
+                return;
+
             case "/api/preview" when request.HttpMethod == "POST":
                 await HandlePreviewAsync(context, request).ConfigureAwait(false);
                 return;
@@ -274,6 +282,10 @@ public sealed class AuthoringServer : IAsyncDisposable
             EventKey key = entry.Key;
             _mappings.TryGet(key, out EventMapping? mapping);
             IReadOnlyDictionary<string, FunscriptDocument> existing = _store.LoadExisting(key);
+            // The gallery a stage plays is not always the one its own key derives: a link makes
+            // several stages share one waveform (SPEC001 6.7-14).
+            string gallery = _store.ResolveGallery(key);
+            IReadOnlyList<EventKey> sharing = _store.KeysSharing(gallery);
             return new
             {
                 context = entry.Context,
@@ -281,7 +293,10 @@ public sealed class AuthoringServer : IAsyncDisposable
                 animationId = entry.AnimationId,
                 phase = entry.Phase,
                 stageId = entry.StageId,
-                gallery = Funscript.CreateGalleryName(key),
+                gallery,
+                ownGallery = Funscript.CreateGalleryName(key),
+                isLinked = !string.Equals(gallery, Funscript.CreateGalleryName(key), StringComparison.Ordinal),
+                sharedWith = sharing.Where(other => other != key).Select(other => other.ToString()).ToArray(),
                 clipLengthSeconds = entry.ClipLengthSeconds,
                 isLooping = entry.IsLooping,
                 source = entry.Source,
@@ -426,9 +441,153 @@ public sealed class AuthoringServer : IAsyncDisposable
         IReadOnlyDictionary<string, FunscriptDocument> variants = _store.LoadExisting(key);
         await WriteJsonAsync(context, 200, new
         {
-            gallery = Funscript.CreateGalleryName(key),
+            gallery = _store.ResolveGallery(key),
             variants,
         }).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Makes the selected stages play the source stage's waveform. <c>link</c> points their
+    /// mappings at its gallery so one edit reaches all of them; <c>copy</c> gives each stage its
+    /// own independent gallery (SPEC001 6.7-14, FR-062).
+    /// </summary>
+    private async Task HandleLinkAsync(HttpListenerContext context, HttpListenerRequest request)
+    {
+        LinkPayload? payload = await ReadJsonAsync<LinkPayload>(request).ConfigureAwait(false);
+        if (payload?.Source is null || payload.Targets is not { Count: > 0 })
+        {
+            await WriteJsonAsync(context, 400, new { error = "A source stage and at least one target are required." })
+                .ConfigureAwait(false);
+            return;
+        }
+
+        EventKey source = payload.Source.ToKey();
+        EventKey[] targets = payload.Targets.Select(target => target.ToKey()).ToArray();
+        string mode = payload.Mode ?? "link";
+
+        if (string.Equals(mode, "copy", StringComparison.Ordinal))
+        {
+            await WriteJsonAsync(context, 200, await CopyToTargetsAsync(source, targets, payload.ApproveMismatch)
+                .ConfigureAwait(false)).ConfigureAwait(false);
+            return;
+        }
+
+        if (!string.Equals(mode, "link", StringComparison.Ordinal))
+        {
+            await WriteJsonAsync(context, 400, new { error = $"Unknown mode '{mode}'; expected 'link' or 'copy'." })
+                .ConfigureAwait(false);
+            return;
+        }
+
+        AuthoringLinkResult result = await _store
+            .LinkAsync(new AuthoringLinkRequest(source, targets, payload.ApproveMismatch), _lifetime.Token)
+            .ConfigureAwait(false);
+
+        int linked = result.Targets.Count(outcome => outcome.Success);
+        if (linked > 0)
+        {
+            _logInfo?.Invoke(
+                $"Gallery '{result.Gallery}' is now shared by {linked} further stage(s): "
+                + string.Join(", ", result.Targets.Where(x => x.Success).Select(x => x.Target)));
+        }
+
+        if (result.Targets.Any(outcome => !outcome.Success) || result.Errors.Count > 0)
+        {
+            _logWarning?.Invoke(
+                $"Linking to '{result.Gallery}' was refused for "
+                + string.Join(
+                    "; ",
+                    result.Errors.Concat(result.Targets
+                        .Where(x => !x.Success)
+                        .Select(x => $"{x.Target}: {string.Join(", ", x.Errors.Concat(x.Warnings))}"))));
+        }
+
+        await WriteJsonAsync(context, result.Success ? 200 : 409, result).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Gives each target its own copy of the source waveform. Every copy goes through the ordinary
+    /// save path, so it is validated against that stage's own clip (SPEC001 6.7-3, FR-038).
+    /// </summary>
+    private async Task<AuthoringLinkResult> CopyToTargetsAsync(
+        EventKey source,
+        IReadOnlyList<EventKey> targets,
+        bool approveMismatch)
+    {
+        string gallery = _store.ResolveGallery(source);
+        IReadOnlyDictionary<string, FunscriptDocument> variants = _store.LoadExisting(source);
+        if (variants.Count == 0)
+        {
+            return new AuthoringLinkResult(
+                false,
+                gallery,
+                new[] { "The source stage has no saved waveform to copy. Save it first." },
+                Array.Empty<AuthoringLinkOutcome>());
+        }
+
+        var outcomes = new List<AuthoringLinkOutcome>(targets.Count);
+        foreach (EventKey target in targets)
+        {
+            if (target == source)
+            {
+                outcomes.Add(new AuthoringLinkOutcome(
+                    target.ToString(),
+                    false,
+                    new[] { "A stage cannot be copied onto itself." },
+                    Array.Empty<string>(),
+                    Array.Empty<string>()));
+                continue;
+            }
+
+            AuthoringSaveResult saved = await _store
+                .SaveAsync(
+                    new AuthoringSaveRequest(target, variants, approveMismatch, null, null, Detach: true),
+                    _lifetime.Token)
+                .ConfigureAwait(false);
+
+            outcomes.Add(new AuthoringLinkOutcome(
+                target.ToString(),
+                saved.Success,
+                saved.Errors,
+                saved.LoopWarnings.Concat(saved.MotionWarnings).ToArray(),
+                saved.Outputs ?? Array.Empty<string>()));
+        }
+
+        int copied = outcomes.Count(outcome => outcome.Success);
+        if (copied > 0)
+        {
+            _logInfo?.Invoke($"The waveform of '{gallery}' was copied to {copied} further stage(s).");
+        }
+
+        return new AuthoringLinkResult(
+            outcomes.All(outcome => outcome.Success), gallery, Array.Empty<string>(), outcomes);
+    }
+
+    private async Task HandleUnlinkAsync(HttpListenerContext context, HttpListenerRequest request)
+    {
+        UnlinkPayload? payload = await ReadJsonAsync<UnlinkPayload>(request).ConfigureAwait(false);
+        if (payload?.Key is null)
+        {
+            await WriteJsonAsync(context, 400, new { error = "The stage to unlink was not given." })
+                .ConfigureAwait(false);
+            return;
+        }
+
+        EventKey key = payload.Key.ToKey();
+        AuthoringSaveResult result = await _store
+            .UnlinkAsync(key, payload.Repeat, payload.ApproveLoopMismatch, _lifetime.Token)
+            .ConfigureAwait(false);
+
+        if (result.Success)
+        {
+            _logInfo?.Invoke($"{key} no longer shares a waveform; it now owns '{result.Gallery}'.");
+        }
+        else
+        {
+            _logWarning?.Invoke($"Unlinking {key} was refused: {string.Join("; ", result.Errors)}");
+        }
+
+        await WriteJsonAsync(context, result.Success ? 200 : 409, result).ConfigureAwait(false);
     }
 
     private async Task HandleSaveAsync(HttpListenerContext context, HttpListenerRequest request)
@@ -636,6 +795,29 @@ public sealed class AuthoringServer : IAsyncDisposable
         List<string>? SilentOutputs = null);
 
     private sealed record PreviewPayload(string? Gallery, List<string>? Outputs);
+
+    private sealed record KeyPayload(
+        string? Context,
+        string? ActorId,
+        string? AnimationId,
+        string? Phase,
+        string? StageId)
+    {
+        public EventKey ToKey() => new(
+            Context ?? string.Empty,
+            ActorId ?? string.Empty,
+            AnimationId ?? string.Empty,
+            Phase ?? string.Empty,
+            string.IsNullOrWhiteSpace(StageId) ? EventKey.DefaultStageId : StageId);
+    }
+
+    private sealed record LinkPayload(
+        KeyPayload? Source,
+        List<KeyPayload>? Targets,
+        string? Mode,
+        bool ApproveMismatch);
+
+    private sealed record UnlinkPayload(KeyPayload? Key, bool? Repeat, bool ApproveLoopMismatch);
 
     private sealed record SaveFillerPayload(
         string? Gallery,

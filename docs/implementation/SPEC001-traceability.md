@@ -1,6 +1,10 @@
 # SPEC001 implementation traceability
 
-Normative source: [`docs/specifications/SPEC001.md`](../specifications/SPEC001.md) (revised 2026-08-06, CHG-014 〜 CHG-036). This document records implementation and verification only; it does not change the specification.
+Normative source: [`docs/specifications/SPEC001.md`](../specifications/SPEC001.md) (revised 2026-08-09, CHG-014 〜 CHG-039). This document records implementation and verification only; it does not change the specification.
+
+**CHG-039（2026-08-09）。** ある段階の波形を複数の他段階へ適用できるようにした。既定は共有（リンク）で、適用先のトリガーが元の段階のギャラリー名を指すだけであり、`.funscript` は複製されない。再生側は元から `outputs[].gallery` を読むだけなので、再生経路の変更はない。GUIの編集・試聴・保存の対象ギャラリーは `AuthoringStore.ResolveGallery` の結果へ切り替えた（FR-063）。段階ごとに動きを変えたい場合のために複製も選べる。
+
+**CHG-037（2026-08-09）。** 拘束トリガーの `actorId` を6.2.1の順序で解決するようにした。それまでは `Bind.BinderEnemy.GalleryEnemyID` を直接使っており、(1) 未登録の敵がすべて `hold/None/…` を共有し（利用者のカタログで6件）、(2) `EnemyObject` でない拘束者（`ParasiteTentacle`、`ParasiteBullet`、`StoneEye`）の拘束はトリガーが1件も出ていなかった。既存カタログの `hold` 行21件は新しい鍵で作り直される。`.funscript` は未作成のため移行不要。
 
 Manual and hardware verification steps live in [`docs/testing/SPEC001-test-scenarios.md`](../testing/SPEC001-test-scenarios.md). Rows below marked as pending device or in-game evidence are the ones those scenarios cover.
 
@@ -73,6 +77,12 @@ Status meanings:
 | FR-055 | `OutputGate.Suppress` stops the device before it stops forwarding | `SuppressingAnOpenOutputStopsTheDeviceFirst` | Tested |
 | FR-056 | every roster output needs a `defaultFillers` key; `null` means silent | `EveryOutputNeedsADefaultFillerKeyEvenIfItIsNull` | Tested |
 | FR-057 | `GalleryRegistration.FindStrayVariants` reports a variant no output claims | `EveryGalleryVariantBelongsToAnOutputInTheRoster` | Tested |
+| FR-058 | `BinderActorId.Resolve` walks `GalleryEnemyID` → `EnemyID` → `ActorIds.FromObjectName`, reading the binder through `Bind.Binder` as well as `Bind.BinderEnemy`; `ActorIds.IsUsable` rejects `None` | `ActorIdTests.UnsetNamesNoActor`, `UnitySuffixesAreNotPartOfTheActor`, `DifferentBindersGetDifferentKeys`; AC-056 in game | Tested / unverified |
+| FR-059 | `RuntimeObserver.ObserveGameplay` no longer requires `BinderEnemy` to observe a hold; an unnameable binder becomes `ActorIds.UnidentifiedBinder` | `ActorIdTests.TheUnidentifiedBinderIsItsOwnActor`; AC-057 in game | Tested / unverified |
+| FR-061 | `Authoring.OpenGuiKey` (default `F6`) read in `RuntimeObserver.OnGUI`; `AuthoringGuiLauncher.Open` shells out to the default browser and swallows failures; `Authoring.OpenGuiOnStart` opens it at load; the startup log names the key | Build-time only so far — the key path needs the game; AC-059 in game | Implemented / unverified |
+| FR-062 | `AuthoringStore.LinkAsync` / `UnlinkAsync`; `POST /api/link` (`mode: link|copy`) and `POST /api/unlink` in `AuthoringServer`; the GUI's 「この波形を他の段階へ…」 dialog, the shared badge in the catalog list, and the link banner with 「リンク解除」 | `LinkedTriggerTests` (8 cases: sharing without a second asset, editing through a link, clip-length approval, unmappable targets, unsaved source, unlink, unlink of an unlinked stage, two-gallery fallback); GUI behaviour driven through a jsdom harness; AC-060〜AC-063 in game | Tested / unverified in game |
+| FR-063 | `AuthoringStore.ResolveGallery` reads the gallery from the mapping; `LoadExisting`, `SaveAsync`, `/api/script`, `/api/catalog`, and preview all use it | `LinkedTriggerTests.EditingALinkedStageWritesTheSharedGallery`, `AnEntryNamingTwoGalleriesResolvesToTheStagesOwnGallery` | Tested |
+| FR-060 | `EventKey.IsUnidentifiedActor` / `IsAuthorable`; `AuthoringStore.Save` refuses the key; `MappingRepository.TryResolve` refuses it even when hand-written; `PlaybackCoordinator.ObserveEvent` warns about identification rather than authoring | `ActorIdTests.AnUnidentifiedActorCanNeverCarryAScript`, `AHandWrittenMappingForAnUnidentifiedActorIsNotHonoured`; AC-058 in game | Tested / unverified |
 
 ## Acceptance criteria
 

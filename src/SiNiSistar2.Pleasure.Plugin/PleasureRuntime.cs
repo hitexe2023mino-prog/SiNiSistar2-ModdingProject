@@ -230,8 +230,11 @@ internal static class PleasureRuntime
     /// <summary>Game time at which the climax flash stops being drawn.</summary>
     internal static double ClimaxFlashUntil { get; set; }
 
-    /// <summary>The captor's gallery id, or null when it cannot be resolved.</summary>
+    /// <summary>The captor's enemy identifier (SPEC003 5.3.1), or null when it cannot be resolved.</summary>
     internal static string? BinderEnemyId { get; set; }
+
+    /// <summary>What the game calls the captor, or null when it has no name to give.</summary>
+    internal static string? BinderDisplayName { get; set; }
 
     /// <summary>
     /// Set by the damage patch when the gauge fills, consumed by the observer. The climax writes to
@@ -373,35 +376,55 @@ internal static class PleasureRuntime
             + "game is first saved.");
     }
 
-    internal static void LoadSlot(string slotKey, string reason)
+    /// <summary>
+    /// Points the run at a slot (SPEC003 FR-284).
+    ///
+    /// What happens to the accumulated values is decided by <see cref="SlotTransition"/> rather
+    /// than here, so the rule has one home and a test. The three facts it needs are gathered here
+    /// and nowhere else.
+    /// </summary>
+    /// <param name="authoritative">
+    /// True when the slot is speaking rather than being written to — a load, or a return from a
+    /// defeat. Such a change never carries the run in hand: a defeat sends the player back to the
+    /// last save, and a save that recorded nothing means nothing was accumulated.
+    /// </param>
+    internal static void LoadSlot(string slotKey, string reason, bool authoritative = false)
     {
         CurrentSlotKey = slotKey;
 
         SidecarLoad load = Sidecar?.Load(slotKey) ?? new SidecarLoad(null, null, false);
         SidecarDocument? stored = load.Document;
-        if (stored is not null)
+
+        // A save written moments ago is the only innocent way to reach a key with no sidecar: the
+        // player put the run in progress into a new file. Anything else that lands on an unknown
+        // key is a load, and a load must not inherit (付録A A-55).
+        bool justSaved = LastSaveAt > 0d
+            && UnityEngine.Time.unscaledTimeAsDouble - LastSaveAt < 10d;
+        SlotAction action = SlotTransition.Decide(stored is not null, authoritative, justSaved);
+
+        switch (action)
         {
-            Corruption?.LoadFrom(stored.Corruption);
-            Climaxes.LoadFrom(stored.ClimaxCount);
-            Breasts?.LoadFrom(stored.BreastAtMaxCount);
-            Milk?.LoadFrom(stored.Milk);
-            CrestSublimated = stored.LustCrest;
-            CrestDebtDirty = true;
-        }
-        else
-        {
-            // A key with no sidecar has never been seen before, and the only way to arrive at one
-            // is to have just created that save from the run in progress. Clearing here is what
-            // wiped a fresh playthrough's progress the moment it was first saved: the file name
-            // changed, the key changed with it, and the absent sidecar was read as "nothing yet"
-            // rather than "this is where the run in progress now lives" (付録A A-44).
-            //
-            // Starting a new game is the case that does need zeroing, and that is handled where it
-            // belongs: the game reports no loaded file at all, which EnterNoSlot answers.
-            Log?.LogInfo(
-                $"Slot '{slotKey}' has no sidecar yet; the run in progress carries into it.");
+            case SlotAction.Restore when stored is not null:
+                Corruption?.LoadFrom(stored.Corruption);
+                Climaxes.LoadFrom(stored.ClimaxCount);
+                Breasts?.LoadFrom(stored.BreastAtMaxCount);
+                Milk?.LoadFrom(stored.Milk);
+                CrestSublimated = stored.LustCrest;
+                break;
+
+            case SlotAction.Reset:
+                Corruption?.LoadFrom(0f);
+                Climaxes.ResetCount();
+                Breasts?.Reset();
+                Milk?.Reset();
+                CrestSublimated = false;
+                break;
+
+            case SlotAction.Carry:
+                break;
         }
 
+        CrestDebtDirty = true;
         Meter?.Reset();
         PendingClimax = false;
 
@@ -410,35 +433,67 @@ internal static class PleasureRuntime
         // unkillable by the limit for the rest of the session (FR-216).
         ClimaxDeathFired = false;
         PendingBreastSuper = false;
+        PendingLustCrest = false;
         ClimaxFlashUntil = 0d;
 
-        string state = stored is not null
-            ? $"restored climaxes {Climaxes.Count}, corruption {Corruption?.Value ?? 0f:F2}, "
-              + $"breast applications {Breasts?.Count ?? 0} "
-              + $"({Breasts?.Remaining ?? 0} more before BreastSuper), milk {Milk?.Fill ?? 0f:P0}"
-            : "no sidecar yet, starting from zero";
+        string state = action switch
+        {
+            SlotAction.Restore => "restored from its sidecar",
+            SlotAction.Carry => "has no sidecar and was just saved into, so the run in progress carries in",
+            _ => "has no sidecar, so everything starts from zero",
+        };
         string notice = load.Notice is null ? string.Empty : $" The stored file {load.Notice}.";
-        Log?.LogInfo($"Slot '{slotKey}' ({reason}): {state}.{notice}");
+        Log?.LogInfo(
+            $"Slot '{slotKey}' ({reason}): {state} — climaxes {Climaxes.Count}, corruption "
+            + $"{Corruption?.Value ?? 0f:F2}, breast applications {Breasts?.Count ?? 0}, milk "
+            + $"{Milk?.Fill ?? 0f:P0}, crest {(CrestSublimated ? "sublimated" : "not sublimated")}."
+            + notice);
+
+        // Written straight back when it was carried, so the same key can never be ambiguous twice.
+        // Without this, dying before the next save point would find no sidecar and start from zero.
+        if (action == SlotAction.Carry)
+        {
+            SaveSlot("the run was carried into a new slot");
+        }
     }
 
     /// <summary>
     /// Reloads the current slot. Used when the player comes back from a defeat, which returns them
     /// to the last save and should return these values with them.
+    ///
+    /// Authoritative: a defeat is the save speaking. Carrying the run in hand across a death is
+    /// what let corruption survive a retry (付録A A-55).
     /// </summary>
     internal static void ReloadCurrentSlot(string reason)
     {
         if (CurrentSlotKey is null)
         {
+            // No slot means nothing was ever saved, and a defeat still ends the attempt. Zeroing
+            // is the honest reading: there is no record to go back to.
+            Corruption?.LoadFrom(0f);
+            Climaxes.ResetCount();
+            Breasts?.Reset();
+            Milk?.Reset();
+            CrestSublimated = false;
+            CrestDebtDirty = true;
+            Meter?.Reset();
+            ClimaxDeathFired = false;
+            Log?.LogInfo(
+                $"No slot is attached ({reason}), so there is nothing to reload; the run starts "
+                + "from zero.");
             return;
         }
 
-        LoadSlot(CurrentSlotKey, reason);
+        LoadSlot(CurrentSlotKey, reason, authoritative: true);
     }
 
     /// <summary>
     /// Writes the run to the sidecar. A failure is reported and nothing else happens: losing a
     /// write must never interrupt play (SPEC003 FR-226).
     /// </summary>
+    /// <summary>Unscaled time of the last successful write, used to recognise a fresh save.</summary>
+    internal static double LastSaveAt { get; private set; }
+
     internal static void SaveSlot(string reason)
     {
         if (CurrentSlotKey is null || Sidecar is null)
@@ -459,6 +514,7 @@ internal static class PleasureRuntime
             return;
         }
 
+        LastSaveAt = UnityEngine.Time.unscaledTimeAsDouble;
         Log?.LogInfo(
             $"Slot '{CurrentSlotKey}' saved ({reason}): climaxes {Climaxes.Count}, "
             + $"corruption {Corruption?.Value ?? 0f:F2}.");
@@ -493,6 +549,7 @@ internal static class PleasureRuntime
         IsBound = false;
         IsDefeatPerformance = false;
         BinderEnemyId = null;
+        BinderDisplayName = null;
         Meter?.Reset();
     }
 }

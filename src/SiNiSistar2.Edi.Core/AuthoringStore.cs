@@ -18,7 +18,40 @@ public sealed record AuthoringSaveRequest(
     /// absent: absent means "not part of this trigger", silenced means "stop this device"
     /// (SPEC001 6.2, FR-047).
     /// </summary>
-    IReadOnlyList<string>? SilentOutputs = null);
+    IReadOnlyList<string>? SilentOutputs = null,
+    /// <summary>
+    /// Saves under the trigger's own gallery name even when its mapping currently points at
+    /// another stage's gallery. This is how a link is broken without losing the waveform: the
+    /// shared waveform is written out as this stage's own copy (SPEC001 6.7-14).
+    /// </summary>
+    bool Detach = false);
+
+/// <summary>
+/// A request to make other stages play the waveform a source stage already has, by pointing their
+/// mappings at its gallery rather than by copying the file (SPEC001 6.7-14, FR-062).
+/// </summary>
+public sealed record AuthoringLinkRequest(
+    EventKey Source,
+    IReadOnlyList<EventKey> Targets,
+    /// <summary>
+    /// Approves the per-target warnings: a looping target whose clip length disagrees with the
+    /// shared waveform, and a target whose own authored files stop being played.
+    /// </summary>
+    bool ApproveMismatch = false);
+
+public sealed record AuthoringLinkOutcome(
+    string Target,
+    bool Success,
+    IReadOnlyList<string> Errors,
+    IReadOnlyList<string> Warnings,
+    IReadOnlyList<string> Outputs,
+    string? ManifestPath = null);
+
+public sealed record AuthoringLinkResult(
+    bool Success,
+    string Gallery,
+    IReadOnlyList<string> Errors,
+    IReadOnlyList<AuthoringLinkOutcome> Targets);
 
 /// <summary>
 /// A filler gallery referenced by name from the mapping file. Fillers are not triggers, so they
@@ -286,10 +319,285 @@ public sealed class AuthoringStore
         }
     }
 
+    /// <summary>
+    /// The gallery a trigger actually plays.
+    ///
+    /// A trigger's own gallery name is derived from its key, but its mapping may name another
+    /// trigger's gallery instead: the game selects a different event depending on whether the
+    /// player was idle, walking or falling when the hold began, while what happens on screen is
+    /// all but the same. One waveform serving several such triggers is a fact about the mapping,
+    /// not about the files, so it is read back from the mapping (SPEC001 6.7-14).
+    /// </summary>
+    public string ResolveGallery(EventKey key)
+    {
+        string own = Funscript.CreateGalleryName(key);
+        if (!_mappings.TryGet(key, out EventMapping mapping) || mapping.Disposition != "mapped")
+        {
+            return own;
+        }
+
+        string[] galleries = mapping.Outputs
+            .Select(assignment => assignment.Gallery)
+            .Where(gallery => gallery is { Length: > 0 })
+            .Select(gallery => gallery!)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        // A hand-written entry could name two galleries for one trigger. That is not a link, and
+        // guessing which one the GUI should edit would be worse than editing the trigger's own.
+        return galleries.Length == 1 ? galleries[0] : own;
+    }
+
+    /// <summary>
+    /// Every mapped trigger whose mapping names <paramref name="gallery"/>, in file order. Editing
+    /// the waveform changes all of them at once, so the GUI has to be able to say who they are.
+    /// </summary>
+    public IReadOnlyList<EventKey> KeysSharing(string gallery) =>
+        _mappings.Document.Events
+            .Where(mapping => mapping.Disposition == "mapped"
+                && mapping.Outputs.Any(assignment =>
+                    string.Equals(assignment.Gallery, gallery, StringComparison.Ordinal)))
+            .Select(mapping => mapping.Key)
+            .ToArray();
+
+    /// <summary>
+    /// Points the targets' mappings at the source's gallery. No asset is written and no waveform is
+    /// copied: the stages become one waveform played in several places, so a later edit reaches all
+    /// of them (SPEC001 6.7-14, FR-062).
+    /// </summary>
+    public async Task<AuthoringLinkResult> LinkAsync(
+        AuthoringLinkRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        string gallery = ResolveGallery(request.Source);
+        IReadOnlyDictionary<string, FunscriptDocument> variants = LoadExisting(request.Source);
+        if (variants.Count == 0)
+        {
+            return new AuthoringLinkResult(
+                false,
+                gallery,
+                new[]
+                {
+                    "The source stage has no saved waveform, so there is nothing for other stages "
+                    + "to play. Save it first, then link.",
+                },
+                Array.Empty<AuthoringLinkOutcome>());
+        }
+
+        if (request.Targets.Count == 0)
+        {
+            return new AuthoringLinkResult(
+                false, gallery, new[] { "No target stage was selected." }, Array.Empty<AuthoringLinkOutcome>());
+        }
+
+        // What a linked stage drives is what the source's files say it drives, which is the same
+        // rule a save follows (DEC-026).
+        var assignments = new List<OutputAssignment>();
+        var errors = new List<string>();
+        foreach (string variant in variants.Keys)
+        {
+            string? output = _mappings.OutputForVariant(variant);
+            if (output is null)
+            {
+                errors.Add($"No output in the roster plays the variant '{variant}'.");
+                continue;
+            }
+
+            assignments.Add(new OutputAssignment { Id = output, Gallery = gallery });
+        }
+
+        // "Stop this device" is part of what the source stage means, so a linked stage inherits it
+        // too; otherwise the linked stage would leave the device on its filler (SPEC001 6.2).
+        if (_mappings.TryGet(request.Source, out EventMapping sourceMapping)
+            && sourceMapping.Disposition == "mapped")
+        {
+            foreach (OutputAssignment silent in sourceMapping.Outputs.Where(x => x.Gallery is null))
+            {
+                if (!assignments.Any(x => string.Equals(x.Id, silent.Id, StringComparison.Ordinal)))
+                {
+                    assignments.Add(new OutputAssignment { Id = silent.Id, Gallery = null });
+                }
+            }
+        }
+
+        if (errors.Count > 0)
+        {
+            return new AuthoringLinkResult(false, gallery, errors, Array.Empty<AuthoringLinkOutcome>());
+        }
+
+        long duration = variants.Values.Max(script => script.DurationMilliseconds);
+        string[] outputIds = assignments.Select(x => x.Id).ToArray();
+
+        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var outcomes = new List<AuthoringLinkOutcome>(request.Targets.Count);
+            foreach (EventKey target in request.Targets)
+            {
+                outcomes.Add(await LinkOneAsync(
+                        request, target, gallery, duration, assignments, outputIds, cancellationToken)
+                    .ConfigureAwait(false));
+            }
+
+            return new AuthoringLinkResult(
+                outcomes.All(outcome => outcome.Success), gallery, Array.Empty<string>(), outcomes);
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
+    }
+
+    private async Task<AuthoringLinkOutcome> LinkOneAsync(
+        AuthoringLinkRequest request,
+        EventKey target,
+        string gallery,
+        long duration,
+        IReadOnlyList<OutputAssignment> assignments,
+        IReadOnlyList<string> outputIds,
+        CancellationToken cancellationToken)
+    {
+        var errors = new List<string>();
+        var warnings = new List<string>();
+
+        if (target == request.Source)
+        {
+            errors.Add("A stage cannot be linked to itself.");
+        }
+
+        if (target.IsUnobservedPlaceholder)
+        {
+            errors.Add(
+                "This stage has not been played yet, so its animation and length are unknown. "
+                + "Play it once in the gallery, then link it.");
+        }
+
+        if (target.IsUnidentifiedActor)
+        {
+            errors.Add(
+                "This hold's binder could not be identified, so its trigger stands for every "
+                + "unidentified binder at once. A funscript linked here would play for all of them.");
+        }
+
+        if (errors.Count == 0)
+        {
+            // The waveform was authored against another clip. A loop that does not line up with
+            // this stage's clip drifts on every repeat, which is the same harm FR-040 guards
+            // against on save, so it is reported the same way.
+            if (_catalog.TryGet(target, out TriggerCatalogEntry entry)
+                && entry.IsLooping == true
+                && entry.ClipLengthSeconds is > 0
+                && Math.Abs(Math.Round(entry.ClipLengthSeconds.Value * 1000) - duration)
+                    > Funscript.LoopToleranceMilliseconds)
+            {
+                warnings.Add(
+                    $"This stage's clip is {Math.Round(entry.ClipLengthSeconds.Value * 1000)} ms but the "
+                    + $"shared waveform is {duration} ms, which is more than the "
+                    + $"{Funscript.LoopToleranceMilliseconds} ms tolerance apart.");
+            }
+
+            string own = Funscript.CreateGalleryName(target);
+            if (!string.Equals(own, gallery, StringComparison.Ordinal))
+            {
+                string[] orphaned = RosterVariants
+                    .Select(variant => Path.Combine(_galleryRoot, variant, $"{own}.funscript"))
+                    .Where(File.Exists)
+                    .ToArray();
+                if (orphaned.Length > 0)
+                {
+                    warnings.Add(
+                        $"This stage already has {orphaned.Length} authored file(s) of its own. They are "
+                        + "kept on disk but stop being played while the link is in place.");
+                }
+            }
+        }
+
+        if (errors.Count > 0 || (warnings.Count > 0 && !request.ApproveMismatch))
+        {
+            return new AuthoringLinkOutcome(
+                target.ToString(), false, errors, warnings, Array.Empty<string>());
+        }
+
+        string manifestPath = Path.Combine(
+            _manifestRoot, _gameBuildId, $"{Funscript.CreateGalleryName(target)}.manifest.json");
+        await WriteLinkManifestAsync(
+            manifestPath, target, request.Source, gallery, warnings, cancellationToken).ConfigureAwait(false);
+
+        // A link replaces the target's assignments rather than merging into them. The additive rule
+        // of 6.7-8 exists so that saving one side of a pair does not drop the other; here the
+        // statement being made is "this stage plays what that stage plays", and a leftover
+        // assignment pointing at the target's own gallery would contradict it.
+        var mapping = new EventMapping
+        {
+            Id = $"linked-{Funscript.CreateGalleryName(target)}",
+            Context = target.Context,
+            ActorId = target.ActorId,
+            AnimationId = target.AnimationId,
+            Phase = target.Phase,
+            StageId = target.StageId,
+            Disposition = "mapped",
+            Outputs = assignments.Select(x => new OutputAssignment { Id = x.Id, Gallery = x.Gallery }).ToList(),
+            SeekMode = "animation-time",
+        };
+
+        try
+        {
+            await _mappings.UpsertAsync(mapping, _mappingPath, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (
+            exception is InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            return new AuthoringLinkOutcome(
+                target.ToString(),
+                false,
+                new[] { $"The mapping file could not be updated: {exception.Message}" },
+                warnings,
+                Array.Empty<string>());
+        }
+
+        return new AuthoringLinkOutcome(
+            target.ToString(), true, Array.Empty<string>(), warnings, outputIds, manifestPath);
+    }
+
+    /// <summary>
+    /// Breaks a link by writing the shared waveform out as this stage's own gallery. The other
+    /// stages on the link keep playing the shared one (SPEC001 6.7-14).
+    /// </summary>
+    public async Task<AuthoringSaveResult> UnlinkAsync(
+        EventKey key,
+        bool? repeat = null,
+        bool approveLoopMismatch = false,
+        CancellationToken cancellationToken = default)
+    {
+        string own = Funscript.CreateGalleryName(key);
+        string linked = ResolveGallery(key);
+        if (string.Equals(own, linked, StringComparison.Ordinal))
+        {
+            return AuthoringSaveResult.Rejected(
+                own,
+                new[] { "This stage is not linked to another stage's waveform." },
+                Array.Empty<string>());
+        }
+
+        IReadOnlyDictionary<string, FunscriptDocument> variants = LoadExisting(key);
+        if (variants.Count == 0)
+        {
+            return AuthoringSaveResult.Rejected(
+                own,
+                new[] { $"The shared gallery '{linked}' has no files to copy." },
+                Array.Empty<string>());
+        }
+
+        return await SaveAsync(
+                new AuthoringSaveRequest(key, variants, approveLoopMismatch, repeat, null, Detach: true),
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     /// <summary>Returns the variants already present on disk for a trigger.</summary>
     public IReadOnlyDictionary<string, FunscriptDocument> LoadExisting(EventKey key)
     {
-        string gallery = Funscript.CreateGalleryName(key);
+        string gallery = ResolveGallery(key);
         var result = new Dictionary<string, FunscriptDocument>(StringComparer.Ordinal);
         foreach (string variant in RosterVariants)
         {
@@ -313,7 +621,11 @@ public sealed class AuthoringStore
         AuthoringSaveRequest request,
         CancellationToken cancellationToken = default)
     {
-        string gallery = Funscript.CreateGalleryName(request.Key);
+        // A linked stage edits the waveform it plays, which is the one it is linked to. Detaching is
+        // the deliberate way to stop sharing it (SPEC001 6.7-14).
+        string gallery = request.Detach
+            ? Funscript.CreateGalleryName(request.Key)
+            : ResolveGallery(request.Key);
         double clipLength = 0;
         bool isLoop = false;
         if (_catalog.TryGet(request.Key, out TriggerCatalogEntry entry))
@@ -343,6 +655,17 @@ public sealed class AuthoringStore
             errors.Add(
                 "This stage has not been played yet, so its animation and length are unknown. "
                 + "Play it once in the gallery, then author it.");
+        }
+
+        // The actor could not be told apart from any other unidentified binder, so a script saved
+        // here would play for all of them (SPEC001 FR-060). The trigger is kept in the catalogue as
+        // evidence that the hold happened; it is the identification that has to be fixed first.
+        if (request.Key.IsUnidentifiedActor)
+        {
+            errors.Add(
+                "This hold's binder could not be identified, so its trigger stands for every "
+                + "unidentified binder at once. A funscript saved here would play for all of them. "
+                + "Report the trigger with the surrounding log so the binder can be named.");
         }
 
         var assignments = new List<OutputAssignment>();
@@ -494,7 +817,11 @@ public sealed class AuthoringStore
             List<OutputAssignment> mergedOutputs = _mappings.MergeOutputs(request.Key, assignments);
             var mapping = new EventMapping
             {
-                Id = $"authored-{gallery}",
+                // Named after the trigger, not after the gallery: a shared gallery is named by more
+                // than one entry, and two entries with one id make the whole file a configuration
+                // error at the next start. For a stage that owns its gallery the two spellings are
+                // the same, so existing files do not change.
+                Id = $"authored-{Funscript.CreateGalleryName(request.Key)}",
                 Context = request.Key.Context,
                 ActorId = request.Key.ActorId,
                 AnimationId = request.Key.AnimationId,
@@ -540,6 +867,41 @@ public sealed class AuthoringStore
         {
             _writeLock.Release();
         }
+    }
+
+    /// <summary>
+    /// Records a link under the linked stage's own gallery name, so every mapped stage has a
+    /// manifest even when it owns no asset of its own (SPEC001 6.7-9, 6.7-14).
+    /// </summary>
+    private static async Task WriteLinkManifestAsync(
+        string path,
+        EventKey target,
+        EventKey source,
+        string gallery,
+        IReadOnlyList<string> warnings,
+        CancellationToken cancellationToken)
+    {
+        var manifest = new
+        {
+            schemaVersion = 2,
+            authoringVersion = 2,
+            eventKey = target,
+            gallery,
+            linkedTo = source,
+            linkWarningsApproved = warnings,
+            savedAt = DateTimeOffset.UtcNow,
+        };
+
+        string? directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        string temp = path + ".tmp";
+        await File.WriteAllTextAsync(temp, JsonSerializer.Serialize(manifest, JsonOptions), cancellationToken)
+            .ConfigureAwait(false);
+        File.Move(temp, path, true);
     }
 
     private static async Task WriteManifestAsync(

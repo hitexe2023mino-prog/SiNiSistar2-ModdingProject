@@ -1,7 +1,7 @@
 using SiNiSistar2.Damage;
 using SiNiSistar2.Obj;
-using SiNiSistar2.EventLabel;
 using SiNiSistar2.Pleasure.Core;
+using SiNiSistar2.UI;
 
 namespace SiNiSistar2.Pleasure.Plugin;
 
@@ -281,20 +281,28 @@ internal static class DamageProbePatches
 /// Detects a save point or obelisk being used, which is what clears the climax count
 /// (SPEC003 5.6, FR-217).
 ///
-/// <c>IsObeliskLabel</c> tells the two apart. Restricting the reset to obelisks is offered but not
-/// the default: <c>SavePointSelector.m_ChangeObeliskInHardMode</c> swaps save points for obelisks
-/// depending on difficulty, so an obelisk-only rule can leave a run with no reset point at all.
+/// The seam is <c>SavePointMenu.SetObeliskMode(bool)</c>, which the game calls as it opens the
+/// save point menu, and whose argument tells save points and obelisks apart. An earlier version
+/// patched <c>SavePointAsyncLabel.ExecutionOneAsync</c> instead; that method returns
+/// <c>UniTask</c>, a struct, and detouring an IL2CPP method that returns a struct corrupts the
+/// returned task — the game saw it as already completed, so the save dialog closed the moment it
+/// was asked for and neither saving nor levelling was possible. Only void-returning methods are
+/// safe to patch on this runtime.
+///
+/// Restricting the reset to obelisks is offered but not the default:
+/// <c>SavePointSelector.m_ChangeObeliskInHardMode</c> swaps save points for obelisks depending on
+/// difficulty, so an obelisk-only rule can leave a run with no reset point at all.
 /// </summary>
 internal static class SavePointPatches
 {
-    internal static void ExecutionOneAsyncPostfix(SavePointAsyncLabel __instance)
+    internal static void SetObeliskModePostfix(bool __0)
     {
         try
         {
-            bool isObelisk = __instance.IsObeliskLabel;
+            bool isObelisk = __0;
             PleasureRuntime.Probe(
                 $"savepoint-activated-{isObelisk}",
-                $"A-7 answered: SavePointAsyncLabel.ExecutionOneAsync ran with IsObeliskLabel={isObelisk}.");
+                $"A-7 answered: SavePointMenu.SetObeliskMode ran with isObelisk={isObelisk}.");
 
             ClimaxTuning climax = PleasureRuntime.Profile.Climax;
             if (!climax.Enabled || (climax.ResetAtObeliskOnly && !isObelisk))

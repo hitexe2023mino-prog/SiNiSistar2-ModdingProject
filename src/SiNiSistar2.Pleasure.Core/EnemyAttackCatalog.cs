@@ -1,5 +1,7 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Unicode;
 
 namespace SiNiSistar2.Pleasure.Core;
 
@@ -29,6 +31,10 @@ public interface IEnemyAttackOverrides
 /// <summary>One line of the catalogue file.</summary>
 public sealed record EnemyAttackEntry
 {
+    /// <summary>
+    /// The enemy identifier (SPEC003 5.3.1): a <c>GalleryEnemyID</c> name, an <c>EnemyID</c> name, or
+    /// a normalised object name behind <see cref="EnemyIds.ObjectPrefix"/>. Never <c>None</c>.
+    /// </summary>
     [JsonPropertyName("id")]
     public string Id { get; init; } = string.Empty;
 
@@ -47,13 +53,121 @@ public sealed record EnemyAttackEntry
     [JsonPropertyName("seen")]
     public bool Seen { get; init; }
 
+    /// <summary>
+    /// What the game calls this enemy on screen (SPEC003 FR-282). Read from the enemy itself when it
+    /// takes hold, so it is present only for enemies that have been met. Absent from the file rather
+    /// than written as null, because a row that has never been met has nothing to say here.
+    /// </summary>
+    [JsonPropertyName("displayName")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? DisplayName { get; init; }
+
     [JsonPropertyName("note")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Note { get; init; }
 
+    /// <summary>
+    /// Not serialised: it is <see cref="Kind"/> parsed, and the file's field list (SPEC003 6.2) has
+    /// five fields. Writing it as well produced a sixth that nothing reads and that contradicts
+    /// <see cref="Kind"/> the moment the file is edited by hand.
+    /// </summary>
+    [JsonIgnore]
     public EnemyAttackSetting Setting =>
         Enum.TryParse(Kind, ignoreCase: true, out EnemyAttackSetting parsed)
             ? parsed
             : EnemyAttackSetting.Auto;
+}
+
+/// <summary>
+/// What counts as an enemy identifier (SPEC003 5.3.1).
+///
+/// The rule that matters is that <c>None</c> is not one. Both of the game's enumerations carry a
+/// <c>None</c> member meaning "not set", and treating it as a name collapses every enemy the game
+/// left unset into a single row: one decision made about one of them would then apply to all of
+/// them, and no decision about any of them would apply to the one in front of the player.
+/// </summary>
+public static class EnemyIds
+{
+    /// <summary>Marks an identifier that came from an object name rather than an enumeration.</summary>
+    public const string ObjectPrefix = "obj:";
+
+    /// <summary>The name both of the game's enemy enumerations use for "not set".</summary>
+    public const string Unset = "None";
+
+    /// <summary>
+    /// Names Unity scenes reuse for structure rather than for identity. Hold colliders and attack
+    /// areas hang off objects called <c>Root</c> under every character in this build, so a row keyed
+    /// on one would stand for whichever binder happened to sit there.
+    /// </summary>
+    private static readonly HashSet<string> StructuralNames =
+        new(StringComparer.Ordinal) { "Root", "Base" };
+
+    public static bool IsUsable(string? id) =>
+        !string.IsNullOrWhiteSpace(id) && !string.Equals(id, Unset, StringComparison.Ordinal);
+
+    /// <summary>Whether a scene object's name is one the game reuses for structure.</summary>
+    public static bool IsStructuralName(string? objectName) =>
+        objectName is not null && StructuralNames.Contains(objectName.Trim());
+
+    /// <summary>
+    /// The last resort of 5.3.1: an identifier built from the object's own name.
+    ///
+    /// Unity appends <c>(Clone)</c> for every instantiation and <c> (2)</c> for every duplicate in a
+    /// scene, so the same enemy arrives under a different name depending on how it got there. Left
+    /// alone, one worm would occupy a row per spawn and a decision made about one of them would not
+    /// apply to the next. Returns null when nothing is left to name.
+    /// </summary>
+    public static string? FromObjectName(string? objectName)
+    {
+        if (string.IsNullOrWhiteSpace(objectName))
+        {
+            return null;
+        }
+
+        string trimmed = objectName!.Trim();
+        bool changed = true;
+        while (changed && trimmed.Length > 0)
+        {
+            changed = false;
+            trimmed = trimmed.TrimEnd();
+
+            if (trimmed.EndsWith("(Clone)", StringComparison.Ordinal))
+            {
+                trimmed = trimmed[..^"(Clone)".Length];
+                changed = true;
+                continue;
+            }
+
+            // A trailing "(12)" is Unity's duplicate counter. Digits outside brackets are part of the
+            // name — MeatWorm1 is not MeatWorm — so only the bracketed form is removed.
+            int open = trimmed.LastIndexOf('(');
+            if (open >= 0 && trimmed.EndsWith(")", StringComparison.Ordinal))
+            {
+                string inside = trimmed[(open + 1)..^1];
+                if (inside.Length > 0 && inside.All(char.IsDigit))
+                {
+                    trimmed = trimmed[..open];
+                    changed = true;
+                }
+            }
+        }
+
+        trimmed = trimmed.Trim();
+        if (trimmed.Length == 0 || IsStructuralName(trimmed))
+        {
+            return null;
+        }
+
+        return ObjectPrefix + trimmed;
+    }
+
+    /// <summary>
+    /// An identifier built from the binder's own type, used when its object name does not identify
+    /// it. A binder sitting on an object called <c>Root</c> still has a class of its own —
+    /// <c>ParasiteTentacle</c>, <c>StoneEye</c> — and that is what the player is being held by.
+    /// </summary>
+    public static string? FromTypeName(string? typeName) =>
+        string.IsNullOrWhiteSpace(typeName) ? null : ObjectPrefix + typeName!.Trim();
 }
 
 /// <summary>
@@ -81,7 +195,16 @@ public sealed record EnemyAttackDocument
 
     public string Serialize() => JsonSerializer.Serialize(this, SerializerOptions);
 
-    private static readonly JsonSerializerOptions SerializerOptions = new() { WriteIndented = true };
+    /// <summary>
+    /// Indented, and with the whole of Unicode left unescaped. The file exists to be read and diffed
+    /// by hand (SPEC003 6.2), and the default encoder turns a display name such as 大口のワーム into
+    /// a run of 大-style escapes — technically the same string, unreadable as a row in a list.
+    /// </summary>
+    private static readonly JsonSerializerOptions SerializerOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.Create(UnicodeRanges.All),
+    };
 
     /// <summary>
     /// Reads a catalogue. A future schema version yields no document so the caller refuses to
@@ -133,7 +256,7 @@ public sealed record EnemyAttackParse(EnemyAttackDocument? Document, string? Err
 }
 
 /// <summary>One row as the in-game editor shows it.</summary>
-public sealed record EnemyAttackRow(string Id, EnemyAttackSetting Setting, bool Seen);
+public sealed record EnemyAttackRow(string Id, EnemyAttackSetting Setting, bool Seen, string? DisplayName = null);
 
 /// <summary>
 /// The catalogue in memory. The classifier holds this object rather than a copy of its contents, so
@@ -149,13 +272,7 @@ public sealed class EnemyAttackCatalog : IEnemyAttackOverrides
 
     public EnemyAttackCatalog(EnemyAttackDocument document)
     {
-        foreach (EnemyAttackEntry entry in document.Enemies)
-        {
-            if (!string.IsNullOrWhiteSpace(entry.Id))
-            {
-                _entries[entry.Id] = entry;
-            }
-        }
+        Absorb(document);
     }
 
     /// <summary>Whether something has changed since the last write.</summary>
@@ -163,12 +280,23 @@ public sealed class EnemyAttackCatalog : IEnemyAttackOverrides
 
     public int Count => _entries.Count;
 
+    /// <summary>
+    /// The declaration carried by a discarded <c>None</c> row, when it was not <c>Auto</c>.
+    ///
+    /// Such a row is a leftover from before 5.3.1, when every unidentified captor shared one line.
+    /// It cannot be carried anywhere, because there is no way to tell which enemy it was meant for.
+    /// Dropping it silently would take a decision away without saying so, so it is reported once.
+    /// </summary>
+    public EnemyAttackSetting? DiscardedUnsetDeclaration { get; private set; }
+
     public EnemyAttackSetting SettingFor(string enemyId) =>
-        _entries.TryGetValue(enemyId, out EnemyAttackEntry? entry) ? entry.Setting : EnemyAttackSetting.Auto;
+        EnemyIds.IsUsable(enemyId) && _entries.TryGetValue(enemyId, out EnemyAttackEntry? entry)
+            ? entry.Setting
+            : EnemyAttackSetting.Auto;
 
     public void Set(string enemyId, EnemyAttackSetting setting, string? note = null)
     {
-        if (string.IsNullOrWhiteSpace(enemyId))
+        if (!EnemyIds.IsUsable(enemyId))
         {
             return;
         }
@@ -204,28 +332,35 @@ public sealed class EnemyAttackCatalog : IEnemyAttackOverrides
     }
 
     /// <summary>
-    /// Records that this enemy has held the player. Returns true the first time, which is when the
-    /// file is worth rewriting; after that it is a no-op so a long hold does not write once a frame.
+    /// Records that this enemy has held the player, and what the game calls it (SPEC003 FR-282).
+    ///
+    /// Returns true when something changed, which is when the file is worth rewriting; a hold that
+    /// tells it nothing new is a no-op, so a long hold does not write once a frame. The display name
+    /// is compared as well as the sighting because switching the game's language changes it, and a
+    /// list showing yesterday's language is worse than one showing none.
     /// </summary>
-    public bool MarkSeen(string enemyId)
+    public bool MarkSeen(string enemyId, string? displayName = null)
     {
-        if (string.IsNullOrWhiteSpace(enemyId))
+        if (!EnemyIds.IsUsable(enemyId))
         {
             return false;
         }
 
+        string? name = string.IsNullOrWhiteSpace(displayName) ? null : displayName!.Trim();
+
         if (_entries.TryGetValue(enemyId, out EnemyAttackEntry? entry))
         {
-            if (entry.Seen)
+            bool nameIsNew = name is not null && !string.Equals(entry.DisplayName, name, StringComparison.Ordinal);
+            if (entry.Seen && !nameIsNew)
             {
                 return false;
             }
 
-            _entries[enemyId] = entry with { Seen = true };
+            _entries[enemyId] = entry with { Seen = true, DisplayName = name ?? entry.DisplayName };
         }
         else
         {
-            _entries[enemyId] = new EnemyAttackEntry { Id = enemyId, Seen = true };
+            _entries[enemyId] = new EnemyAttackEntry { Id = enemyId, Seen = true, DisplayName = name };
         }
 
         IsDirty = true;
@@ -242,7 +377,7 @@ public sealed class EnemyAttackCatalog : IEnemyAttackOverrides
         var added = 0;
         foreach (string id in enemyIds)
         {
-            if (string.IsNullOrWhiteSpace(id) || _entries.ContainsKey(id))
+            if (!EnemyIds.IsUsable(id) || _entries.ContainsKey(id))
             {
                 continue;
             }
@@ -284,7 +419,7 @@ public sealed class EnemyAttackCatalog : IEnemyAttackOverrides
     /// </summary>
     public IReadOnlyList<EnemyAttackRow> Rows() =>
         _entries.Values
-            .Select(entry => new EnemyAttackRow(entry.Id, entry.Setting, entry.Seen))
+            .Select(entry => new EnemyAttackRow(entry.Id, entry.Setting, entry.Seen, entry.DisplayName))
             .OrderByDescending(row => row.Seen)
             .ThenBy(row => row.Id, StringComparer.Ordinal)
             .ToArray();
@@ -303,15 +438,35 @@ public sealed class EnemyAttackCatalog : IEnemyAttackOverrides
     public void RestoreFrom(EnemyAttackDocument snapshot)
     {
         _entries.Clear();
-        foreach (EnemyAttackEntry entry in snapshot.Enemies)
+        Absorb(snapshot);
+        IsDirty = false;
+    }
+
+    /// <summary>
+    /// Takes a document's rows in, dropping the ones that name no enemy (SPEC003 FR-281). The drop
+    /// happens here rather than at the file boundary so a snapshot restored by a cancelled edit
+    /// cannot put a <c>None</c> row back.
+    /// </summary>
+    private void Absorb(EnemyAttackDocument document)
+    {
+        foreach (EnemyAttackEntry entry in document.Enemies)
         {
-            if (!string.IsNullOrWhiteSpace(entry.Id))
+            if (EnemyIds.IsUsable(entry.Id))
             {
                 _entries[entry.Id] = entry;
+                continue;
             }
-        }
 
-        IsDirty = false;
+            if (string.Equals(entry.Id, EnemyIds.Unset, StringComparison.Ordinal)
+                && entry.Setting != EnemyAttackSetting.Auto)
+            {
+                DiscardedUnsetDeclaration = entry.Setting;
+            }
+
+            // The row was dropped, so what is in memory no longer matches the file. Without this the
+            // leftover row would survive every launch where nothing else changed.
+            IsDirty = true;
+        }
     }
 
     /// <summary>How many enemies carry a decision rather than being left to the status test.</summary>

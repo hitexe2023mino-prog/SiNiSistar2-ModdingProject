@@ -189,3 +189,54 @@ dialog { background: var(--panel); color: var(--text); border: 1px solid var(--l
 dialog h3 { margin: 0 0 12px; font-size: 14px; }
 dialog select { width: 460px; }
 .dialogButtons { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+
+/* A shared waveform is edited from any of the stages that play it, so the editor has to say so
+   before the user changes something they thought belonged to one stage only. */
+.linkInfo {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--warn);
+  border-radius: 4px;
+  background: rgba(224, 163, 64, .12);
+  font-size: 12px;
+  line-height: 1.7;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.linkInfo .sharedList { color: var(--muted); white-space: pre-line; width: 100%; }
+.linkInfo button { padding: 3px 8px; }
+
+.badge.shared { color: var(--warn); border-color: var(--warn); }
+
+.applyMode { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; max-width: 560px; }
+.applyMode label { display: flex; align-items: flex-start; gap: 8px; line-height: 1.6; font-size: 12px; }
+.applyMode input[type="radio"] { margin-top: 3px; }
+
+#applyFilter { width: 100%; }
+
+.applyList {
+  margin-top: 8px;
+  max-height: 320px;
+  width: 560px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 6px;
+}
+
+.applyList label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.applyList label:hover { background: var(--panel-2); }
+.applyList .sub { color: var(--muted); font-size: 11px; }
+.applyList .empty { color: var(--muted); font-size: 12px; padding: 8px; }
+#applyStatus { max-width: 560px; max-height: 220px; overflow: auto; font-size: 12px; }
