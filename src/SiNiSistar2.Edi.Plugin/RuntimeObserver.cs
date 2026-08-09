@@ -34,6 +34,9 @@ public sealed class RuntimeObserver : MonoBehaviour
     private string? _galleryActorDisplayName;
     private string? _authoringUrl;
     private KeyCode _authoringKey = KeyCode.None;
+    private EventKey? _gameOverKey;
+    private LeliaDeadState _gameOverState = LeliaDeadState.Live;
+    private AnimatorSample _gameOverSample;
     private int _enumeratedTakePlayerId;
     private int _enumeratedCategoryId;
     private bool _actorFallbackLogged;
@@ -143,6 +146,8 @@ public sealed class RuntimeObserver : MonoBehaviour
     {
         _capture?.Observe(null);
         _currentEvent = null;
+        _gameOverKey = null;
+        _gameOverState = LeliaDeadState.Live;
         PublishLive(null);
         _coordinator?.SetInactive();
         if (_diagnostics is not null)
@@ -450,6 +455,17 @@ public sealed class RuntimeObserver : MonoBehaviour
 
     private EventObservation? ObserveGameplay(ObjectManager objects, Lelia lelia)
     {
+        // A defeat is read from the game's own death state machine (Live → HP0 → GameOver), and
+        // before the hold, because a defeat that happens while an enemy is holding the player is a
+        // defeat and not a continuation of the hold (SPEC001 6.2.2).
+        LeliaDeadState deadState = ReadDeadState(lelia);
+        if (deadState != LeliaDeadState.Live)
+        {
+            return ObserveGameOver(lelia, deadState);
+        }
+
+        ForgetGameOver();
+
         if (lelia.IsHold && TryReadAnimator(lelia.m_Animator, out AnimatorSample holdSample))
         {
             // No general hold state machine is exposed by this build, so the animator state name
@@ -468,14 +484,6 @@ public sealed class RuntimeObserver : MonoBehaviour
                 holdSample.AnimationId);
         }
 
-        // Game-over and cinematic reactions play a single animation, so they are single-stage
-        // triggers and keep the default stage id (SPEC001 3章).
-        if (lelia.IsHP0 && TryReadAnimator(lelia.m_Animator, out AnimatorSample gameOverSample))
-        {
-            string actor = BinderActorId.Resolve(lelia) ?? "lelia";
-            return CreateObservation("game-over", actor, gameOverSample, "reaction", EventKey.DefaultStageId);
-        }
-
         if (objects.IsCinematicEvent && TryReadAnimator(lelia.m_Animator, out AnimatorSample eventSample))
         {
             return CreateObservation(
@@ -487,6 +495,96 @@ public sealed class RuntimeObserver : MonoBehaviour
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The game's own answer to "is the player dying, and how far along is it".
+    ///
+    /// <c>IsHP0</c> is about hit points; the defeat performance is a separate stage the game enters
+    /// afterwards, and it is the part that lasts. Reading the state machine instead of the flag is
+    /// what makes the second stage observable at all (SPEC001 6.2.2).
+    /// </summary>
+    [HideFromIl2Cpp]
+    private static LeliaDeadState ReadDeadState(Lelia lelia)
+    {
+        try
+        {
+            return lelia.LeliaDeadState;
+        }
+        catch (Exception)
+        {
+            // A destroyed player object throws on member access rather than returning null.
+            return LeliaDeadState.Live;
+        }
+    }
+
+    /// <summary>
+    /// One trigger per stage of a defeat.
+    ///
+    /// The key is latched when the stage begins and held until the game says the stage changed.
+    /// Sampling the animator every poll instead produced a new key whenever the player's animator
+    /// moved on — the catalog held three <c>game-over/lelia/…</c> rows for one defeat in
+    /// <c>Dungeon_Swamp_Boss</c> (<c>Damage3_Wall</c>, <c>Damage3_Wall_Down</c>, <c>Idle_Injured</c>) —
+    /// so playback restarted and stopped through the very performance it was meant to accompany
+    /// (SPEC001 6.2.2, FR-064).
+    /// </summary>
+    [HideFromIl2Cpp]
+    private EventObservation ObserveGameOver(Lelia lelia, LeliaDeadState deadState)
+    {
+        string scene = SceneManager.GetActiveScene().name;
+        if (_gameOverKey is null || deadState != _gameOverState)
+        {
+            string actor = BinderActorId.Resolve(lelia) ?? "lelia";
+            if (!TryReadAnimator(lelia.m_Animator, out AnimatorSample sample, out string failure))
+            {
+                // Not every defeat is performed by the player's animator; some are scripted
+                // performances elsewhere in the scene. The stage still happened and is still
+                // authorable, so it is named after the game's own state rather than dropped —
+                // dropping it is what left the boss defeats with no trigger at all.
+                sample = new AnimatorSample(deadState.ToString(), 0, 0, false);
+                _log?.LogInfo(
+                    $"[game-over] {deadState} in '{scene}' is not driven by the player's animator "
+                    + $"({failure}); the stage is catalogued as '{sample.AnimationId}'.");
+            }
+
+            _gameOverState = deadState;
+            _gameOverSample = sample;
+            _gameOverKey = new EventKey("game-over", actor, sample.AnimationId, "reaction", deadState.ToString());
+            _log?.LogInfo(
+                $"[game-over] {_gameOverKey}: scene={scene}, held={lelia.IsHold}, hp0={lelia.IsHP0}, "
+                + $"clip={sample.ClipLengthSeconds:0.###}s, loop={sample.IsLooping}.");
+        }
+
+        // The seek only matters while the latched clip is still the one running; once it is not,
+        // the last reading is kept rather than restarting the trigger.
+        double normalizedTime = _gameOverSample.NormalizedTime;
+        if (TryReadAnimator(lelia.m_Animator, out AnimatorSample live)
+            && string.Equals(live.AnimationId, _gameOverSample.AnimationId, StringComparison.Ordinal))
+        {
+            normalizedTime = live.NormalizedTime;
+        }
+
+        return new EventObservation(
+            _gameOverKey.Value,
+            normalizedTime,
+            _gameOverSample.ClipLengthSeconds,
+            _gameOverSample.IsLooping,
+            scene,
+            DateTimeOffset.UtcNow);
+    }
+
+    /// <summary>Ends a defeat so the next one latches afresh.</summary>
+    [HideFromIl2Cpp]
+    private void ForgetGameOver()
+    {
+        if (_gameOverKey is null)
+        {
+            return;
+        }
+
+        _log?.LogInfo($"[game-over] {_gameOverKey} ended; the player is alive again.");
+        _gameOverKey = null;
+        _gameOverState = LeliaDeadState.Live;
     }
 
     /// <summary>
@@ -737,6 +835,10 @@ public sealed class RuntimeObserver : MonoBehaviour
         }
 
         _currentEvent = null;
+        // A defeat cannot survive the observer losing sight of the player: the next one has to
+        // latch its own stage rather than resume the last.
+        _gameOverKey = null;
+        _gameOverState = LeliaDeadState.Live;
         PublishLive(null);
         _coordinator!.SetInactive();
     }

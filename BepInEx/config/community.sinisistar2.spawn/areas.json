@@ -1,0 +1,11 @@
+{
+  // SPEC004 6章 areas.json — SceneID 名 → エリア別上書き。
+  // 未記載のエリアはグローバル設定 (community.sinisistar2.spawn.cfg) を使う。
+  // 例:
+  // "Road_1_0": {
+  //   "spawnCountMultiplierMin": 1.2,
+  //   "spawnCountMultiplierMax": 2.0,
+  //   "ambushChance": 0.5,
+  //   "excluded": false
+  // }
+}

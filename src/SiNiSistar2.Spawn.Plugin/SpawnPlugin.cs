@@ -162,17 +162,22 @@ public sealed class SpawnPlugin : BasePlugin
 
         ConfigEntry<bool> logInterventions = Config.Bind("Diagnostics", "LogInterventions", defaults.LogInterventions, "Log each intervention (AC-301..AC-315 rely on this).");
 
+        // The game binds no function keys at all (it is entirely on the new input system), so the
+        // only contention is between MODs: F6 opens the funscript authoring GUI and F7..F11 are
+        // the pleasure MOD's screens. F12 is Steam's screenshot key. That leaves F1..F5, and F4
+        // is avoided because Alt+F4 sits next to a key meant to be pressed repeatedly.
         ConfigEntry<KeyCode> hudHotkey = Config.Bind(
             "Debug",
             "HudHotkey",
             KeyCode.F5,
-            "Cycles the HUD: Off -> Compact -> Full. F7..F11 belong to the pleasure MOD; pick a "
-            + "key none of the installed MODs use.");
+            "Cycles the HUD: Off -> Compact -> Full. Taken by other MODs in this game folder: F6 "
+            + "(funscript authoring GUI), F7..F11 (pleasure MOD screens). F12 is Steam's "
+            + "screenshot key.");
         ConfigEntry<KeyCode> panelHotkey = Config.Bind(
             "Debug",
             "DebugPanelHotkey",
-            KeyCode.F6,
-            "Opens and closes the debug command panel.");
+            KeyCode.F3,
+            "Opens and closes the debug command panel. See HudHotkey for the keys already taken.");
         ConfigEntry<HudMode> hudMode = Config.Bind(
             "Debug",
             "HudMode",
@@ -189,9 +194,48 @@ public sealed class SpawnPlugin : BasePlugin
         SpawnRuntime.HudHotkey = hudHotkey.Value;
         SpawnRuntime.DebugPanelHotkey = panelHotkey.Value;
 
+        // Two features on one key means the second one silently never runs.
+        if (hudHotkey.Value != KeyCode.None && hudHotkey.Value == panelHotkey.Value)
+        {
+            Log.LogWarning(
+                $"HudHotkey and DebugPanelHotkey are both {hudHotkey.Value}; only the HUD will "
+                + "respond. Give the debug panel a different key.");
+        }
+
         _enabledEntry.SettingChanged += (_, _) =>
         {
             SpawnRuntime.Enabled = _enabledEntry.Value;
+        };
+
+        // Turning the commands on is the one setting whose whole audience is mid-session: someone
+        // who has just opened the panel and found the keys inert. Requiring a restart there is the
+        // difference between a usable tool and a dead end.
+        debugCommands.SettingChanged += (_, _) =>
+        {
+            SpawnRuntime.Profile = SpawnRuntime.Profile with { DebugCommandsEnabled = debugCommands.Value };
+            Log.LogInfo(
+                $"[debug] commands are now {(debugCommands.Value ? "ACTIVE" : "off")}; "
+                + $"open the panel with {SpawnRuntime.DebugPanelHotkey}.");
+        };
+
+        // BepInEx never re-reads the file on its own, so opening the panel triggers it here. Only
+        // the two switches meant to be live are applied; the tuning values are still read once at
+        // startup, which is what the config comments say.
+        // Writing the entry persists it (BepInEx saves on set) and fires SettingChanged above,
+        // which is what pushes the new value into the active profile.
+        SpawnRuntime.SetDebugCommands = value => debugCommands.Value = value;
+
+        SpawnRuntime.ReloadConfig = () =>
+        {
+            try
+            {
+                Config.Reload();
+                SpawnRuntime.Profile = SpawnRuntime.Profile with { DebugCommandsEnabled = debugCommands.Value };
+            }
+            catch (Exception exception)
+            {
+                Log.LogWarning($"The config file could not be re-read: {exception.Message}");
+            }
         };
 
         return new SpawnOptions

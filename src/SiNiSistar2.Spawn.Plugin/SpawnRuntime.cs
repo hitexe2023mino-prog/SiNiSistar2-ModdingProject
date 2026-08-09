@@ -1,6 +1,7 @@
 using BepInEx.Logging;
 using SiNiSistar2.Obj;
 using SiNiSistar2.Spawn.Core;
+using UnityEngine;
 
 namespace SiNiSistar2.Spawn.Plugin;
 
@@ -43,10 +44,23 @@ internal static class SpawnRuntime
     /// <summary>The current visit's random stream (SPEC004 5.6); reseeded on every area entry.</summary>
     internal static IRandomSource Random = new SystemRandomSource();
 
+    /// <summary>
+    /// Re-reads the config file. BepInEx does not watch the file, so without this an edit made
+    /// while the game runs would have no effect and the panel's own instructions would be a lie.
+    /// Invoked when the debug panel opens; applies the debug switch and the master Enabled switch.
+    /// </summary>
+    internal static Action? ReloadConfig;
+
+    /// <summary>
+    /// Turns the debug commands on or off and persists the choice to the config file, so the
+    /// switch can be thrown from the panel that reports it (SPEC004 5.9, FR-337).
+    /// </summary>
+    internal static Action<bool>? SetDebugCommands;
+
     /// <summary>HUD and debug panel hotkeys (SPEC004 6章 [Debug]).</summary>
     internal static UnityEngine.KeyCode HudHotkey = UnityEngine.KeyCode.F5;
 
-    internal static UnityEngine.KeyCode DebugPanelHotkey = UnityEngine.KeyCode.F6;
+    internal static UnityEngine.KeyCode DebugPanelHotkey = UnityEngine.KeyCode.F3;
 
     /// <summary>
     /// Pseudo-treasure-box registry keyed by EnemyObject instance id. Only instances registered
@@ -63,6 +77,12 @@ internal static class SpawnRuntime
     /// (SPEC004 5.9 抽選固定, FR-333).
     /// </summary>
     internal static bool? PinnedMimicOutcome;
+
+    /// <summary>
+    /// A copy to re-read shortly after it was made. Grounding is settled by the physics step, so
+    /// reading it on the spawn frame cannot tell "not evaluated yet" from "never grounded".
+    /// </summary>
+    internal static (EnemyObject Enemy, double Due, Vector3 SpawnedAt)? PendingCopyCheck;
 
     internal static int MimicHits;
 

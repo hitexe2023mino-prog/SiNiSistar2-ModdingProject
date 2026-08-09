@@ -271,6 +271,7 @@ function selectFiller(filler) {
 
   renderFillers();
   renderVariantBar();
+  simReset();
   draw();
 }
 
@@ -436,6 +437,7 @@ async function selectTrigger(trigger) {
   renderCatalog();
   renderVariantBar();
   renderLinkInfo();
+  simReset();
   draw();
 }
 
@@ -754,6 +756,405 @@ function draw() {
       ctx.fill();
     }
   }
+
+  // Simulation playhead: the moving devices below and this line are one picture, so the reader
+  // can tie "this part of the curve" to "this motion" (SPEC001 6.7-16).
+  if (sim.playing || sim.timeMs > 0) {
+    const x = toX(clamp(sim.timeMs, 0, state.duration), area);
+    ctx.strokeStyle = '#4fbf7b';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x, area.y);
+    ctx.lineTo(x, area.y + area.h);
+    ctx.stroke();
+    ctx.fillStyle = '#4fbf7b';
+    ctx.beginPath();
+    ctx.moveTo(x - 5, area.y);
+    ctx.lineTo(x + 5, area.y);
+    ctx.lineTo(x, area.y + 7);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+// ------------------------------------------- device-motion simulation (SPEC001 6.7-16, FR-065)
+
+// Mirrors ButtplugDevice.SendCmd in EDI: a rotate command's speed is the segment slope divided
+// by 450 units/s (clamped to 1), and the spin direction flips at a uniform random 500–2500 ms
+// interval that has nothing to do with the waveform. Keep in step with the EDI source.
+const ROTATE_FULL_SPEED_UNITS_PER_SECOND = 450;
+const ROTATE_FLIP_MIN_MS = 500;
+const ROTATE_FLIP_MAX_MS = 2500;
+
+// Visual full-speed spin. The real rotor is faster, but past ~2.5 turns/s the animation aliases
+// on a 60 Hz screen and reads as flicker, which defeats the point of showing speed.
+const SIM_ROTOR_MAX_TURNS_PER_SECOND = 2.2;
+
+const sim = {
+  playing: false,
+  timeMs: 0,
+  lastFrameAt: null,
+  raf: 0,
+  // variant -> { angle, direction, flipInMs }
+  rotors: {},
+};
+
+const nextFlipInterval = () =>
+  ROTATE_FLIP_MIN_MS + Math.random() * (ROTATE_FLIP_MAX_MS - ROTATE_FLIP_MIN_MS);
+
+// The roster decides what a variant drives; 'a10-main' is the linear piston, everything else in
+// this MOD's roster is a rotor. The set of devices always comes from the catalog, never from here.
+const isPistonVariant = (variant) => variant === 'a10-main';
+
+function simTargets() {
+  return (state.catalog && state.catalog.outputs ? state.catalog.outputs : [])
+    .map((output) => ({ output, points: state.scripts[output.variant] || [] }));
+}
+
+const simLoops = () => (isFillerMode() ? true : el('repeat').checked);
+
+/** Linear interpolation over a point list; what the drawn line commands at a moment. */
+function sampleAt(points, timeMs) {
+  if (points.length === 0) {
+    return null;
+  }
+  if (timeMs <= points[0].at) {
+    return points[0].pos;
+  }
+  for (let index = 1; index < points.length; index += 1) {
+    if (timeMs <= points[index].at) {
+      const a = points[index - 1];
+      const b = points[index];
+      const span = b.at - a.at;
+      return span <= 0 ? b.pos : a.pos + ((b.pos - a.pos) * (timeMs - a.at)) / span;
+    }
+  }
+  return points[points.length - 1].pos;
+}
+
+/** Where the carriage actually is: the reachable trace, not the drawn line (AC-067). */
+function reachablePosAt(points, timeMs) {
+  const trace = simulateDevice(points);
+  return trace.length > 1 ? sampleAt(trace, timeMs) : sampleAt(points, timeMs);
+}
+
+/**
+ * The rotation intensity a rotor is commanded at a moment: the slope of the active segment,
+ * normalized by the 450 units/s full-speed constant (AC-068). Before the first point there is
+ * no command yet, so the rotor is still.
+ */
+function rotorSpeedNormAt(points, timeMs) {
+  if (points.length < 2 || timeMs < points[0].at) {
+    return 0;
+  }
+  for (let index = 1; index < points.length; index += 1) {
+    if (timeMs <= points[index].at) {
+      const a = points[index - 1];
+      const b = points[index];
+      const span = b.at - a.at;
+      if (span <= 0) {
+        return 0;
+      }
+      const unitsPerSecond = (Math.abs(b.pos - a.pos) * 1000) / span;
+      return Math.min(1, unitsPerSecond / ROTATE_FULL_SPEED_UNITS_PER_SECOND);
+    }
+  }
+  return 0;
+}
+
+function updateSimControls() {
+  el('simToggle').textContent = sim.playing ? '⏸ 一時停止' : '▶ 動作シミュレーション';
+  el('simClock').textContent = `${Math.round(clamp(sim.timeMs, 0, state.duration))} / ${state.duration} ms`;
+}
+
+/** Stops playback and rewinds. Called whenever another stage or filler is loaded. */
+function simReset() {
+  if (sim.raf) {
+    cancelAnimationFrame(sim.raf);
+    sim.raf = 0;
+  }
+  sim.playing = false;
+  sim.timeMs = 0;
+  sim.lastFrameAt = null;
+  sim.rotors = {};
+  updateSimControls();
+  drawSim();
+}
+
+function simFrame(now) {
+  sim.raf = 0;
+  if (!sim.playing) {
+    return;
+  }
+  if (el('editor').hidden || !isEditing()) {
+    simReset();
+    return;
+  }
+
+  const dt = sim.lastFrameAt === null ? 0 : Math.min(100, now - sim.lastFrameAt);
+  sim.lastFrameAt = now;
+  const duration = Math.max(1, state.duration);
+  const loops = simLoops();
+  let atEnd = false;
+  sim.timeMs += dt;
+  if (sim.timeMs >= duration) {
+    if (loops) {
+      sim.timeMs %= duration;
+    } else {
+      // Play once, then the device sits still — the same thing the real gallery does (5.2.9).
+      sim.timeMs = duration;
+      atEnd = true;
+    }
+  }
+
+  for (const { output, points } of simTargets()) {
+    if (isPistonVariant(output.variant) || points.length < 2) {
+      continue;
+    }
+    let rotor = sim.rotors[output.variant];
+    if (!rotor) {
+      rotor = { angle: 0, direction: 1, flipInMs: nextFlipInterval() };
+      sim.rotors[output.variant] = rotor;
+    }
+    rotor.flipInMs -= dt;
+    while (rotor.flipInMs <= 0) {
+      rotor.direction = -rotor.direction;
+      rotor.flipInMs += nextFlipInterval();
+    }
+    const norm = atEnd ? 0 : rotorSpeedNormAt(points, sim.timeMs);
+    rotor.angle += (rotor.direction * norm * SIM_ROTOR_MAX_TURNS_PER_SECOND * 2 * Math.PI * dt) / 1000;
+  }
+
+  draw();
+  drawSim();
+  updateSimControls();
+
+  if (atEnd) {
+    sim.playing = false;
+    updateSimControls();
+    return;
+  }
+  sim.raf = requestAnimationFrame(simFrame);
+}
+
+// --- rendering ---
+
+const SIM_COLORS = {
+  text: '#e6e9ef',
+  muted: '#97a0b0',
+  line: '#333a47',
+  well: '#232833',
+  accent: '#5aa9e6',
+  ok: '#4fbf7b',
+  warn: '#e0a340',
+};
+
+function drawSim() {
+  const canvas = el('simCanvas');
+  if (!canvas) {
+    return;
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const targets = simTargets();
+  if (targets.length === 0) {
+    return;
+  }
+
+  const cellW = canvas.width / targets.length;
+  const atEnd = !simLoops() && sim.timeMs >= state.duration;
+  targets.forEach(({ output, points }, index) => {
+    ctx.save();
+    ctx.translate(index * cellW, 0);
+    if (index > 0) {
+      ctx.strokeStyle = SIM_COLORS.line;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0.5, 12);
+      ctx.lineTo(0.5, canvas.height - 12);
+      ctx.stroke();
+    }
+
+    const hasWave = points.length >= 2;
+    ctx.fillStyle = hasWave ? SIM_COLORS.text : SIM_COLORS.muted;
+    ctx.font = '600 13px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(output.displayName || output.id, cellW / 2, 22);
+    ctx.fillStyle = SIM_COLORS.muted;
+    ctx.font = '11px "Segoe UI", sans-serif';
+    ctx.fillText(output.variant, cellW / 2, 38);
+
+    if (isPistonVariant(output.variant)) {
+      drawPistonCell(ctx, cellW, canvas.height, points, hasWave);
+    } else {
+      drawRotorCell(ctx, cellW, canvas.height, output.variant, points, hasWave, atEnd);
+    }
+
+    if (!hasWave) {
+      ctx.fillStyle = SIM_COLORS.muted;
+      ctx.font = '11px "Segoe UI", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('波形なし — 動きません', cellW / 2, canvas.height - 10);
+    }
+    ctx.restore();
+  });
+}
+
+/** Vertical track and carriage. The carriage follows the reachable trace; a dashed marker shows
+    the drawn line, so a stroke the piston cannot finish is visible as the two separating. */
+function drawPistonCell(ctx, cellW, cellH, points, hasWave) {
+  const trackW = 46;
+  const trackX = (cellW - trackW) / 2;
+  const trackY = 52;
+  const trackH = cellH - trackY - 30;
+
+  ctx.strokeStyle = SIM_COLORS.line;
+  ctx.fillStyle = SIM_COLORS.well;
+  ctx.lineWidth = 1;
+  roundedRect(ctx, trackX, trackY, trackW, trackH, 8);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = SIM_COLORS.muted;
+  ctx.font = '10px "Segoe UI", sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('100', trackX - 6, trackY + 8);
+  ctx.fillText('0', trackX - 6, trackY + trackH);
+
+  if (!hasWave) {
+    return;
+  }
+
+  const t = clamp(sim.timeMs, 0, state.duration);
+  const posToY = (pos) => trackY + 14 + (1 - pos / 100) * (trackH - 28);
+
+  // Drawn target (what the author asked for), as a dashed marker behind the carriage.
+  const drawn = sampleAt(points, t);
+  if (drawn !== null) {
+    const y = posToY(drawn);
+    ctx.strokeStyle = SIM_COLORS.warn;
+    ctx.setLineDash([4, 3]);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(trackX - 4, y);
+    ctx.lineTo(trackX + trackW + 4, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // The carriage itself, at the position the device can actually reach.
+  const reached = reachablePosAt(points, t);
+  if (reached !== null) {
+    const y = posToY(reached);
+    ctx.fillStyle = SIM_COLORS.accent;
+    roundedRect(ctx, trackX + 4, y - 12, trackW - 8, 24, 6);
+    ctx.fill();
+    ctx.fillStyle = SIM_COLORS.text;
+    ctx.font = '11px "Segoe UI", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(`${Math.round(reached)}`, trackX + trackW + 10, y + 4);
+  }
+}
+
+/** Spinning rotor with an intensity ring: the ring is what the waveform commands (slope / 450),
+    the spin direction is the random flip the real device performs (AC-068). */
+function drawRotorCell(ctx, cellW, cellH, variant, points, hasWave, atEnd) {
+  const cx = cellW / 2;
+  const cy = 52 + (cellH - 52 - 30) / 2;
+  const radius = Math.min(52, (cellH - 52 - 44) / 2);
+
+  const t = clamp(sim.timeMs, 0, state.duration);
+  const norm = hasWave && !atEnd ? rotorSpeedNormAt(points, t) : 0;
+  const rotor = sim.rotors[variant];
+
+  // Intensity ring: full track in line color, commanded intensity on top of it.
+  ctx.strokeStyle = SIM_COLORS.line;
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius + 10, 0, Math.PI * 2);
+  ctx.stroke();
+  if (norm > 0) {
+    ctx.strokeStyle = SIM_COLORS.accent;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + 10, -Math.PI / 2, -Math.PI / 2 + norm * Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Rotor blades.
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rotor ? rotor.angle : 0);
+  const bladeColor = hasWave ? (norm > 0 ? SIM_COLORS.accent : SIM_COLORS.muted) : SIM_COLORS.line;
+  for (let blade = 0; blade < 3; blade += 1) {
+    ctx.save();
+    ctx.rotate((blade * 2 * Math.PI) / 3);
+    ctx.fillStyle = bladeColor;
+    ctx.beginPath();
+    ctx.ellipse(0, -radius * 0.55, radius * 0.24, radius * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.fillStyle = SIM_COLORS.well;
+  ctx.strokeStyle = SIM_COLORS.line;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * 0.22, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  if (hasWave) {
+    const direction = rotor ? rotor.direction : 1;
+    ctx.fillStyle = norm > 0 ? SIM_COLORS.text : SIM_COLORS.muted;
+    ctx.font = '11px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(
+      `強度 ${Math.round(norm * 100)}% ${direction > 0 ? '⟳' : '⟲'}`,
+      cx,
+      cy + radius + 28,
+    );
+  }
+}
+
+function roundedRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function attachSimControls() {
+  el('simToggle').addEventListener('click', () => {
+    if (!isEditing()) {
+      return;
+    }
+    if (sim.playing) {
+      sim.playing = false;
+      if (sim.raf) {
+        cancelAnimationFrame(sim.raf);
+        sim.raf = 0;
+      }
+      updateSimControls();
+      return;
+    }
+    if (sim.timeMs >= state.duration) {
+      sim.timeMs = 0;
+      sim.rotors = {};
+    }
+    sim.playing = true;
+    sim.lastFrameAt = null;
+    updateSimControls();
+    sim.raf = requestAnimationFrame(simFrame);
+  });
+
+  el('simStop').addEventListener('click', () => {
+    simReset();
+    draw();
+  });
 }
 
 function hitTest(px, py) {
@@ -1373,6 +1774,7 @@ function attachControls() {
 
 attachCanvasHandlers();
 attachControls();
+attachSimControls();
 loadCatalog();
 updatePlayingBanner();
 

@@ -37,6 +37,8 @@ internal static class SpawnDiagnostics
                 simpleRows.Add(DescribeSimpleArea(area, ref mimicPools));
             }
 
+            Dictionary<string, int> histogram = GimmickHistogram();
+
             var document = new
             {
                 scene = sceneName,
@@ -45,8 +47,11 @@ internal static class SpawnDiagnostics
                 mimicPoolCount = mimicPools,
                 spawners = spawnerRows,
                 simpleSpawnAreas = simpleRows,
-                treasureBoxLabels = CountByType<TreasureBoxParameter>(),
-                gimmickTypeHistogram = GimmickHistogram(),
+                // TreasureBoxParameter is an Il2CppSystem.Object, not a UnityEngine.Object, so it
+                // cannot be searched for; its MonoBehaviour is counted through the histogram.
+                treasureBoxLabels = histogram.TryGetValue("TreasureBoxLabel", out int boxes) ? boxes : 0,
+                sceneEnemies = SceneEnemies(),
+                gimmickTypeHistogram = histogram,
             };
 
             string directory = DiagnosticsDirectory();
@@ -114,17 +119,37 @@ internal static class SpawnDiagnostics
         }
     }
 
-    private static int CountByType<T>()
-        where T : Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase
+    /// <summary>
+    /// The enemies actually present in the scene, by <c>EnemyID</c>.
+    ///
+    /// This build populates ordinary areas with concrete <c>EnemyObject</c> instances rather than
+    /// with <c>EnemySpawner</c>, so this is the inventory that describes what an area really
+    /// contains — the spawner list is empty in every area checked so far.
+    /// </summary>
+    internal static Dictionary<string, int> SceneEnemies()
     {
+        var histogram = new Dictionary<string, int>(StringComparer.Ordinal);
         try
         {
-            return UnityEngine.Object.FindObjectsOfType(Il2CppType.Of<T>()).Length;
+            foreach (UnityEngine.Object obj in UnityEngine.Object.FindObjectsOfType(
+                Il2CppType.Of<EnemyObject>(), includeInactive: true))
+            {
+                EnemyObject? enemy = obj.TryCast<EnemyObject>();
+                if (enemy is null)
+                {
+                    continue;
+                }
+
+                string id = enemy.m_EnemyID.ToString();
+                histogram[id] = histogram.TryGetValue(id, out int count) ? count + 1 : 1;
+            }
         }
-        catch (Exception)
+        catch (Exception exception)
         {
-            return -1;
+            SpawnRuntime.Log?.LogWarning($"Scene enemy scan failed: {exception.Message}");
         }
+
+        return histogram;
     }
 
     /// <summary>
@@ -136,7 +161,7 @@ internal static class SpawnDiagnostics
         var histogram = new Dictionary<string, int>(StringComparer.Ordinal);
         try
         {
-            foreach (UnityEngine.Object obj in UnityEngine.Object.FindObjectsOfType(Il2CppType.Of<MonoBehaviour>()))
+            foreach (UnityEngine.Object obj in UnityEngine.Object.FindObjectsOfType(Il2CppType.Of<MonoBehaviour>(), includeInactive: true))
             {
                 MonoBehaviour? behaviour = obj.TryCast<MonoBehaviour>();
                 if (behaviour is null)

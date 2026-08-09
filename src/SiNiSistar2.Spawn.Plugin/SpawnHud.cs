@@ -18,6 +18,7 @@ internal sealed class SpawnHud
 {
     private const float Margin = 8f;
     private const float LineHeight = 18f;
+    private const float ButtonHeight = 24f;
     private const float PanelWidth = 560f;
 
     private static readonly Color Backdrop = new(0f, 0f, 0f, 0.72f);
@@ -28,10 +29,19 @@ internal sealed class SpawnHud
     private GUIStyle? _boxStyle;
     private Texture2D? _solid;
     private bool _faultLogged;
+    private bool _cursorSaved;
+    private bool _previousCursorVisible;
+    private CursorLockMode _previousCursorLock;
 
     internal HudMode Mode { get; set; } = HudMode.Off;
 
     internal bool DebugPanelOpen { get; private set; }
+
+    /// <summary>
+    /// Set when a command key was pressed while commands are off, so the panel can say why
+    /// nothing happened. Cleared when the panel is closed.
+    /// </summary>
+    internal bool PressedWhileDisabled { get; private set; }
 
     /// <summary>Set by the observer each frame; the HUD never reads the game itself (FR-327).</summary>
     internal HudSnapshot Snapshot { get; set; } = new();
@@ -55,6 +65,7 @@ internal sealed class SpawnHud
         try
         {
             HandleKeys(hudKey, debugKey, commandsEnabled);
+            ApplyCursor(DebugPanelOpen);
 
             if (Mode != HudMode.Off)
             {
@@ -81,6 +92,45 @@ internal sealed class SpawnHud
         }
     }
 
+    /// <summary>
+    /// Buttons need a pointer. This is the one piece of game state the HUD writes, it is confined
+    /// to the debug panel being open, and the previous values are put back when it closes
+    /// (SPEC004 5.9, the stated exception to FR-327).
+    /// </summary>
+    private void ApplyCursor(bool panelOpen)
+    {
+        if (panelOpen)
+        {
+            if (!_cursorSaved)
+            {
+                _previousCursorVisible = Cursor.visible;
+                _previousCursorLock = Cursor.lockState;
+                _cursorSaved = true;
+            }
+
+            if (!Cursor.visible)
+            {
+                Cursor.visible = true;
+            }
+
+            if (Cursor.lockState != CursorLockMode.None)
+            {
+                Cursor.lockState = CursorLockMode.None;
+            }
+
+            return;
+        }
+
+        if (!_cursorSaved)
+        {
+            return;
+        }
+
+        Cursor.visible = _previousCursorVisible;
+        Cursor.lockState = _previousCursorLock;
+        _cursorSaved = false;
+    }
+
     private void HandleKeys(KeyCode hudKey, KeyCode debugKey, bool commandsEnabled)
     {
         // Fully qualified: the game has its own SiNiSistar2.Event namespace, which wins here.
@@ -100,24 +150,44 @@ internal sealed class SpawnHud
         if (current.keyCode == debugKey)
         {
             DebugPanelOpen = !DebugPanelOpen;
+            PressedWhileDisabled = false;
             current.Use();
             return;
         }
 
-        if (!DebugPanelOpen || !commandsEnabled)
+        if (!DebugPanelOpen)
         {
-            // FR-331: with commands off the panel is readable but inert.
+            return;
+        }
+
+        // Enable only. It never disables, so pressing it again when a command looks unresponsive
+        // cannot turn the tool off (HudModel.ToggleKey).
+        if (IsDigitKey(current.keyCode, HudModel.ToggleKey))
+        {
+            PendingCommand = HudModel.ToggleKey;
+            PressedWhileDisabled = false;
+            current.Use();
             return;
         }
 
         foreach ((char key, _) in HudModel.Commands)
         {
-            if (current.keyCode == DigitKey(key))
+            if (!IsDigitKey(current.keyCode, key))
+            {
+                continue;
+            }
+
+            if (commandsEnabled)
             {
                 PendingCommand = key;
-                current.Use();
-                return;
             }
+            else
+            {
+                NoteDisabledPress(key);
+            }
+
+            current.Use();
+            return;
         }
     }
 
@@ -132,18 +202,81 @@ internal sealed class SpawnHud
         DrawLines(Margin, HudModel.Full(Snapshot), Foreground);
     }
 
+    /// <summary>
+    /// The panel, drawn as real buttons rather than a printed key list. Reading a list and
+    /// remembering which number to press is work the panel can do for the user, and it removes
+    /// the whole class of "I pressed a key and cannot tell whether it registered".
+    /// </summary>
     private void DrawDebugPanel()
     {
-        IReadOnlyList<string> lines = HudModel.DebugPanel(Snapshot);
+        IReadOnlyList<string> header = HudModel.DebugHeader(Snapshot, PressedWhileDisabled);
+        bool enabled = Snapshot.DebugCommandsEnabled;
+
         float top = Margin + ((Mode == HudMode.Off ? 0 : LineCount()) * LineHeight) + (Margin * 2f);
-        DrawLines(top, lines, Accent);
+        float left = Math.Max(Margin, Screen.width - PanelWidth - Margin);
+        float height = (header.Count * LineHeight) + ((HudModel.Commands.Count + 1) * ButtonHeight)
+            + (Margin * 3f);
+        var panel = new Rect(left, top, PanelWidth, height);
+
+        Color previous = GUI.color;
+        GUI.color = Backdrop;
+        GUI.Box(panel, GUIContent.none, BoxStyle);
+
+        GUI.color = Accent;
+        float y = panel.y + Margin;
+        foreach (string line in header)
+        {
+            GUI.Label(new Rect(panel.x + Margin, y, panel.width - (Margin * 2f), LineHeight), line, TextStyle);
+            y += LineHeight;
+        }
+
+        // Buttons use the built-in skin so they look and behave like buttons; the tint is reset
+        // first because a coloured GUI.color would wash them out.
+        GUI.color = Color.white;
+        y += Margin;
+
+        var switchArea = new Rect(panel.x + Margin, y, panel.width - (Margin * 2f), ButtonHeight - 2f);
+        if (GUI.Button(switchArea, HudModel.ToggleLabel(enabled)))
+        {
+            PendingCommand = enabled ? HudModel.DisableCommand : HudModel.ToggleKey;
+            PressedWhileDisabled = false;
+        }
+
+        y += ButtonHeight;
+
+        foreach ((char key, string label) in HudModel.Commands)
+        {
+            var area = new Rect(panel.x + Margin, y, panel.width - (Margin * 2f), ButtonHeight - 2f);
+            bool clicked = GUI.Button(area, HudModel.CommandLabel(key, label));
+            y += ButtonHeight;
+
+            if (!clicked)
+            {
+                continue;
+            }
+
+            if (enabled)
+            {
+                PendingCommand = key;
+            }
+            else
+            {
+                // Same acknowledgement a keypress gets, so a click is never silently dropped.
+                NoteDisabledPress(key);
+            }
+        }
+
+        GUI.color = previous;
     }
 
     private int LineCount() => Mode == HudMode.Compact ? 1 : HudModel.Full(Snapshot).Count;
 
     private void DrawLines(float top, IReadOnlyList<string> lines, Color colour)
     {
-        var area = new Rect(Margin, top, PanelWidth, (lines.Count * LineHeight) + (Margin * 2f));
+        // Top-right: the player portrait and status sit in the top-left corner, and an overlay on
+        // top of them hides the very thing being played.
+        float left = Math.Max(Margin, Screen.width - PanelWidth - Margin);
+        var area = new Rect(left, top, PanelWidth, (lines.Count * LineHeight) + (Margin * 2f));
 
         Color previous = GUI.color;
         GUI.color = Backdrop;
@@ -187,5 +320,30 @@ internal sealed class SpawnHud
         }
     }
 
-    private static KeyCode DigitKey(char digit) => KeyCode.Alpha0 + (digit - '0');
+    /// <summary>
+    /// FR-331 keeps the panel inert while commands are off, but silence is what made this look
+    /// broken. The attempt is acknowledged once per panel session and points at the switch.
+    /// </summary>
+    private void NoteDisabledPress(char key)
+    {
+        if (PressedWhileDisabled)
+        {
+            return;
+        }
+
+        PressedWhileDisabled = true;
+        SpawnRuntime.Log?.LogWarning(
+            $"[debug] '{key}' did nothing: debug commands are off. Click the COMMANDS switch at "
+            + $"the top of the panel, or press {HudModel.ToggleKey}, to turn them on.");
+    }
+
+    /// <summary>
+    /// Accepts the number row and the numpad. Only the number row was handled at first, which
+    /// makes the panel look dead to anyone reaching for the keypad.
+    /// </summary>
+    private static bool IsDigitKey(KeyCode pressed, char digit)
+    {
+        var offset = digit - '0';
+        return pressed == KeyCode.Alpha0 + offset || pressed == KeyCode.Keypad0 + offset;
+    }
 }

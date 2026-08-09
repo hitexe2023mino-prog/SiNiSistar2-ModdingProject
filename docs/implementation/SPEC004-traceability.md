@@ -15,6 +15,8 @@ In-game verification steps live in [`docs/testing/SPEC004-test-scenarios.md`](..
 
 `dotnet test .\tests\SiNiSistar2.Spawn.Core.Tests\SiNiSistar2.Spawn.Core.Tests.csproj -c Release` → 99 tests, 0 failures.
 
+`HotkeyCollisionTests` scans every other plugin's sources for hotkey defaults in **both** spellings — `KeyCode.Fn` and the quoted `"Fn"` a string-typed config entry uses — and fails if this MOD's defaults collide. It was added after the debug panel shipped on F6, the funscript authoring GUI's key, which a search for `KeyCode.F6` could not have found.
+
 `ForbiddenSurfaceTests` scans `src/SiNiSistar2.Spawn.Plugin/**/*.cs` with comments stripped and fails the build if a forbidden member is assigned or named (`*Hard` field assignment, treasure box members, `ForceDeadDamage`, `UnityEngine.Random`, save members, plugin dependencies, the game's UI and `timeScale`). It also asserts that `SpawnHud` never reaches for `ManagerList` or the profile, so FR-327's read-only rule holds structurally rather than by review.
 
 ## 要件台帳
@@ -50,7 +52,24 @@ In-game verification steps live in [`docs/testing/SPEC004-test-scenarios.md`](..
 | FR-328 | IMGUI限定、Canvas・`timeScale` に触れない | `SpawnHud`（`GUI.Box` / `GUI.Label` のみ） | `ForbiddenSurfaceTests.TheHudNeverReachesIntoTheGamesUi`（4件）、AC-308 実機 | Design-time / unverified |
 | FR-329 | 描画例外でHUDを停止し1回提示 | `SpawnHud.OnGUI` の catch（`Mode=Off`、`_faultLogged`） | 実機（例外誘発は再現困難のためコードレビュー） | Implemented / unverified |
 | FR-330 | `Full` は停滞・上限・疑似宝箱・候補数を表示 | `HudModel.Full` | `HudModelTests.FullCoversStagnationBudgetCandidatesAndBoxes` ほか6件 | Tested |
-| FR-331 | デバッグ操作は設定有効時のみ、無効時は表示のみ | `SpawnHud.HandleKeys`（`commandsEnabled` ガード）、`HudModel.DebugPanel` | `HudModelTests.DebugPanelStatesWhenCommandsAreDisabled`、AC-319 実機 | Tested / unverified |
+| FR-331 | デバッグ操作は設定有効時のみ、無効時は表示のみ | `SpawnHud.HandleKeys`（`commandsEnabled` ガード）、`HudModel.DebugPanel` | `HudModelTests.DebugPanelDropsTheNoticeOnceCommandsAreOn`、AC-319 実機 | Tested / unverified |
+| FR-334 | 無効時の押下を提示し、有効化手順を示す | `SpawnHud.HandleKeys`（`PressedWhileDisabled` と警告ログ）、`HudModel.DebugPanel`（設定キー・ファイル名・開き直し） | `HudModelTests.DebugPanelSpellsOutHowToEnableCommands` / `...AcknowledgesAPressMadeWhileDisabled`、AC-322 実機 | Tested / unverified |
+| FR-335 | パネル開放時に設定を読み直す | `SpawnRuntime.ReloadConfig`（`SpawnPlugin` が設定）、`SpawnObserver.OnGUI` の開放遷移検知 | AC-322 実機 | Implemented / unverified |
+| FR-336 | 数字段とテンキーの双方を受け付ける | `SpawnHud.IsDigitKey`（`Alpha0+n` と `Keypad0+n`） | AC-322 実機 | Implemented / unverified |
+| FR-337 | スイッチで有効・無効を切り替え永続化、状態と結果を表示 | `HudModel.ToggleLabel`、`SpawnHud.DrawDebugPanel`（スイッチボタン）、`SpawnObserver.Dispatch`、`SpawnRuntime.SetDebugCommands`（`ConfigEntry.Value` 書き込み＝BepInEx が保存） | `HudModelTests.TheSwitchLabelSaysWhatAClickWillDo`、AC-322 実機 | Tested / unverified |
+| FR-341 | 各操作をボタン化しマウスで実行 | `SpawnHud.DrawDebugPanel`（`GUI.Button`）、`HudModel.CommandLabel` | `HudModelTests.EveryCommandHasALabelledButton` / `CommandLabelsCarryTheirKey`、AC-325 実機 | Tested / unverified |
+| FR-342 | パネル開放中のカーソル表示保証と復元 | `SpawnHud.ApplyCursor`（前値退避・復元） | AC-325 実機 | Implemented / unverified |
+| FR-343 | 切り替えキーは有効化のみ | `SpawnObserver.Dispatch`（`ToggleKey` は既に ON なら無操作）、`HudModel.DisableCommand`（ボタン専用） | `HudModelTests.TheEnableKeyIsDistinctFromTheDisableCommandAndFromEveryCommand`、AC-326 実機 | Tested / unverified |
+| FR-344 | 無効時のクリックもキーと同じ提示 | `SpawnHud.NoteDisabledPress`（両経路が呼ぶ） | AC-322 実機 | Implemented / unverified |
+| FR-338 | HUDは画面右上 | `SpawnHud.DrawLines`（`Screen.width` 基準） | AC-323 実機 | Implemented / unverified |
+| FR-339 | スポナー探索は非アクティブを含める | `SpawnObserver.CollectSceneSpawners`、`GimmickCloner.CloneOne`、`SpawnDiagnostics`（すべて `includeInactive: true`） | AC-324 実機（S-0b） | Implemented / unverified |
+| FR-340 | `Full` はスポナー数と敵の実体数を表示し、0 を明示 | `HudModel.Full`、`HudSnapshot.SpawnerCount` / `SceneEnemyCount` | `HudModelTests.FullDistinguishesNoSpawnerFromNoEnemy` / `...DoesNotClaimAnEmptySceneWhenSpawnersExist` | Tested |
+| FR-345 | スポナー非在時はシーン内の敵を複製 | `AdditionalSpawner.TryCloneSceneEnemy`、`SceneEnemyCatalog.Collect` / `Clone` | 実機（S-0b、A-15 済） | Implemented / unverified |
+| FR-346 | 複製単位は他の敵を含まない最上位の祖先 | `SceneEnemyCatalog.RootOf`（親配下の `EnemyObject` が2体以上になる直前で停止） | 実機（A-17） | Gated |
+| FR-347 | ボスと部位は複製しない | `SceneEnemyCatalog.IsCopyable`（`m_IsEnemyIDOwner`、`Boss`／`Mother` 名の除外） | 実機 | Implemented / unverified |
+| FR-348 | 複製の階層パスを複製元と異ならせる | `SceneEnemyCatalog.Clone`（`name` に `-spawnmod-{instanceId}` を付す） | 実機（A-16） | Gated |
+| FR-349 | 配置先はシーン内の敵の位置 | `AdditionalSpawner.TryCloneSceneEnemy`（`positions` は実在の敵の座標のみ） | 実機 | Implemented / unverified |
+| FR-350 | 巻き戻しで複製個体を除去 | `AdditionalSpawner.DestroyClones`、`SpawnObserver.Rollback` | 実機 | Implemented / unverified |
 | FR-332 | 上限・除外・拘束中・位置条件を迂回しない | `SpawnObserver.Dispatch`（除外・一時停止の事前拒否）、`AdditionalSpawner.TrySpawnPenalty`（`forceAmbush` は条件のみ変更）、`MimicBoxPlacement.PlaceOne`（上限確認）、`StagnationDetector.FastForwardToStagnation`（時間のみ） | `StagnationProgressTests` の FastForward 3件、AC-320 実機 | Tested / unverified |
 | FR-333 | 抽選固定は1回で消費し記録 | `SpawnRuntime.PinnedMimicOutcome`、`MimicBoxPatches.HoldSetupPrefix`（消費と `PINNED` 記録）、`HudModel.Full` | `HudModelTests.FullShowsAPinnedLotteryOutcome`、AC-321 実機 | Tested / unverified |
 
@@ -64,8 +83,9 @@ In-game verification steps live in [`docs/testing/SPEC004-test-scenarios.md`](..
 6. **外れ時の非死亡除去は `gameObject.SetActive(false)`**（A-11 の候補経路）。プール返却の正規経路が実測で判明したら置き換える。
 7. **ミミック抽選の介入点は `OnlyHoldEnemy.HoldSetup`**（A-9 の候補）。`EnmID_Mimic` の実装クラスが別だった場合は `SpawnPlugin.ApplyMimicPatch` の対象だけを差し替える。
 8. **HUDの倍率欄は平均値を表示する**。倍率はスポナー毎に独立に引く（5.2）ため代表値が存在しない。1体のスポナーしかないエリアでは実測値と一致する。表示は `mean` と明記している。
-9. **ホットキーは `UnityEngine.Event.current` から読む**。ゲームの `InputManager` と Unity InputSystem を経由しないため、ゲーム側のキー割り当てと競合しない。既定は `F5` / `F6`（SPEC003 が `F7`〜`F11` を使用済み）。
-10. **停滞の早送りは `_windowForced` フラグで実現する**。合成サンプルを積む方式は次フレームの窓刈り込みで消えるため採らなかった。移動が検知された時点と実際に窓が満たされた時点でフラグは解除され、判定規則そのものは変更しない。
+9. **ホットキーは `UnityEngine.Event.current` から読む**。ゲームの `InputManager` と Unity InputSystem を経由しない。対象ビルドのゲーム本体は legacy `KeyCode` を一切使わないため、競合はMOD間でのみ起きる。既定は `F5`（HUD）/ `F3`（デバッグパネル）。占有済みは `F6`（EDI のオーサリングGUI、**文字列設定**のため `KeyCode.` の検索では見えない）、`F7`〜`F11`（快楽MOD）、`F12`（Steam のスクリーンショット）。`F4` は `Alt+F4` と隣接するため避けた。`HotkeyCollisionTests` が両方の綴りを走査してビルド時に検証する。
+10. **BepInEx は設定ファイルを監視しない**。`ConfigFile` に `Reload()` はあるが `FileSystemWatcher` は無いため、実行中の編集は自身で読み直さない限り反映されない。パネル開放時に `Config.Reload()` を呼ぶことで FR-335 を成立させている。読み直しの対象を2つの切替に限るのは、検証済みプロファイルを実行中に差し替えるとHUDの表示と実際の介入が食い違うためである（DEC-317）。
+11. **停滞の早送りは `_windowForced` フラグで実現する**。合成サンプルを積む方式は次フレームの窓刈り込みで消えるため採らなかった。移動が検知された時点と実際に窓が満たされた時点でフラグは解除され、判定規則そのものは変更しない。
 
 ## 付録A 実測の現況
 
@@ -82,3 +102,6 @@ In-game verification steps live in [`docs/testing/SPEC004-test-scenarios.md`](..
 | A-10 | `AddItem` / `Play` の反映 | 未実測 |
 | A-11 | 非死亡除去の波及なし | 未実測。`SetActive(false)` 候補 |
 | A-12 | ミミック保有シーン一覧 | 未実測。`DiagnosticsEnabled` の `mimicPoolCount` で収集する |
+| A-13 | スポナー探索の非アクティブ包含 | **確定（2026-08-09 実機ログ）**。既定の `FindObjectsOfType` は実エリアで 0 件。`includeInactive: true` へ修正済み |
+| A-17 | 複製個体の初期化 | **確定（2026-08-10 実機ログ）**。必要なのは `SetUpSiNiObject` → `SetUpHP` → `StartRunning` → `StartSpawnProcess` の4つ（すべて void 返し）。`SetUpHP` を欠くと `IsLiving=False` となり被弾しない。**`StartTask` は呼んではならない** — ゲーム自身が呼んでおり、二重呼び出しが状態機械へ `Key: Ready` の重複登録例外を投げ、登録が中断して移動不能になる。`UniTask` 返しのため例外は非同期で表面化し、呼び出し側の try/catch を素通りする（SPEC003 DEC-259 と同種）。`ForbiddenSurfaceTests.UniTaskReturningMembersAreNeverCalled` で再発を防止 |
+| A-14 | 非アクティブスポナーのプール構築状況 | 未実測。S-0b 手順3で観測する |

@@ -14,6 +14,7 @@ namespace SiNiSistar2.Spawn.Plugin;
 internal sealed class AdditionalSpawner
 {
     private readonly List<EnemyObject> _spawned = new();
+    private readonly List<GameObject> _clones = new();
     private int _consecutiveFailures;
     private bool _suspendedForVisit;
 
@@ -25,6 +26,8 @@ internal sealed class AdditionalSpawner
     public void ResetForVisit()
     {
         _spawned.Clear();
+        // Copies die with the scene they were made in; the references are dropped, not destroyed.
+        _clones.Clear();
         _consecutiveFailures = 0;
         _suspendedForVisit = false;
         LastNote = "";
@@ -72,7 +75,11 @@ internal sealed class AdditionalSpawner
         {
             try
             {
-                if (_spawned[i].IsUsed && _spawned[i].IsLiving)
+                // Presence in the scene, not IsUsed: that flag belongs to the pool bookkeeping and
+                // reads false on a copy, which made the budget believe nothing was alive while
+                // five copies stood in the area.
+                EnemyObject enemy = _spawned[i];
+                if (enemy.gameObject is GameObject body && body.activeInHierarchy && enemy.IsLiving)
                 {
                     alive++;
                 }
@@ -152,8 +159,9 @@ internal sealed class AdditionalSpawner
 
         if (candidates.Count == 0)
         {
-            LastNote = $"no {condition} position available";
-            SpawnRuntime.LogIntervention($"penalty spawn skipped: no {condition} point available.");
+            // No spawner, or none of its points qualify: fall back to copying an enemy that the
+            // area already contains, placed where the area already puts one (SPEC004 5.3 出現源).
+            TryCloneSceneEnemy(camera, playerX, facing, ambush, condition, budget, random);
             return;
         }
 
@@ -179,6 +187,150 @@ internal sealed class AdditionalSpawner
                 SpawnRuntime.Log?.LogWarning(
                     $"Additional spawns are suspended for this visit after {FailureLimit} consecutive failures.");
             }
+        }
+    }
+
+    /// <summary>
+    /// The spawner-less path (SPEC004 5.3): copy an enemy the scene already has, onto the
+    /// position of another enemy the scene already has. Both halves stay inside what the author
+    /// placed in this area, which is what DEC-302 and DEC-303 are protecting.
+    /// </summary>
+    private void TryCloneSceneEnemy(
+        Camera camera,
+        float playerX,
+        FacingDir facing,
+        bool ambush,
+        string condition,
+        SpawnBudget budget,
+        IRandomSource random)
+    {
+        List<EnemyObject> enemies = SceneEnemyCatalog.Collect();
+        var liveSources = new List<EnemyObject>();
+        var dormantSources = new List<EnemyObject>();
+        var positions = new List<Vector3>();
+        float margin = SpawnRuntime.Profile.OffscreenMargin;
+
+        foreach (EnemyObject enemy in enemies)
+        {
+            try
+            {
+                if (SceneEnemyCatalog.IsCopyable(enemy))
+                {
+                    // A live enemy is one the game has built completely; a dormant one has no
+                    // movement yet, and copying it copies that absence (see IsLive).
+                    (SceneEnemyCatalog.IsLive(enemy) ? liveSources : dormantSources).Add(enemy);
+                }
+
+                Vector3 world = enemy.transform.position;
+                Vector3 viewport = camera.WorldToViewportPoint(world);
+                if (!SpawnPointClassifier.IsOffscreen(viewport.x, viewport.y, viewport.z, margin))
+                {
+                    continue;
+                }
+
+                if (ambush && !SpawnPointClassifier.IsBehind(world.x, playerX, facing))
+                {
+                    continue;
+                }
+
+                positions.Add(world);
+            }
+            catch (Exception)
+            {
+                // A destroyed enemy contributes neither a source nor a position.
+            }
+        }
+
+        List<EnemyObject> sources = liveSources.Count > 0 ? liveSources : dormantSources;
+        if (sources.Count == 0)
+        {
+            LastNote = enemies.Count == 0
+                ? "this area has no enemy to copy"
+                : "this area's enemies cannot be copied";
+            SpawnRuntime.LogIntervention($"penalty spawn skipped: {LastNote}.");
+            return;
+        }
+
+        if (liveSources.Count == 0)
+        {
+            SpawnRuntime.LogIntervention(
+                $"no live enemy to copy among {enemies.Count}; copying a dormant one, which may "
+                + "not have its movement built yet.");
+        }
+
+        if (positions.Count == 0)
+        {
+            LastNote = $"no {condition} position available";
+            SpawnRuntime.LogIntervention(
+                $"penalty spawn skipped: no {condition} enemy position among {enemies.Count}.");
+            return;
+        }
+
+        EnemyObject source = sources[random.NextInt(sources.Count)];
+        Vector3 position = positions[random.NextInt(positions.Count)];
+        string enemyName = SafeEnemyName(source);
+
+        EnemyObject? copy = SceneEnemyCatalog.Clone(source, position, out GameObject? cloneRoot);
+        if (copy is null)
+        {
+            LastNote = "the enemy copy failed";
+            if (cloneRoot is not null)
+            {
+                UnityEngine.Object.Destroy(cloneRoot);
+            }
+
+            _consecutiveFailures++;
+            if (_consecutiveFailures >= FailureLimit)
+            {
+                _suspendedForVisit = true;
+                SpawnRuntime.Log?.LogWarning(
+                    $"Additional spawns are suspended for this visit after {FailureLimit} failures.");
+            }
+
+            return;
+        }
+
+        _spawned.Add(copy);
+        _clones.Add(cloneRoot!);
+        budget.CountAdditionalSpawn();
+        _consecutiveFailures = 0;
+        LastNote = $"{enemyName} copy ({condition})";
+        SpawnRuntime.LogIntervention(
+            $"penalty spawn: copied {enemyName} ({(liveSources.Count > 0 ? "live" : "dormant")} source) "
+            + $"to ({position.x:0.#},{position.y:0.#}) "
+            + $"condition={condition} spawnedThisVisit={budget.SpawnedThisVisit}");
+    }
+
+    /// <summary>Destroys the copies this MOD made that are still alive (SPEC004 5.7).</summary>
+    public void DestroyClones()
+    {
+        foreach (GameObject clone in _clones)
+        {
+            try
+            {
+                if (clone is not null)
+                {
+                    UnityEngine.Object.Destroy(clone);
+                }
+            }
+            catch (Exception)
+            {
+                // Already gone with its scene.
+            }
+        }
+
+        _clones.Clear();
+    }
+
+    private static string SafeEnemyName(EnemyObject enemy)
+    {
+        try
+        {
+            return enemy.m_EnemyID.ToString();
+        }
+        catch (Exception)
+        {
+            return "?";
         }
     }
 

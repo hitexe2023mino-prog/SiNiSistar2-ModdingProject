@@ -1,0 +1,141 @@
+2026-08-10 00:18:36.154 +09:00 [DBG] Hosting starting
+2026-08-10 00:18:36.274 +09:00 [INF] Application started. Press Ctrl+C to shut down.
+2026-08-10 00:18:36.274 +09:00 [INF] Hosting environment: Production
+2026-08-10 00:18:36.274 +09:00 [INF] Content root path: D:\Indies\SiNiSistar2-ModdingProject\Edi
+2026-08-10 00:18:36.274 +09:00 [DBG] Hosting started
+2026-08-10 00:18:36.485 +09:00 [INF] Buttplug message metadata cache prewarmed for 20 message types.
+2026-08-10 00:18:36.485 +09:00 [INF] ButtplugController initialized.
+2026-08-10 00:18:36.485 +09:00 [INF] ButtplugProvider initialized with repository and device manager.
+2026-08-10 00:18:36.487 +09:00 [INF] EStimProvider initialized with Config: -1
+2026-08-10 00:18:36.488 +09:00 [INF] OutputRecorderProvider initialized with Config: Record=False
+2026-08-10 00:18:36.489 +09:00 [INF] Removing all devices.
+2026-08-10 00:18:36.489 +09:00 [INF] All devices removed.
+2026-08-10 00:18:36.490 +09:00 [INF] Removing all devices.
+2026-08-10 00:18:36.490 +09:00 [INF] Recreating device wrappers while retaining transports.
+2026-08-10 00:18:36.610 +09:00 [INF] Initializing ButtplugProvider...
+2026-08-10 00:18:36.610 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-10 00:18:36.611 +09:00 [INF] Removing all devices.
+2026-08-10 00:18:36.611 +09:00 [INF] All devices removed.
+2026-08-10 00:18:36.611 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-10 00:18:36.629 +09:00 [INF] No Handy connection key is configured; continuing with Bluetooth discovery.
+2026-08-10 00:18:36.629 +09:00 [INF] Removing all devices.
+2026-08-10 00:18:36.629 +09:00 [INF] Recreating device wrappers while retaining transports.
+2026-08-10 00:18:36.629 +09:00 [INF] Starting initialization with 0 device keys.
+2026-08-10 00:18:36.681 +09:00 [INF] Initialization started.
+2026-08-10 00:18:36.681 +09:00 [WRN] DeviceId is set to -1. Initialization will be skipped.
+2026-08-10 00:18:36.681 +09:00 [INF] OutputRecorderProvider initialization started.
+2026-08-10 00:18:36.681 +09:00 [INF] RecorderConfig.Record is false. No device will be loaded.
+2026-08-10 00:18:40.677 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-10 00:18:40.677 +09:00 [INF] ButtplugProvider initialization complete.
+2026-08-10 00:19:00.681 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-10 00:19:00.681 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-10 00:19:00.681 +09:00 [INF] Removing all devices.
+2026-08-10 00:19:00.681 +09:00 [INF] All devices removed.
+2026-08-10 00:19:00.681 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-10 00:19:04.773 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-10 00:19:24.778 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-10 00:19:24.778 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-10 00:19:24.778 +09:00 [INF] Removing all devices.
+2026-08-10 00:19:24.778 +09:00 [INF] All devices removed.
+2026-08-10 00:19:24.778 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-10 00:19:28.877 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-10 00:19:48.881 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-10 00:19:48.881 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-10 00:19:48.881 +09:00 [INF] Removing all devices.
+2026-08-10 00:19:48.881 +09:00 [INF] All devices removed.
+2026-08-10 00:19:48.881 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-10 00:19:52.993 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-10 00:20:13.006 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-10 00:20:13.006 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-10 00:20:13.006 +09:00 [INF] Removing all devices.
+2026-08-10 00:20:13.006 +09:00 [INF] All devices removed.
+2026-08-10 00:20:13.006 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-10 00:20:17.087 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-10 00:20:37.096 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-10 00:20:37.096 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-10 00:20:37.096 +09:00 [INF] Removing all devices.
+2026-08-10 00:20:37.096 +09:00 [INF] All devices removed.
+2026-08-10 00:20:37.097 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-10 00:20:41.170 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-10 00:21:01.178 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-10 00:21:01.178 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-10 00:21:01.178 +09:00 [INF] Removing all devices.
+2026-08-10 00:21:01.178 +09:00 [INF] All devices removed.
+2026-08-10 00:21:01.178 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-10 00:21:05.291 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-10 00:21:25.306 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-10 00:21:25.306 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-10 00:21:25.306 +09:00 [INF] Removing all devices.
+2026-08-10 00:21:25.307 +09:00 [INF] All devices removed.
+2026-08-10 00:21:25.307 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-10 00:21:29.390 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-10 00:21:49.403 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-10 00:21:49.404 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-10 00:21:49.404 +09:00 [INF] Removing all devices.
+2026-08-10 00:21:49.404 +09:00 [INF] All devices removed.
+2026-08-10 00:21:49.404 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-10 00:21:53.514 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-10 00:22:13.528 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-10 00:22:13.528 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-10 00:22:13.528 +09:00 [INF] Removing all devices.
+2026-08-10 00:22:13.528 +09:00 [INF] All devices removed.
+2026-08-10 00:22:13.528 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-10 00:22:17.617 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-10 00:22:37.628 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-10 00:22:37.628 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-10 00:22:37.628 +09:00 [INF] Removing all devices.
+2026-08-10 00:22:37.628 +09:00 [INF] All devices removed.
+2026-08-10 00:22:37.628 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-10 00:22:41.700 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-10 00:23:01.705 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-10 00:23:01.705 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-10 00:23:01.705 +09:00 [INF] Removing all devices.
+2026-08-10 00:23:01.705 +09:00 [INF] All devices removed.
+2026-08-10 00:23:01.705 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-10 00:23:05.821 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-10 00:23:25.831 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-10 00:23:25.831 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-10 00:23:25.831 +09:00 [INF] Removing all devices.
+2026-08-10 00:23:25.831 +09:00 [INF] All devices removed.
+2026-08-10 00:23:25.831 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-10 00:23:29.918 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-10 00:23:49.929 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-10 00:23:49.929 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-10 00:23:49.929 +09:00 [INF] Removing all devices.
+2026-08-10 00:23:49.929 +09:00 [INF] All devices removed.
+2026-08-10 00:23:49.929 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-10 00:23:54.011 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-10 00:24:14.026 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-10 00:24:14.026 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-10 00:24:14.026 +09:00 [INF] Removing all devices.
+2026-08-10 00:24:14.026 +09:00 [INF] All devices removed.
+2026-08-10 00:24:14.026 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-10 00:24:18.134 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-10 00:24:38.143 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-10 00:24:38.143 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-10 00:24:38.143 +09:00 [INF] Removing all devices.
+2026-08-10 00:24:38.143 +09:00 [INF] All devices removed.
+2026-08-10 00:24:38.143 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-10 00:24:42.207 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-10 00:25:02.222 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-10 00:25:02.222 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-10 00:25:02.222 +09:00 [INF] Removing all devices.
+2026-08-10 00:25:02.222 +09:00 [INF] All devices removed.
+2026-08-10 00:25:02.222 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-10 00:25:06.294 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-10 00:25:26.306 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-10 00:25:26.306 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-10 00:25:26.306 +09:00 [INF] Removing all devices.
+2026-08-10 00:25:26.306 +09:00 [INF] All devices removed.
+2026-08-10 00:25:26.306 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-10 00:25:30.397 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-10 00:25:50.414 +09:00 [INF] Reconnection timer triggered. Attempting to reconnect.
+2026-08-10 00:25:50.414 +09:00 [INF] Attempting to connect to Buttplug client.
+2026-08-10 00:25:50.414 +09:00 [INF] Removing all devices.
+2026-08-10 00:25:50.414 +09:00 [INF] All devices removed.
+2026-08-10 00:25:50.414 +09:00 [INF] Existing client disposed and devices removed.
+2026-08-10 00:25:54.511 +09:00 [ERR] Failed to connect to client: Websocket Connection Exception! See Inner Exception
+2026-08-10 00:25:58.725 +09:00 [DBG] Hosting stopping
+2026-08-10 00:25:58.725 +09:00 [INF] Application is shutting down...
+2026-08-10 00:25:58.725 +09:00 [INF] Apagando Edi...
+2026-08-10 00:25:58.725 +09:00 [DBG] Hosting stopped

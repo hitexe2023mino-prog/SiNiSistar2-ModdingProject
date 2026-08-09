@@ -25,6 +25,7 @@
     <Reference Include="SiNiSistar2" HintPath="$(BepInExRoot)\interop\SiNiSistar2.dll" Private="false" />
     <Reference Include="UniRx" HintPath="$(BepInExRoot)\interop\UniRx.dll" Private="false" />
     <Reference Include="UniTask" HintPath="$(BepInExRoot)\interop\UniTask.dll" Private="false" />
+    <Reference Include="com.lightbug.character-controller-pro" HintPath="$(BepInExRoot)\interop\com.lightbug.character-controller-pro.dll" Private="false" />
     <Reference Include="UnityEngine.CoreModule" HintPath="$(BepInExRoot)\interop\UnityEngine.CoreModule.dll" Private="false" />
     <Reference Include="UnityEngine.IMGUIModule" HintPath="$(BepInExRoot)\interop\UnityEngine.IMGUIModule.dll" Private="false" />
     <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(BepInExRoot)\interop\UnityEngine.TextRenderingModule.dll" Private="false" />

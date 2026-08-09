@@ -47,6 +47,7 @@ public sealed class SpawnObserver : MonoBehaviour
     private int _behindCandidates;
     private double _nextCandidateScan;
     private StagnationPause _paused;
+    private int _sceneEnemyCount;
 
     public SpawnObserver(IntPtr pointer)
         : base(pointer)
@@ -131,6 +132,7 @@ public sealed class SpawnObserver : MonoBehaviour
         _sceneActive = true;
         SpawnRuntime.ResetVisitState();
         _additional.ResetForVisit();
+        SceneEnemyCatalog.ResetReporting();
         _ledger.Clear();
         _gimmicks.ForgetSceneObjects();
 
@@ -232,7 +234,8 @@ public sealed class SpawnObserver : MonoBehaviour
 
         SpawnRuntime.LogIntervention(
             $"area '{sceneName}' visit {visit}: spawners={_spawners.Count}, "
-            + $"simpleAreas={_simpleAreas.Count}, tuned={_ledger.TunedCount}, hardBase={isHard}, "
+            + $"simpleAreas={_simpleAreas.Count}, sceneEnemies={_sceneEnemyCount}, "
+            + $"tuned={_ledger.TunedCount}, hardBase={isHard}, "
             + $"seedMode={(profile.Seed != 0 ? "seeded" : "system")}.");
     }
 
@@ -240,6 +243,12 @@ public sealed class SpawnObserver : MonoBehaviour
     private void PerFrame()
     {
         MimicBoxPlacement.ProcessPendingMisses();
+
+        if (SpawnRuntime.PendingCopyCheck is { } check && Time.timeAsDouble >= check.Due)
+        {
+            SpawnRuntime.PendingCopyCheck = null;
+            SceneEnemyCatalog.ReportSettled(check.Enemy, check.SpawnedAt);
+        }
 
         if (_settings is null || _settings.Excluded || _stagnation is null)
         {
@@ -294,7 +303,16 @@ public sealed class SpawnObserver : MonoBehaviour
         }
 
         _hud.Snapshot = BuildSnapshot();
+
+        bool panelWasOpen = _hud.DebugPanelOpen;
         _hud.OnGUI(SpawnRuntime.HudHotkey, SpawnRuntime.DebugPanelHotkey, SpawnRuntime.Profile.DebugCommandsEnabled);
+
+        if (!panelWasOpen && _hud.DebugPanelOpen)
+        {
+            // Opening the panel is the moment someone has just edited the file, so this is where
+            // the re-read belongs (SpawnRuntime.ReloadConfig).
+            SpawnRuntime.ReloadConfig?.Invoke();
+        }
 
         char command = _hud.TakePendingCommand();
         if (command != '\0')
@@ -337,6 +355,8 @@ public sealed class SpawnObserver : MonoBehaviour
             Seed = profile.Seed,
             TuningApplied = _tuningApplied,
             TunedSpawnerCount = _ledger.TunedCount,
+            SpawnerCount = _spawners.Count + _simpleAreas.Count,
+            SceneEnemyCount = _sceneEnemyCount,
             HardBase = _hardBaseUsed,
             SpawnCountMultiplier = _lastCountMultiplier,
             SpawnIntervalMultiplier = _lastIntervalMultiplier,
@@ -395,6 +415,23 @@ public sealed class SpawnObserver : MonoBehaviour
     [HideFromIl2Cpp]
     private string Dispatch(char command)
     {
+        if (command == HudModel.ToggleKey)
+        {
+            if (SpawnRuntime.Profile.DebugCommandsEnabled)
+            {
+                return "debug commands are already ON";
+            }
+
+            SpawnRuntime.SetDebugCommands?.Invoke(true);
+            return "debug commands are now ON";
+        }
+
+        if (command == HudModel.DisableCommand)
+        {
+            SpawnRuntime.SetDebugCommands?.Invoke(false);
+            return "debug commands are now off";
+        }
+
         if (!_sceneActive || _settings is null)
         {
             return "no active area";
@@ -458,7 +495,11 @@ public sealed class SpawnObserver : MonoBehaviour
         _spawners.Clear();
         _simpleAreas.Clear();
 
-        foreach (UnityEngine.Object obj in UnityEngine.Object.FindObjectsOfType(Il2CppType.Of<EnemySpawner>()))
+        // includeInactive is required, not optional: this game leaves its spawners disabled until
+        // the player reaches them, so the default overload reported zero spawners in every real
+        // area and every mechanism silently had nothing to work with.
+        foreach (UnityEngine.Object obj in UnityEngine.Object.FindObjectsOfType(
+            Il2CppType.Of<EnemySpawner>(), includeInactive: true))
         {
             EnemySpawner? spawner = obj.TryCast<EnemySpawner>();
             if (spawner is not null)
@@ -467,12 +508,25 @@ public sealed class SpawnObserver : MonoBehaviour
             }
         }
 
-        foreach (UnityEngine.Object obj in UnityEngine.Object.FindObjectsOfType(Il2CppType.Of<SimpleSpawnArea>()))
+        foreach (UnityEngine.Object obj in UnityEngine.Object.FindObjectsOfType(
+            Il2CppType.Of<SimpleSpawnArea>(), includeInactive: true))
         {
             SimpleSpawnArea? area = obj.TryCast<SimpleSpawnArea>();
             if (area is not null)
             {
                 _simpleAreas.Add(area);
+            }
+        }
+
+        // Counted separately: this build places ordinary enemies directly in the scene rather
+        // than through spawners, so "spawners 0" alone does not say whether an area is empty.
+        _sceneEnemyCount = 0;
+        foreach (UnityEngine.Object obj in UnityEngine.Object.FindObjectsOfType(
+            Il2CppType.Of<EnemyObject>(), includeInactive: true))
+        {
+            if (obj.TryCast<EnemyObject>() is not null)
+            {
+                _sceneEnemyCount++;
             }
         }
     }
@@ -531,6 +585,7 @@ public sealed class SpawnObserver : MonoBehaviour
 
         _ledger.RestoreAll();
         _gimmicks.DestroyAll();
+        _additional.DestroyClones();
         SpawnRuntime.ResetVisitState();
         _settings = null;
         _sceneActive = false;

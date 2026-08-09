@@ -42,6 +42,16 @@ public sealed record HudSnapshot
 
     public int TunedSpawnerCount { get; init; }
 
+    /// <summary>Spawners found in the scene, tuned or not — 0 means no mechanism can act.</summary>
+    public int SpawnerCount { get; init; }
+
+    /// <summary>
+    /// EnemyObject instances present in the scene. This build populates ordinary areas with these
+    /// directly rather than through spawners, so the two counts together say whether an area is
+    /// empty or merely spawner-less.
+    /// </summary>
+    public int SceneEnemyCount { get; init; }
+
     public bool HardBase { get; init; }
 
     public float SpawnCountMultiplier { get; init; } = 1f;
@@ -145,7 +155,8 @@ public static class HudModel
     {
         var lines = new List<string>
         {
-            $"AREA   {s.AreaName}  visit #{s.VisitCount}  rng {(s.Seeded ? $"seed {s.Seed}" : "system")}",
+            $"AREA   {s.AreaName}  visit #{s.VisitCount}  spawners {s.SpawnerCount}  "
+            + $"enemies {s.SceneEnemyCount}  rng {(s.Seeded ? $"seed {s.Seed}" : "system")}",
         };
 
         if (s.Excluded)
@@ -156,6 +167,16 @@ public static class HudModel
 
         // Each spawner draws its own multipliers (5.2), so a single number cannot describe the
         // area; the mean is shown and labelled as such rather than picking one spawner's draw.
+        // A scene with no spawner at all cannot do anything, and saying so beats every other line
+        // on this panel when it happens.
+        if (s.TunedSpawnerCount == 0 && s.SpawnerCount == 0)
+        {
+            lines.Add(s.SceneEnemyCount > 0
+                ? $"TUNING no EnemySpawner here, but {s.SceneEnemyCount} enemies are placed directly: "
+                  + "nothing for the spawner mechanisms to act on."
+                : "TUNING no EnemySpawner and no enemy in this scene.");
+        }
+
         lines.Add(s.TuningApplied
             ? $"TUNING {s.TunedSpawnerCount} spawner(s), base {(s.HardBase ? "Hard" : "Normal")}, mean  "
               + $"count x{Num(s.SpawnCountMultiplier)}  interval x{Num(s.SpawnIntervalMultiplier)}  "
@@ -190,27 +211,56 @@ public static class HudModel
         return lines;
     }
 
-    /// <summary>The debug panel's command list, with the disabled notice when commands are off.</summary>
-    public static IReadOnlyList<string> DebugPanel(HudSnapshot s)
+    /// <summary>The config file the enable switch lives in, named so the notice is actionable.</summary>
+    public const string ConfigFileName = "BepInEx/config/community.sinisistar2.spawn.cfg";
+
+    /// <summary>
+    /// Turns the commands ON from inside the panel and persists the choice. Enabling only, never
+    /// disabling: when a command legitimately does nothing (no eligible position, cap reached),
+    /// pressing the enable key again is the natural next move, and a toggle turns the tool off at
+    /// exactly the moment its user is trying to make it work. A real session lost five rounds to
+    /// that. Disabling is available on the panel's switch button (<see cref="DisableCommand"/>).
+    /// </summary>
+    public const char ToggleKey = '0';
+
+    /// <summary>Turns the commands off. Reachable by clicking the switch, not by a digit.</summary>
+    public const char DisableCommand = '-';
+
+    /// <summary>
+    /// The debug panel's command list.
+    ///
+    /// When commands are off the notice has to be impossible to miss: a key that produces no
+    /// effect and no message reads as a broken feature rather than a disabled one, which is
+    /// exactly how this was first reported.
+    /// </summary>
+    /// <summary>The panel's status lines, drawn above the buttons.</summary>
+    public static IReadOnlyList<string> DebugHeader(HudSnapshot s, bool pressedWhileDisabled = false)
     {
-        var lines = new List<string> { "DEBUG COMMANDS" };
+        var lines = new List<string>();
 
-        if (!s.DebugCommandsEnabled)
+        if (s.DebugCommandsEnabled)
         {
-            lines.Add("  disabled. Set [Debug] DebugCommandsEnabled = true to use these.");
+            lines.Add("DEBUG COMMANDS -- ON.  Click a button, or press its number.");
+            lines.Add("Caps, area exclusion and the hold/cinematic block still apply.");
         }
-
-        foreach ((char key, string label) in Commands)
+        else
         {
-            lines.Add($"  [{key}] {label}");
+            lines.Add(pressedWhileDisabled
+                ? "DEBUG COMMANDS -- OFF. THAT DID NOTHING."
+                : "DEBUG COMMANDS -- OFF.");
+            lines.Add($"Click the switch below, or press [{ToggleKey}], to turn them on.");
         }
-
-        lines.Add(s.DebugCommandsEnabled
-            ? "  Caps, area exclusion and the hold/cinematic block still apply."
-            : "  (state above is shown regardless)");
 
         return lines;
     }
+
+    /// <summary>Label of the on/off switch button, which states what a click will do.</summary>
+    public static string ToggleLabel(bool enabled) => enabled
+        ? "COMMANDS: ON      -- click to turn OFF"
+        : $"COMMANDS: OFF     -- click to turn ON   (or press {ToggleKey})";
+
+    /// <summary>Label of one command button.</summary>
+    public static string CommandLabel(char key, string text) => $"[{key}]  {text}";
 
     /// <summary>
     /// Digit key to command. Held in Core so the panel text and the dispatch table cannot drift

@@ -51,7 +51,7 @@ internal sealed class GimmickCloner
     private void CloneOne(string typeName, SpawnProfile profile, SpawnBudget budget, IRandomSource random)
     {
         var sources = new List<MonoBehaviour>();
-        foreach (UnityEngine.Object obj in UnityEngine.Object.FindObjectsOfType(Il2CppType.Of<MonoBehaviour>()))
+        foreach (UnityEngine.Object obj in UnityEngine.Object.FindObjectsOfType(Il2CppType.Of<MonoBehaviour>(), includeInactive: true))
         {
             MonoBehaviour? behaviour = obj.TryCast<MonoBehaviour>();
             if (behaviour is not null && behaviour.GetIl2CppType().Name == typeName)

@@ -67,6 +67,17 @@
         </div>
       </div>
 
+      <div class="simPanel">
+        <div class="simHead">
+          <button id="simToggle" type="button">▶ 動作シミュレーション</button>
+          <button id="simStop" type="button" title="停止して先頭へ戻す">■</button>
+          <span id="simClock" class="muted simClock">0 ms</span>
+          <span class="muted simNote">ブラウザ内の再現表示です。デバイスにもEDIにも何も送らず、保存前の波形をそのまま動かします。
+            UFOの回転方向は実機同様0.5〜2.5秒ごとにランダムに反転するため、反転の瞬間だけは実機と一致しません。</span>
+        </div>
+        <canvas id="simCanvas" width="900" height="230"></canvas>
+      </div>
+
       <div class="controls">
         <label>長さ (ms)
           <input id="duration" type="number" min="100" step="10">

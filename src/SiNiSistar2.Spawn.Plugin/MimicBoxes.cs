@@ -29,6 +29,11 @@ internal static class MimicBoxPlacement
         List<(EnemyPool Pool, Transform Point)> candidates = Collect(spawners, simpleAreas);
         if (candidates.Count == 0)
         {
+            while (budget.CanPlaceMimicBox && TryCloneSceneMimic(random))
+            {
+                budget.CountMimicBox();
+            }
+
             return;
         }
 
@@ -69,7 +74,13 @@ internal static class MimicBoxPlacement
         List<(EnemyPool Pool, Transform Point)> candidates = Collect(spawners, simpleAreas);
         if (candidates.Count == 0)
         {
-            return "this area has no mimic pool";
+            if (TryCloneSceneMimic(random))
+            {
+                budget.CountMimicBox();
+                return "pseudo box copied from a mimic in this scene";
+            }
+
+            return "this area has no mimic, in a pool or in the scene";
         }
 
         (EnemyPool pool, Transform point) = candidates[random.NextInt(candidates.Count)];
@@ -82,10 +93,62 @@ internal static class MimicBoxPlacement
         return "pseudo box placed";
     }
 
-    /// <summary>Whether this area can host pseudo boxes at all, for the HUD (SPEC004 5.8-5).</summary>
+    /// <summary>
+    /// Whether this area can host pseudo boxes at all, for the HUD (SPEC004 5.8-5). A mimic pool
+    /// or a mimic already standing in the scene both qualify: the scene instance can be copied
+    /// the same way ordinary enemies are (SPEC004 5.3 出現源).
+    /// </summary>
     internal static bool HasMimicPool(
         IReadOnlyList<EnemySpawner> spawners,
-        IReadOnlyList<SimpleSpawnArea> simpleAreas) => Collect(spawners, simpleAreas).Count > 0;
+        IReadOnlyList<SimpleSpawnArea> simpleAreas) =>
+        Collect(spawners, simpleAreas).Count > 0 || FindSceneMimics().Count > 0;
+
+    private static List<EnemyObject> FindSceneMimics()
+    {
+        var mimics = new List<EnemyObject>();
+        foreach (EnemyObject enemy in SceneEnemyCatalog.Collect())
+        {
+            try
+            {
+                if (enemy.m_EnemyID == EnemyID.EnmID_Mimic)
+                {
+                    mimics.Add(enemy);
+                }
+            }
+            catch (Exception)
+            {
+                // A destroyed enemy is not a candidate.
+            }
+        }
+
+        return mimics;
+    }
+
+    /// <summary>Copies a mimic that already stands in the scene, when no pool offers one.</summary>
+    private static bool TryCloneSceneMimic(IRandomSource random)
+    {
+        List<EnemyObject> mimics = FindSceneMimics();
+        if (mimics.Count == 0)
+        {
+            return false;
+        }
+
+        EnemyObject source = mimics[random.NextInt(mimics.Count)];
+        EnemyObject? copy = SceneEnemyCatalog.Clone(source, source.transform.position, out GameObject? cloneRoot);
+        if (copy is null)
+        {
+            if (cloneRoot is not null)
+            {
+                UnityEngine.Object.Destroy(cloneRoot);
+            }
+
+            return false;
+        }
+
+        SpawnRuntime.MimicBoxes[copy.GetInstanceID()] = new MimicBoxEntry(copy);
+        SpawnRuntime.LogIntervention($"mimic pseudo box copied from a scene mimic; id={copy.GetInstanceID()}");
+        return true;
+    }
 
     private static List<(EnemyPool Pool, Transform Point)> Collect(
         IReadOnlyList<EnemySpawner> spawners,
