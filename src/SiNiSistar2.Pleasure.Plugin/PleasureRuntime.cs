@@ -8,14 +8,12 @@ namespace SiNiSistar2.Pleasure.Plugin;
 /// <summary>
 /// State the Harmony patches read, and the probe log that answers the SPEC003 付録A measurements.
 ///
-/// The MOD ships in a state where the only behaviour change is removing the HP0 defeat; everything
-/// else is off until the measurements have been taken (SPEC003 FR-233). The probe is therefore the
-/// most useful thing it can do on a first run.
+/// The MOD ships changing nothing at all: every tuning value is at a no-change setting and the HP
+/// suppression waits for the gauge to be able to rise (SPEC003 FR-233, FR-278). The probe is
+/// therefore the most useful thing it can do on a first run.
 /// </summary>
 internal static class PleasureRuntime
 {
-    internal const string RemainHp1Key = "pleasure-remain-hp1-while-bound";
-
     internal const string HaanjaCurableKey = "pleasure-breastsuper-haanja-curable";
 
     private static readonly HashSet<string> Reported = new(StringComparer.Ordinal);
@@ -236,17 +234,20 @@ internal static class PleasureRuntime
     internal static string? BinderEnemyId { get; set; }
 
     /// <summary>
-    /// Set by the damage patch when the gauge fills, consumed by the observer. The climax has side
-    /// effects on the UI and on the HP0 contribution, which belong on the main-thread update rather
+    /// Set by the damage patch when the gauge fills, consumed by the observer. The climax writes to
+    /// the UI and, at the limit, to the player's HP; both belong on the main-thread update rather
     /// than inside damage resolution.
     /// </summary>
     internal static bool PendingClimax { get; set; }
 
     /// <summary>
-    /// The MOD's identity in the game's multi-source values. <c>ResitValue</c> and
-    /// <c>ReleaseValue</c> key on an object reference, so this must outlive every contribution.
+    /// Whether this run has already been ended by the climax limit (SPEC003 FR-216).
+    ///
+    /// The defeat performance keeps the observer running, so without a latch a second pass would
+    /// find the count still at the limit and ask for the death again. Cleared when a slot is loaded
+    /// or a run begins, which is where the count itself goes back.
     /// </summary>
-    internal static Il2CppSystem.Object? ContributionKey { get; set; }
+    internal static bool ClimaxDeathFired { get; set; }
 
     /// <summary>
     /// Records a probe finding once. Every measurement in 付録A is about whether something is
@@ -359,6 +360,7 @@ internal static class PleasureRuntime
         Milk?.Reset();
         Meter?.Reset();
         PendingClimax = false;
+        ClimaxDeathFired = false;
         PendingBreastSuper = false;
         PendingLustCrest = false;
         CrestSublimated = false;
@@ -402,6 +404,11 @@ internal static class PleasureRuntime
 
         Meter?.Reset();
         PendingClimax = false;
+
+        // The count that made the run lethal has just been replaced by whatever the slot holds, so
+        // the latch that recorded it has to go with it. Leaving it set would make a reloaded save
+        // unkillable by the limit for the rest of the session (FR-216).
+        ClimaxDeathFired = false;
         PendingBreastSuper = false;
         ClimaxFlashUntil = 0d;
 

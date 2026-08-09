@@ -3,15 +3,23 @@ namespace SiNiSistar2.Pleasure.Core;
 /// <summary>
 /// Raw configuration as read from BepInEx, before validation (SPEC003 6章).
 ///
-/// Every tuning value ships at a no-change setting. The one exception is
-/// <see cref="SuppressHp0WhileBound"/>: removing the HP0 defeat is the requirement itself and has
-/// no value to tune, so it is on from the start (SPEC003 FR-233).
+/// Every tuning value ships at a no-change setting, with no exception (SPEC003 FR-233).
+/// <see cref="SuppressSexualHpDamage"/> is on from the start but does nothing on its own: the
+/// suppression only takes effect once the gauge can rise, so a fresh install still changes nothing
+/// (FR-278).
 /// </summary>
 public sealed record PleasureOptions
 {
     public bool Enabled { get; init; } = true;
 
-    public bool SuppressHp0WhileBound { get; init; } = true;
+    /// <summary>
+    /// Whether a sexual hit taken while bound leaves HP untouched (SPEC003 5.1).
+    ///
+    /// v1.1 replaced v1.0's <c>SuppressHp0WhileBound</c>, which clamped HP at 1 and let damage keep
+    /// arriving. Clamping left HP as the instrument the player read the danger from, and left the
+    /// moment of defeat decided by how much of it was left (DEC-256).
+    /// </summary>
+    public bool SuppressSexualHpDamage { get; init; } = true;
 
     public float PleasureGainPerHit { get; init; }
 

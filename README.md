@@ -87,6 +87,28 @@ MOD は波形を生成・補間・推測しません。`ufo-left` と `ufo-right
 
 カタログとマッピングはゲームビルドごとに分離します。ゲーム更新でハッシュが変わった場合は以前のカタログを混在させません。
 
+## 画像処理ツール
+
+`scripts/` の各ツール（`enhance_image.py`、`pdn_layers.py`、`crest_preview.py`）は numpy と Pillow に依存します。グローバル環境を汚さないよう venv を使ってください。
+
+```powershell
+py -m venv scripts/.venv
+scripts\.venv\Scripts\Activate.ps1
+pip install -r scripts/requirements.txt
+```
+
+`enhance_image.py` の Real-ESRGAN 経路（既定）を使う場合は torch も追加します。未インストールでも classical フォールバックで動作します。
+
+```powershell
+pip install -r scripts/requirements-optional.txt
+```
+
+以降はこの venv を有効化した状態でツールを実行します。
+
+```powershell
+python scripts/enhance_image.py INPUT OUTPUT
+```
+
 ## リポジトリ内の正本
 
 - 実行プラグイン: `BepInEx/plugins/community.sinisistar2.edi`

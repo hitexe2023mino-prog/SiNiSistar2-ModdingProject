@@ -107,7 +107,7 @@ public sealed record PleasureOverlayLayout(
 /// <summary>The validated configuration the plugin acts on (SPEC003 6.2).</summary>
 public sealed record PleasureProfile(
     bool Enabled,
-    bool SuppressHp0WhileBound,
+    bool SuppressSexualHpDamage,
     PleasureTuning Pleasure,
     ClimaxTuning Climax,
     CorruptionTuning Corruption,
@@ -138,12 +138,22 @@ public sealed record PleasureProfile(
         PleasureOverlayLayout.Default);
 
     /// <summary>
-    /// True when the MOD would do anything observable. HP0 suppression alone counts: it is the
-    /// requirement that ships enabled.
+    /// Whether a sexual hit taken while bound actually leaves HP alone (SPEC003 5.1.1, FR-278).
+    ///
+    /// The setting alone is not enough. Stopping the damage while the gauge cannot rise would make
+    /// a sexual hold cost nothing at all — no HP, no pleasure, no climax. The suppression is only
+    /// sound because something else takes over as the cost, so it is tied to that something else
+    /// existing. This is also what keeps the shipped defaults from changing the game (FR-233).
+    /// </summary>
+    public bool BlocksSexualHpDamage => Enabled && SuppressSexualHpDamage && Pleasure.HasEffect;
+
+    /// <summary>
+    /// True when the MOD would do anything observable. The HP suppression counts only when it is
+    /// actually in force, which the shipped defaults are not (FR-233, FR-278).
     /// </summary>
     public bool AnyMechanismActive =>
         Enabled
-        && (SuppressHp0WhileBound || Pleasure.HasEffect || Corruption.HasEffect
+        && (BlocksSexualHpDamage || Pleasure.HasEffect || Corruption.HasEffect
             || BreastSuper.HasEffect || ProbeMeasurements);
 }
 
@@ -181,7 +191,7 @@ public static class PleasureProfileFactory
         SexualAttackClassifier classifier = BuildClassifier(options, knownAbnormalNames, enemies, notices);
         var profile = new PleasureProfile(
             true,
-            options.SuppressHp0WhileBound,
+            options.SuppressSexualHpDamage,
             pleasure,
             climax,
             corruption,
@@ -218,7 +228,16 @@ public static class PleasureProfileFactory
             notices.Add(
                 "The pleasure gauge cannot rise: set Pleasure.PleasureGainPerHit above 0. Until the "
                 + "SPEC003 付録A measurements are taken this is the intended shipped state, and only "
-                + "the HP0 suppression and the probe log are active (FR-233).");
+                + "the probe log is active (FR-233).");
+        }
+
+        if (options.SuppressSexualHpDamage && !pleasure.HasEffect)
+        {
+            notices.Add(
+                "Survival.SuppressSexualHpDamage is on but the pleasure gauge cannot rise, so sexual "
+                + "hits go on costing HP exactly as the game intends. Stopping the damage with "
+                + "nothing taking its place would make a sexual hold free, so the suppression waits "
+                + "for Pleasure.PleasureGainPerHit (FR-278).");
         }
 
         if (!breastSuper.HasEffect)

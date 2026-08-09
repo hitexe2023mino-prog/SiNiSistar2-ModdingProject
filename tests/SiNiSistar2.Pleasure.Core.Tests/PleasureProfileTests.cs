@@ -1,8 +1,8 @@
 namespace SiNiSistar2.Pleasure.Core.Tests;
 
 /// <summary>
-/// The MOD ships in a state where only the HP0 removal and the probe log are live, so that the
-/// 付録A measurements can be taken before any tuning value is guessed at (SPEC003 FR-233).
+/// The MOD ships changing nothing at all, so the 付録A measurements can be taken before any tuning
+/// value is guessed at (SPEC003 FR-233, FR-278).
 /// </summary>
 public sealed class PleasureProfileTests
 {
@@ -13,19 +13,69 @@ public sealed class PleasureProfileTests
     private static PleasureValidation Validate(PleasureOptions options) =>
         PleasureProfileFactory.Create(options, Known);
 
-    /// <summary>AC-227: defaults remove the HP0 defeat and nothing else.</summary>
+    /// <summary>AC-227: the defaults change nothing, not even the HP suppression.</summary>
     [Fact]
-    public void ShippedDefaultsOnlyRemoveTheHp0Defeat()
+    public void ShippedDefaultsChangeNothing()
     {
         PleasureValidation result = Validate(new PleasureOptions());
 
         Assert.Empty(result.Errors);
-        Assert.True(result.Profile.SuppressHp0WhileBound);
+        Assert.True(result.Profile.SuppressSexualHpDamage);
+        Assert.False(result.Profile.BlocksSexualHpDamage);
         Assert.False(result.Profile.Pleasure.HasEffect);
         Assert.False(result.Profile.Corruption.HasEffect);
         Assert.False(result.Profile.BreastSuper.HasEffect);
         Assert.False(result.Profile.Climax.GameOverEnabled);
         Assert.Contains(result.Notices, x => x.Contains("PleasureGainPerHit", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// AC-242 / FR-278: the suppression waits for the gauge. Stopping the damage while nothing
+    /// takes its place would make a sexual hold cost nothing at all.
+    /// </summary>
+    [Fact]
+    public void TheSuppressionWaitsForAGaugeThatCanRise()
+    {
+        PleasureValidation result = Validate(new PleasureOptions { SuppressSexualHpDamage = true });
+
+        Assert.False(result.Profile.BlocksSexualHpDamage);
+        Assert.Contains(result.Notices, x => x.Contains("FR-278", StringComparison.Ordinal));
+    }
+
+    /// <summary>AC-202: with a gauge that can rise, sexual hits stop costing HP.</summary>
+    [Fact]
+    public void AGaugeThatCanRiseTurnsTheSuppressionOn()
+    {
+        PleasureValidation result = Validate(new PleasureOptions
+        {
+            SuppressSexualHpDamage = true,
+            PleasureGainPerHit = 0.2f,
+        });
+
+        Assert.True(result.Profile.BlocksSexualHpDamage);
+        Assert.DoesNotContain(result.Notices, x => x.Contains("FR-278", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// AC-241 / FR-276: turning the suppression off leaves the rest of the mechanism running. HP is
+    /// spent as the game intends and the climax limit still ends the run.
+    /// </summary>
+    [Fact]
+    public void TurningTheSuppressionOffLeavesTheGaugeRunning()
+    {
+        PleasureValidation result = Validate(new PleasureOptions
+        {
+            SuppressSexualHpDamage = false,
+            PleasureGainPerHit = 0.2f,
+            CorruptionPerClimax = 0.5f,
+            EnableClimaxGameOver = true,
+            ClimaxLimitBase = 3,
+        });
+
+        Assert.False(result.Profile.BlocksSexualHpDamage);
+        Assert.True(result.Profile.Pleasure.HasEffect);
+        Assert.True(result.Profile.Corruption.HasEffect);
+        Assert.True(result.Profile.Climax.GameOverEnabled);
     }
 
     /// <summary>AC-228: disabling the MOD leaves nothing active.</summary>
@@ -36,11 +86,12 @@ public sealed class PleasureProfileTests
         {
             Enabled = false,
             PleasureGainPerHit = 5f,
-            SuppressHp0WhileBound = true,
+            SuppressSexualHpDamage = true,
         });
 
         Assert.False(result.Profile.AnyMechanismActive);
-        Assert.False(result.Profile.SuppressHp0WhileBound);
+        Assert.False(result.Profile.SuppressSexualHpDamage);
+        Assert.False(result.Profile.BlocksSexualHpDamage);
     }
 
     /// <summary>A negative value disables only its own mechanism.</summary>
@@ -56,7 +107,10 @@ public sealed class PleasureProfileTests
         Assert.Contains(result.Errors, x => x.Contains("PleasureGainPerHit", StringComparison.Ordinal));
         Assert.False(result.Profile.Pleasure.Enabled);
         Assert.True(result.Profile.Corruption.HasEffect);
-        Assert.True(result.Profile.SuppressHp0WhileBound);
+
+        // The gauge is what the suppression depends on, so a gauge that failed validation takes the
+        // suppression with it rather than leaving a hold that costs nothing (FR-278).
+        Assert.False(result.Profile.BlocksSexualHpDamage);
     }
 
     /// <summary>
