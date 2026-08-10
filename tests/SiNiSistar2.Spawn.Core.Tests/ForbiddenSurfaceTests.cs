@@ -134,33 +134,13 @@ public sealed class ForbiddenSurfaceTests
     /// same hazard from the patching side.
     /// </summary>
     [Theory]
+    [InlineData("StartTask(")]
     [InlineData("TaskSpawn(")]
     [InlineData("SpawnLogic(")]
     [InlineData("PlayItemEvent(")]
     public void UniTaskReturningMembersAreNeverCalled(string member)
     {
         AssertAbsent(member);
-    }
-
-    /// <summary>
-    /// StartTask is the one exception, and it is only safe next to the line that makes it safe.
-    ///
-    /// A copied enemy inherits its state dictionary but not the task that runs it, so the
-    /// behaviour has to be started by hand — and calling StartTask against an inherited, already
-    /// populated dictionary is what threw "Key: Ready" and left the copy able to attack but not
-    /// walk. Clearing the dictionary first is what makes the call legitimate, so the two must
-    /// stay together.
-    /// </summary>
-    [Fact]
-    public void StartTaskIsOnlyCalledAfterTheInheritedStateDictionaryIsCleared()
-    {
-        string[] callers = PluginSources.Where(x => x.Contains("StartTask(", StringComparison.Ordinal)).ToArray();
-
-        Assert.True(callers.Length <= 1, "StartTask should be called from one place at most.");
-        foreach (string source in callers)
-        {
-            Assert.Contains("ClearSequenceDict", source);
-        }
     }
 
     private static void AssertAbsent(string needle)

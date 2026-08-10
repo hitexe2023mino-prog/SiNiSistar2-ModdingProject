@@ -165,6 +165,10 @@ public sealed class SpawnObserver : MonoBehaviour
 
         CollectSceneSpawners();
 
+        // Entry is when the area's authored enemy positions are on offer: nothing has moved and
+        // nothing has been defeated yet (SPEC004 5.3 出現位置).
+        _additional.RememberEnemyPositions();
+
         if (profile.DiagnosticsEnabled)
         {
             SpawnDiagnostics.DumpArea(sceneName, (int)sceneId, _spawners, _simpleAreas, _settings.Excluded);
@@ -272,6 +276,9 @@ public sealed class SpawnObserver : MonoBehaviour
         {
             _nextAliveCheck = now + 1.0;
             _additional.ReportAlive(_budget);
+
+            // Picks up the places the game's own spawners and patrols use, which entry cannot see.
+            _additional.RememberEnemyPositions();
         }
 
         // The HUD's candidate counts run the full point filter, so they are refreshed on their own

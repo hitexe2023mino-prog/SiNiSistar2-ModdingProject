@@ -88,6 +88,118 @@ internal static class SceneEnemyCatalog
     }
 
     /// <summary>
+    /// Brings an existing enemy (back) into play with the game's own runtime recipe, read from
+    /// <c>ZombieSpawner.SpawnZombie</c>: pick an existing instance, <c>Recover(NormalRecover)</c>,
+    /// <c>Teleport(pos, isFitGround: true)</c>, <c>OrderByLabelEvent("Awake")</c>.
+    ///
+    /// This is how the game itself puts a zombie into the scene mid-play — it never instantiates
+    /// at runtime. Everything downstream of these three calls (state machine, actor, saving) is
+    /// the game's own and needs nothing from the MOD, which is exactly what the copy path could
+    /// not achieve. All three calls are void-returning.
+    /// </summary>
+    internal static bool Reactivate(EnemyObject enemy, Vector3 position, out string failure)
+    {
+        failure = "";
+        try
+        {
+            if (!enemy.gameObject.activeInHierarchy)
+            {
+                enemy.gameObject.SetActive(true);
+            }
+
+            // Before Recover, not after. ResumeAlive is the game's own visual restore — it
+            // reactivates the body and un-erases the sprite renderers the death fade hid — and
+            // it acts only while the dead state still says so. Recover resets that state, so a
+            // revival without this line (or after Recover) walks and fights while invisible,
+            // showing only the face and arm sprites the erase list never covered.
+            try
+            {
+                enemy.EnemyDead?.ResumeAlive();
+            }
+            catch (Exception exception)
+            {
+                SpawnRuntime.Log?.LogWarning($"ResumeAlive failed; the body may stay faded: {exception.Message}");
+            }
+
+            enemy.Recover(EnemyObject.RecoverFuncFlag.NormalRecover);
+            enemy.Teleport(position, useZ: false, isFitGround: true);
+            enemy.OrderByLabelEvent("Awake");
+            RestoreVisibility(enemy, "revive");
+            return true;
+        }
+        catch (Exception exception)
+        {
+            failure = exception.Message;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Makes sure an enemy brought back into play is actually visible, and says what it found.
+    ///
+    /// The death fade is a DOTween tween on <c>EraseEffect</c> that drives the sprite renderers
+    /// down to nothing. <c>Reset</c> is its counterpart, so it is asked first. What remains is
+    /// measured rather than assumed: a renderer left disabled or at zero alpha is reported and
+    /// put back, which is what distinguishes "the fade was not undone" from "something else makes
+    /// them invisible" in the log.
+    /// </summary>
+    private static void RestoreVisibility(EnemyObject enemy, string context)
+    {
+        var renderers = 0;
+        var wereHidden = 0;
+        try
+        {
+            try
+            {
+                enemy.EraseEffect?.Reset();
+            }
+            catch (Exception exception)
+            {
+                SpawnRuntime.Log?.LogWarning($"[visible] EraseEffect.Reset failed: {exception.Message}");
+            }
+
+            foreach (Component component in enemy.GetComponentsInChildren(
+                Il2CppType.Of<SpriteRenderer>(), true))
+            {
+                SpriteRenderer? renderer = component.TryCast<SpriteRenderer>();
+                if (renderer is null)
+                {
+                    continue;
+                }
+
+                renderers++;
+                Color colour = renderer.color;
+                bool hidden = !renderer.enabled || colour.a < 0.99f;
+                if (!hidden)
+                {
+                    continue;
+                }
+
+                wereHidden++;
+                renderer.enabled = true;
+                renderer.color = new Color(colour.r, colour.g, colour.b, 1f);
+            }
+        }
+        catch (Exception exception)
+        {
+            SpawnRuntime.Log?.LogWarning($"[visible] restore failed: {exception.Message}");
+            return;
+        }
+
+        if (wereHidden > 0)
+        {
+            SpawnRuntime.LogIntervention(
+                $"[visible] {context}: {wereHidden} of {renderers} sprite renderers were hidden and "
+                + "were restored.");
+        }
+        else if (!_visibilityReported)
+        {
+            _visibilityReported = true;
+            SpawnRuntime.LogIntervention($"[visible] {context}: all {renderers} sprite renderers were already visible.");
+        }
+    }
+
+    /// <summary>
     /// The outermost ancestor that still contains only this enemy.
     ///
     /// The component sits deep inside its own hierarchy (<c>EnemyZombie (6)/CCP_Enemy/Zombie</c>),
@@ -275,36 +387,6 @@ internal static class SceneEnemyCatalog
         }
     }
 
-    /// <summary>
-    /// Nulls the copy's inherited state dictionary so the behaviour can be started fresh.
-    ///
-    /// The field is declared on the concrete enemy type (<c>Zombie</c> holds a
-    /// <c>SequenceDict&lt;Zombie.State&gt;</c>), so it is reached through the object's own IL2CPP
-    /// class rather than a typed property. Returns false when the type has no such field, which is
-    /// the case for enemies whose behaviour is not built that way.
-    /// </summary>
-    private static bool ClearSequenceDict(EnemyObject copy)
-    {
-        try
-        {
-            IntPtr klass = IL2CPP.il2cpp_object_get_class(copy.Pointer);
-            IntPtr field = IL2CPP.GetIl2CppField(klass, "<SequenceDict>k__BackingField");
-            if (field == IntPtr.Zero)
-            {
-                return false;
-            }
-
-            var offset = (int)IL2CPP.il2cpp_field_get_offset(field);
-            IL2CPP.il2cpp_gc_wbarrier_set_field(
-                copy.Pointer, IntPtr.Add(copy.Pointer, offset), IntPtr.Zero);
-            return true;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
-
     private static void Initialise(EnemyObject copy)
     {
         var steps = new List<string>();
@@ -368,44 +450,33 @@ internal static class SceneEnemyCatalog
         // SetTimeSetting is likewise unnecessary: ActorHandler.FixedUpdate falls back to
         // Time.deltaTime when it has none.
 
-        // The behaviour state machine.
-        //
-        // A copy inherits its source's <SequenceDict> — the states are serialised with the object
-        // — but not the task that walks it, because a running UniTask is not part of what
-        // Instantiate copies. That combination is the whole of "it attacks but never moves": the
-        // collider-driven reactions (hold, grab) still fire, while everything the state machine
-        // drives, walking included, never runs. It is also why calling StartTask on its own threw
-        // "An item with the same key has already been added. Key: Ready": the states were already
-        // there.
-        //
-        // Emptying the dictionary first lets StartTask rebuild it and start the task cleanly.
+        // The game's own wake-up call, taken from its runtime spawn recipe (ZombieSpawner:
+        // Recover → Teleport → "Awake"). Both calls are void-returning. If the copy's inherited
+        // state machine is actually running, this is what legitimately kicks it into action; if
+        // it is dead, both are no-ops.
         try
         {
-            if (ClearSequenceDict(copy))
-            {
-                steps.Add("cleared SequenceDict");
-                ObjectManager? objects = ManagerList.Object;
-                if (objects is null)
-                {
-                    steps.Add("StartTask skipped (no ObjectManager)");
-                }
-                else
-                {
-                    // Returns a UniTask: a failure inside it surfaces asynchronously and will
-                    // appear in the log as an unhandled exception rather than here.
-                    copy.StartTask(objects.Token);
-                    steps.Add("StartTask requested");
-                }
-            }
-            else
-            {
-                steps.Add("SequenceDict not found; behaviour left as inherited");
-            }
+            copy.Recover(EnemyObject.RecoverFuncFlag.NormalRecover);
+            copy.OrderByLabelEvent("Awake");
+            steps.Add("Recover+Awake");
+            RestoreVisibility(copy, "copy");
         }
         catch (Exception exception)
         {
-            steps.Add($"behaviour start failed ({exception.Message})");
+            steps.Add($"Recover+Awake failed ({exception.Message})");
         }
+
+        // The behaviour state machine is deliberately left alone.
+        //
+        // Two attempts to start it were both wrong, and the game's own code says why. StartTask
+        // does not create the state dictionary; it registers states into one that already exists,
+        // and its per-frame lambdas dereference it (<StartTask>b__81_16 reads the field and
+        // throws when it is null). The copy gets that dictionary from its own Awake/SingleSetup,
+        // already populated and already running — which is why calling StartTask again threw
+        // "Key: Ready", and why clearing the dictionary first threw NullReferenceException from
+        // inside ObjectManager.ExecUpdate every frame afterwards.
+        //
+        // So the copy's behaviour is the game's to start, and it does.
 
         if (!_initialisationReported)
         {
@@ -465,8 +536,39 @@ internal static class SceneEnemyCatalog
         Add(parts, "behaviourEnabled", () => enemy.enabled.ToString());
         Add(parts, "active", () => enemy.gameObject.activeInHierarchy.ToString());
         Add(parts, "setupEnd", () => enemy.IsSetupEnd.ToString());
+        Add(parts, "state", () => DescribeState(enemy));
 
         return string.Join(", ", parts);
+    }
+
+    /// <summary>
+    /// The enemy's own state readout. <c>GetStateParameter</c> is the game's debug accessor for
+    /// exactly this, so the copy's behaviour state can be compared against a walking original's
+    /// rather than inferred from whether it happens to be moving.
+    /// </summary>
+    internal static string DescribeState(EnemyObject enemy)
+    {
+        try
+        {
+            Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<
+                Il2CppSystem.ValueTuple<string, int>>? state = enemy.GetStateParameter();
+            if (state is null || state.Length == 0)
+            {
+                return "<none>";
+            }
+
+            var parts = new List<string>();
+            foreach (Il2CppSystem.ValueTuple<string, int> entry in state)
+            {
+                parts.Add($"{entry.Item1}={entry.Item2}");
+            }
+
+            return string.Join(" ", parts);
+        }
+        catch (Exception exception)
+        {
+            return $"<{exception.GetType().Name}>";
+        }
     }
 
     private static void Add(List<string> parts, string name, Func<string> read)
@@ -500,7 +602,7 @@ internal static class SceneEnemyCatalog
             SpawnRuntime.Log?.LogInfo(
                 $"[copy] 2s later: grounded={copy.ActorHandler.IsGrounded}, "
                 + $"moved={moved:0.###} from ({spawnedAt.x:0.##},{spawnedAt.y:0.##}) "
-                + $"to ({now.x:0.##},{now.y:0.##}).");
+                + $"to ({now.x:0.##},{now.y:0.##}), state={DescribeState(copy)}.");
         }
         catch (Exception exception)
         {
@@ -508,6 +610,7 @@ internal static class SceneEnemyCatalog
         }
     }
 
+    private static bool _visibilityReported;
     private static bool _initialisationReported;
     private static bool _placementReported;
     private static bool _movementReported;
@@ -520,5 +623,6 @@ internal static class SceneEnemyCatalog
         _placementReported = false;
         _movementReported = false;
         _settledReported = false;
+        _visibilityReported = false;
     }
 }

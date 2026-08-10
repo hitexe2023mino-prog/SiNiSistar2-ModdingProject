@@ -15,7 +15,9 @@ internal sealed class AdditionalSpawner
 {
     private readonly List<EnemyObject> _spawned = new();
     private readonly List<GameObject> _clones = new();
+    private readonly PositionMemory _places = new();
     private int _consecutiveFailures;
+    private int _initialEnemyCount;
     private bool _suspendedForVisit;
 
     private const int FailureLimit = 5;
@@ -30,7 +32,33 @@ internal sealed class AdditionalSpawner
         _clones.Clear();
         _consecutiveFailures = 0;
         _suspendedForVisit = false;
+        _initialEnemyCount = -1;
+        _places.Clear();
         LastNote = "";
+    }
+
+    /// <summary>
+    /// Records where the area currently has enemies, so a later spawn can use those places even
+    /// once the enemies have left them (SPEC004 5.3 出現位置).
+    ///
+    /// Called on entry — before anything has moved, which is when the authored positions are on
+    /// offer — and then on the observer's slow tick, which picks up the spots the game's own
+    /// spawners and patrols use. Read-only with respect to the game.
+    /// </summary>
+    public void RememberEnemyPositions()
+    {
+        foreach (EnemyObject enemy in SceneEnemyCatalog.Collect())
+        {
+            try
+            {
+                Vector3 world = enemy.transform.position;
+                _places.Remember(world.x, world.y, world.z);
+            }
+            catch (Exception)
+            {
+                // A destroyed enemy has no position to remember.
+            }
+        }
     }
 
     /// <summary>
@@ -64,7 +92,14 @@ internal sealed class AdditionalSpawner
             }
         }
 
-        return (offscreen.Count, behind.Count);
+        // The remembered places count too, and in ordinary areas they are the only candidates
+        // there are — this build ships them with no spawner at all (付録A A-15), so a count drawn
+        // from spawners alone reported POINTS 0/0 while spawning was in fact possible.
+        float margin = SpawnRuntime.Profile.OffscreenMargin;
+        int rememberedOffscreen = RememberedPositions(camera, playerX, facing, false, margin).Count;
+        int rememberedBehind = RememberedPositions(camera, playerX, facing, true, margin).Count;
+
+        return (offscreen.Count + rememberedOffscreen, behind.Count + rememberedBehind);
     }
 
     /// <summary>Counts survivors among the enemies this MOD spawned and reports them to the budget.</summary>
@@ -205,9 +240,15 @@ internal sealed class AdditionalSpawner
         IRandomSource random)
     {
         List<EnemyObject> enemies = SceneEnemyCatalog.Collect();
+        if (_initialEnemyCount < 0)
+        {
+            _initialEnemyCount = enemies.Count;
+        }
+
         var liveSources = new List<EnemyObject>();
         var dormantSources = new List<EnemyObject>();
-        var positions = new List<Vector3>();
+        var deadSources = new List<EnemyObject>();
+        var idleOffscreen = new List<EnemyObject>();
         float margin = SpawnRuntime.Profile.OffscreenMargin;
 
         foreach (EnemyObject enemy in enemies)
@@ -216,12 +257,25 @@ internal sealed class AdditionalSpawner
             {
                 if (SceneEnemyCatalog.IsCopyable(enemy))
                 {
-                    // A live enemy is one the game has built completely; a dormant one has no
-                    // movement yet, and copying it copies that absence (see IsLive).
-                    (SceneEnemyCatalog.IsLive(enemy) ? liveSources : dormantSources).Add(enemy);
+                    if (enemy.IsSetupEnd && !enemy.IsLiving)
+                    {
+                        // Defeated: the game's own respawn recipe brings these back
+                        // (ZombieSpawner does exactly this), and a revival is a genuine +1.
+                        deadSources.Add(enemy);
+                    }
+                    else if (SceneEnemyCatalog.IsLive(enemy))
+                    {
+                        liveSources.Add(enemy);
+                    }
+                    else
+                    {
+                        dormantSources.Add(enemy);
+                    }
                 }
 
                 Vector3 world = enemy.transform.position;
+                _places.Remember(world.x, world.y, world.z);
+
                 Vector3 viewport = camera.WorldToViewportPoint(world);
                 if (!SpawnPointClassifier.IsOffscreen(viewport.x, viewport.y, viewport.z, margin))
                 {
@@ -233,7 +287,11 @@ internal sealed class AdditionalSpawner
                     continue;
                 }
 
-                positions.Add(world);
+                // Standing off-screen and live: relocatable without a visible teleport.
+                if (SceneEnemyCatalog.IsCopyable(enemy) && SceneEnemyCatalog.IsLive(enemy) && enemy.IsLiving)
+                {
+                    idleOffscreen.Add(enemy);
+                }
             }
             catch (Exception)
             {
@@ -242,7 +300,7 @@ internal sealed class AdditionalSpawner
         }
 
         List<EnemyObject> sources = liveSources.Count > 0 ? liveSources : dormantSources;
-        if (sources.Count == 0)
+        if (sources.Count == 0 && deadSources.Count == 0 && idleOffscreen.Count == 0)
         {
             LastNote = enemies.Count == 0
                 ? "this area has no enemy to copy"
@@ -251,23 +309,38 @@ internal sealed class AdditionalSpawner
             return;
         }
 
-        if (liveSources.Count == 0)
-        {
-            SpawnRuntime.LogIntervention(
-                $"no live enemy to copy among {enemies.Count}; copying a dormant one, which may "
-                + "not have its movement built yet.");
-        }
-
+        // Any place this area has held an enemy during the visit, not only the places one stands
+        // in right now: an area cleared in full view of the player used to offer nothing at all.
+        List<Vector3> positions = RememberedPositions(camera, playerX, facing, ambush, margin);
         if (positions.Count == 0)
         {
             LastNote = $"no {condition} position available";
             SpawnRuntime.LogIntervention(
-                $"penalty spawn skipped: no {condition} enemy position among {enemies.Count}.");
+                $"penalty spawn skipped: no {condition} position among {_places.Count} remembered "
+                + $"(scene enemies {enemies.Count}).");
+            return;
+        }
+
+        Vector3 position = positions[random.NextInt(positions.Count)];
+
+        // The game's own runtime recipe first (Recover → Teleport → "Awake", the way
+        // ZombieSpawner respawns): revive a defeated enemy, else relocate one already waiting
+        // off-screen. Everything downstream of these is the game's, so unlike a copy the state
+        // machine, the actor and the save path all just work.
+        if (TryReuse(deadSources, "revived", position, condition, budget, random)
+            || TryReuse(idleOffscreen, "relocated", position, condition, budget, random))
+        {
+            return;
+        }
+
+        if (sources.Count == 0)
+        {
+            LastNote = "no reusable or copyable enemy right now";
+            SpawnRuntime.LogIntervention($"penalty spawn skipped: {LastNote}.");
             return;
         }
 
         EnemyObject source = sources[random.NextInt(sources.Count)];
-        Vector3 position = positions[random.NextInt(positions.Count)];
         string enemyName = SafeEnemyName(source);
 
         EnemyObject? copy = SceneEnemyCatalog.Clone(source, position, out GameObject? cloneRoot);
@@ -298,7 +371,86 @@ internal sealed class AdditionalSpawner
         SpawnRuntime.LogIntervention(
             $"penalty spawn: copied {enemyName} ({(liveSources.Count > 0 ? "live" : "dormant")} source) "
             + $"to ({position.x:0.#},{position.y:0.#}) "
-            + $"condition={condition} spawnedThisVisit={budget.SpawnedThisVisit}");
+            + $"condition={condition} spawnedThisVisit={budget.SpawnedThisVisit} "
+            + $"sceneEnemies={SceneEnemyCatalog.Collect().Count} (area started with {_initialEnemyCount})");
+    }
+
+    /// <summary>
+    /// The remembered places that pass the off-screen filter now (and the behind filter, when the
+    /// roll called for an ambush). The filters are applied at use, not at recording: where the
+    /// camera is has nothing to do with whether an area supports an enemy at a spot.
+    /// </summary>
+    private List<Vector3> RememberedPositions(
+        Camera camera,
+        float playerX,
+        FacingDir facing,
+        bool ambush,
+        float margin)
+    {
+        var positions = new List<Vector3>();
+        foreach ((float x, float y, float z) in _places.Positions)
+        {
+            var world = new Vector3(x, y, z);
+            Vector3 viewport = camera.WorldToViewportPoint(world);
+            if (!SpawnPointClassifier.IsOffscreen(viewport.x, viewport.y, viewport.z, margin))
+            {
+                continue;
+            }
+
+            if (ambush && !SpawnPointClassifier.IsBehind(world.x, playerX, facing))
+            {
+                continue;
+            }
+
+            positions.Add(world);
+        }
+
+        return positions;
+    }
+
+    /// <summary>
+    /// One reuse attempt: the game's Recover → Teleport → "Awake" applied to an existing enemy.
+    /// The enemy stays the game's own object — it is tracked for the alive budget but never
+    /// destroyed on rollback.
+    /// </summary>
+    private bool TryReuse(
+        List<EnemyObject> pool,
+        string verb,
+        Vector3 position,
+        string condition,
+        SpawnBudget budget,
+        IRandomSource random)
+    {
+        while (pool.Count > 0)
+        {
+            int index = random.NextInt(pool.Count);
+            EnemyObject enemy = pool[index];
+            pool.RemoveAt(index);
+
+            string name = SafeEnemyName(enemy);
+            if (!SceneEnemyCatalog.Reactivate(enemy, position, out string failure))
+            {
+                SpawnRuntime.Log?.LogWarning($"Could not reuse {name}: {failure}");
+                continue;
+            }
+
+            _spawned.Add(enemy);
+            budget.CountAdditionalSpawn();
+            _consecutiveFailures = 0;
+            LastNote = $"{name} {verb} ({condition})";
+
+            // The scene's own enemy tally is logged with every spawn so "it goes invisible once
+            // the area holds more than it shipped with" can be read off the log rather than
+            // guessed at: revival and relocation reuse existing bodies and never raise this
+            // number, while a copy does.
+            SpawnRuntime.LogIntervention(
+                $"penalty spawn: {verb} {name} to ({position.x:0.#},{position.y:0.#}) "
+                + $"condition={condition} spawnedThisVisit={budget.SpawnedThisVisit} "
+                + $"sceneEnemies={SceneEnemyCatalog.Collect().Count} (area started with {_initialEnemyCount})");
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>Destroys the copies this MOD made that are still alive (SPEC004 5.7).</summary>
