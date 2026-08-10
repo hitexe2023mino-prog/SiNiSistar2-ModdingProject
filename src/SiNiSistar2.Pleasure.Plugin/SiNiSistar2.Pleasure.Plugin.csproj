@@ -29,6 +29,10 @@
     <Reference Include="UnityEngine.CoreModule" HintPath="$(BepInExRoot)\interop\UnityEngine.CoreModule.dll" Private="false" />
     <Reference Include="UnityEngine.ImageConversionModule" HintPath="$(BepInExRoot)\interop\UnityEngine.ImageConversionModule.dll" Private="false" />
     <Reference Include="UnityEngine.IMGUIModule" HintPath="$(BepInExRoot)\interop\UnityEngine.IMGUIModule.dll" Private="false" />
+    <!-- Polled rather than read from Event.current: the MP0 penalty needs to know an action key is
+         held, and a KeyDown event auto-repeats, which would re-roll for a key nobody pressed again
+         (SPEC005 FR-410). -->
+    <Reference Include="UnityEngine.InputLegacyModule" HintPath="$(BepInExRoot)\interop\UnityEngine.InputLegacyModule.dll" Private="false" />
     <Reference Include="UnityEngine.UI" HintPath="$(BepInExRoot)\interop\UnityEngine.UI.dll" Private="false" />
   </ItemGroup>
 

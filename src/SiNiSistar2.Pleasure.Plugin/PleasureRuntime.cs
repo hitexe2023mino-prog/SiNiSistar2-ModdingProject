@@ -74,6 +74,14 @@ internal static class PleasureRuntime
     internal static int CrestMaxLevel { get; set; } = 1;
 
     /// <summary>
+    /// Whether <see cref="CrestMaxLevel"/> is the game's answer rather than the standing-in 1.
+    ///
+    /// The two cannot be told apart by value — a status really could have one level — and treating
+    /// "not read yet" as a ceiling of one would call the first curse stock a sublimation.
+    /// </summary>
+    internal static bool CrestMaxLevelKnown { get; set; }
+
+    /// <summary>
     /// Whether the crest has ever been received in this run (SPEC003 FR-272).
     ///
     /// Sublimated means the curse reached its last level, which is where it stops being a curse
@@ -157,7 +165,17 @@ internal static class PleasureRuntime
     }
 
     /// <summary>
-    /// One gain of corruption, scaled by whether the crest is worn.
+    /// What the body's current stage multiplies a gain of corruption by (SPEC005 5.5, FR-419).
+    ///
+    /// Read here rather than passed in, because the stage is a property of the body rather than of
+    /// whatever happened to it. The level comes from the game's own list and the ceiling from the
+    /// status itself (FR-421); the MOD writes neither down.
+    /// </summary>
+    internal static float CrestCorruptionScale =>
+        Profile.Corruption.ScaleFor(CrestLevel, CrestMaxLevel, CrestSublimated);
+
+    /// <summary>
+    /// One gain of corruption, scaled by the stage the body has reached.
     ///
     /// Every gain goes through here rather than each caller multiplying for itself. The crest's
     /// effect is a property of the body, not of the particular thing that happened to it, and a
@@ -171,7 +189,7 @@ internal static class PleasureRuntime
             return;
         }
 
-        track.Add(amount * Profile.Corruption.ScaleFor(IsCrestWorn));
+        track.Add(amount * CrestCorruptionScale);
         CrestDebtDirty = true;
 
         // Nothing about the crest is decided here any more. Whether the body owes a stock is a
@@ -181,6 +199,49 @@ internal static class PleasureRuntime
     }
 
     internal static ClimaxLedger Climaxes { get; } = new();
+
+    /// <summary>
+    /// The regeneration a sublimated body earns by climaxing (SPEC005 5.1).
+    ///
+    /// Not persisted and not carried across a slot: it is the state of a body right now, in the
+    /// same way the pleasure gauge is (DEC-409).
+    /// </summary>
+    internal static RegenBuffTrack? Regen { get; set; }
+
+    /// <summary>Decides when an empty MP bar makes acting unreliable (SPEC005 5.3).</summary>
+    internal static MpZeroStunScheduler? Stun { get; set; }
+
+    /// <summary>
+    /// Whether MP can be restored at all on this build, or null before the question has been put.
+    ///
+    /// A-402 is answered from the interop metadata — <c>PlayerStatusManager.MP</c> derives from the
+    /// same <c>BattleMainParameter</c> the HP does, so <c>Recover</c> is there — but a member being
+    /// declared is not the same as it working, and the buff has to keep running on HP alone if it
+    /// does not (FR-405).
+    /// </summary>
+    internal static bool? MpRecoveryWorks { get; set; }
+
+    /// <summary>Game time at which the crest progression haze stops being drawn (SPEC005 5.4).</summary>
+    internal static double CrestFxUntil { get; set; }
+
+    /// <summary>How strongly that haze is drawn, in 0..1.</summary>
+    internal static float CrestFxIntensity { get; set; }
+
+    /// <summary>
+    /// Ends the regeneration buff. Called wherever the run's accumulated state is replaced: a save
+    /// point, a slot load, the start of a run, a game over and the teardown (FR-407, FR-416).
+    /// </summary>
+    internal static void DiscardRegen(string reason)
+    {
+        RegenBuffTrack? track = Regen;
+        if (track is null || !track.IsActive)
+        {
+            return;
+        }
+
+        LogTransition($"The succubus regeneration buff was discarded ({reason}).");
+        track.Discard();
+    }
 
     /// <summary>Counts the <c>Breast</c> applications that lead to <c>BreastSuper</c> (SPEC003 5.8).</summary>
     internal static BreastEscalation? Breasts { get; set; }
@@ -362,6 +423,7 @@ internal static class PleasureRuntime
         Breasts?.Reset();
         Milk?.Reset();
         Meter?.Reset();
+        DiscardRegen("a new run began");
         PendingClimax = false;
         ClimaxDeathFired = false;
         PendingBreastSuper = false;
@@ -426,6 +488,11 @@ internal static class PleasureRuntime
 
         CrestDebtDirty = true;
         Meter?.Reset();
+
+        // The buff belongs to the body that earned it, and that body has just been replaced by
+        // whatever the slot holds. Carrying it across would be the one way to store recovery in a
+        // save file (FR-407).
+        DiscardRegen($"slot '{slotKey}' was attached ({reason})");
         PendingClimax = false;
 
         // The count that made the run lethal has just been replaced by whatever the slot holds, so
@@ -477,6 +544,7 @@ internal static class PleasureRuntime
             CrestSublimated = false;
             CrestDebtDirty = true;
             Meter?.Reset();
+            DiscardRegen($"there was no slot to reload ({reason})");
             ClimaxDeathFired = false;
             Log?.LogInfo(
                 $"No slot is attached ({reason}), so there is nothing to reload; the run starts "
@@ -551,6 +619,10 @@ internal static class PleasureRuntime
         BinderEnemyId = null;
         BinderDisplayName = null;
         Meter?.Reset();
+        DiscardRegen("the scene changed");
+        Stun?.Reset();
+        CrestFxUntil = 0d;
+        CrestFxIntensity = 0f;
     }
 }
 

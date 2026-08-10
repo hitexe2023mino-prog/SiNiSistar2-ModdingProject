@@ -170,14 +170,102 @@ public sealed record PleasureOptions
     public float CorruptionCrestAtFraction { get; init; } = 0.5f;
 
     /// <summary>
-    /// What one unit of corruption becomes while the lust crest is worn.
+    /// What one unit of corruption becomes once the mark is permanent (SPEC005 5.5).
     ///
     /// The crest's own flavour is that the body has been made sensitive, so it is applied to the
     /// rate rather than as a one-off: a marked body learns faster. This is also what makes an enemy
     /// putting the crest on an uncorrupted player a serious event rather than a cosmetic one —
     /// nothing has been lost yet, but everything from here costs more.
+    ///
+    /// This is the far side of the cliff. The curse stages below it use
+    /// <see cref="CorruptionCurseGainMax"/> instead, and must stay under this (FR-420).
     /// </summary>
     public float CorruptionCrestGainScale { get; init; } = 2f;
+
+    /// <summary>
+    /// What the last reversible curse stock adds to the rate (SPEC005 5.5.1).
+    ///
+    /// Ships at 0, which leaves the curse stages exactly as they were: no acceleration at all until
+    /// the 付録A A-406 measurement says how much of one the player can still outrun. The whole
+    /// value of the curse being a warning rests on this staying small — it is the gain of a loop
+    /// that feeds itself, because more corruption means more stocks and more stocks mean more
+    /// corruption (SPEC005 14.3).
+    /// </summary>
+    public float CorruptionCurseGainMax { get; init; }
+
+    /// <summary>
+    /// What pleasure gain is multiplied by once the mark is permanent (SPEC005 5.2, FR-408).
+    ///
+    /// Fixed rather than staged, and deliberately so. How far the body has gone is already carried
+    /// by <see cref="CorruptionGainScale"/>; a second term that also grew with the stage would be
+    /// the same idea managed in two places (DEC-408).
+    ///
+    /// The one tuning value that is not inert on a fresh install. It is a settled figure rather
+    /// than one waiting on a measurement, so it applies from the moment the MOD is added — set it
+    /// to 1 to turn it off.
+    /// </summary>
+    public float CrestPleasureGainScale { get; init; } = 1.25f;
+
+    /// <summary>Whether the succubus regeneration buff is active at all (SPEC005 5.1).</summary>
+    public bool RegenEnabled { get; init; } = true;
+
+    /// <summary>Seconds of regeneration one qualifying climax adds. 0 never grants the buff.</summary>
+    public float RegenDurationPerClimax { get; init; }
+
+    /// <summary>
+    /// A ceiling on the banked duration. 0 means no ceiling was asked for, which is the shipped
+    /// reading: climaxing repeatedly banks time rather than merely refreshing it (DEC-403).
+    /// </summary>
+    public float RegenDurationCap { get; init; }
+
+    public float HpRegenPerSecond { get; init; }
+
+    public float MpRegenPerSecond { get; init; }
+
+    /// <summary>
+    /// Whether an empty MP bar makes acting unreliable (SPEC005 5.3).
+    ///
+    /// Off until 付録A A-401 settles how the game's own no-MP stagger is played from outside. The
+    /// rule is implemented and tested; what is missing is the animation path, and a penalty that
+    /// decides to fire and then cannot show anything is worse than one that never fires.
+    /// </summary>
+    public bool MpPenaltyEnabled { get; init; }
+
+    /// <summary>
+    /// The share of the cap the corruption must reach before the penalty applies (SPEC005 5.3).
+    ///
+    /// Held together with the crest by an AND. An enemy can put the crest on a barely-corrupted
+    /// player, and punishing that player for a state they were handed rather than earned is not
+    /// what the penalty is for (DEC-405).
+    ///
+    /// The whole cap, not half of it (利用者決定 2026-08-10). Losing the reliability of your own
+    /// hands is the deepest thing the corruption does, and it belongs at the bottom of the track
+    /// rather than at the point the mark first appears — by which the player still has half the
+    /// track left to fall.
+    /// </summary>
+    public float MpPenaltyCorruptionFraction { get; init; } = 1f;
+
+    /// <summary>
+    /// Chance, per press of a trigger input, that the press staggers (SPEC005 5.3).
+    ///
+    /// Roughly one press in five (利用者決定 2026-08-10). Acting still works; acting in front of
+    /// something is a gamble. The verification pass ran at 1.0 and read as constant rather than
+    /// unpredictable, which is the wrong feeling for a penalty whose whole description is
+    /// "予測不能なタイミングで硬直が発生する". The cooldown bounds it from the other side: whatever
+    /// this is set to, staggers cannot chain.
+    /// </summary>
+    public float StunChance { get; init; } = 0.2f;
+
+    public float StunCooldownSeconds { get; init; } = 3f;
+
+    public string StunTriggerInputs { get; init; } = string.Join(",", StunInputs.Defaults);
+
+    /// <summary>Whether the haze is drawn as the curse advances (SPEC005 5.4).</summary>
+    public bool CrestFxEnabled { get; init; } = true;
+
+    public float CrestFxDurationSeconds { get; init; } = 1.2f;
+
+    public float CrestFxIntensityPerStage { get; init; } = 0.2f;
 
     /// <summary>Shows the cross that breaks as the climax limit is approached.</summary>
     public bool ShowCross { get; init; } = true;
