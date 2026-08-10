@@ -64,6 +64,12 @@ public sealed class PleasureObserver : MonoBehaviour
     private Texture2D? _crest;
     private int _crestParts = -1;
     private int _crestResolution;
+    private bool _stunUnavailableLogged;
+    private bool _mpPanel;
+    private MpPenaltyState _mpState;
+    private readonly HashSet<KeyCode> _eventKeys = new();
+    private bool _inputPollAnswered;
+    private string? _inputPollBroken;
 
 
     public PleasureObserver(IntPtr pointer)
@@ -153,6 +159,7 @@ public sealed class PleasureObserver : MonoBehaviour
         try
         {
             DrawOverlay();
+            DrawSpec005Panel();
             _enemyEditor.Draw();
             _drawFaultLogged = false;
         }
@@ -179,6 +186,15 @@ public sealed class PleasureObserver : MonoBehaviour
     [HideFromIl2Cpp]
     private void DrawOverlay()
     {
+        // The haze is not part of the HUD and does not answer to its switch. ShowOverlay hides the
+        // gauges — the things the player consults — whereas this reports that the body just changed,
+        // which FR-413 requires on every stock whatever the HUD is set to. Its own CrestFx.Enabled
+        // is the control for it.
+        if (_gameplayActive || _editing)
+        {
+            DrawCrestProgressFlash();
+        }
+
         if (!PleasureRuntime.Profile.ShowOverlay || (!_gameplayActive && !_editing))
         {
             return;
@@ -258,10 +274,12 @@ public sealed class PleasureObserver : MonoBehaviour
         ReportBreastCureSurface(status);
         ApplyPendingBreastSuper(status);
         ApplyPendingLustCrest(status);
+        TrackCrestSublimation();
         EnforceSingleSwelling(status);
         SweepStaleHpHold();
         ConsumeClimax(lelia, status, dead);
-        DecayWhenFree(bound);
+        DecayWhenFree(bound, dead);
+        UpdateMpPenalty(bound, dead);
         ProbeSaveSlot();
 
         _wasBound = bound;
@@ -369,6 +387,7 @@ public sealed class PleasureObserver : MonoBehaviour
         // being true when the game changes it. Recomputed after reading it, because the first pass
         // through this method is also the first time the real ceiling is known.
         PleasureRuntime.CrestMaxLevel = Math.Max(1, data.MaxLevel);
+        PleasureRuntime.CrestMaxLevelKnown = true;
 
         int target = PleasureRuntime.CrestSublimated
             ? PleasureRuntime.CrestMaxLevel
@@ -398,21 +417,139 @@ public sealed class PleasureObserver : MonoBehaviour
         // The last stock is the sublimation. The game carries three of the curse and turns the
         // fourth into the mark itself, so reaching the ceiling is the moment it stops being a
         // curse (FR-273).
-        if (now >= PleasureRuntime.CrestMaxLevel && !PleasureRuntime.CrestSublimated)
+        if (LatchSublimation(now))
         {
-            PleasureRuntime.CrestSublimated = true;
-            PleasureRuntime.Log?.LogInfo(
-                $"The lust crest took its {now}th stock and has sublimated into the mark itself: "
-                + "no cure will take it off for the rest of this run. A new game starts a new run "
-                + "and clears it (FR-273).");
             return;
         }
 
+        if (PleasureRuntime.CrestSublimated)
+        {
+            // The status was put back under a sublimation that has already been announced (a cure
+            // was undone). Not a new stage, so no haze and no repeated announcement.
+            return;
+        }
+
+        RaiseCrestProgressEffect(now, sublimated: false);
         PleasureRuntime.Log?.LogInfo(
             $"The corruption has marked the body: the lust crest holds {now} of "
             + $"{PleasureRuntime.CrestMaxLevel - 1} stocks. It can still be cured at this point; the "
             + $"{PleasureRuntime.CrestMaxLevel}th sublimates it. Corruption is gained "
-            + $"{PleasureRuntime.Profile.Corruption.ScaleFor(true):0.##}x faster while it is worn.");
+            + $"{PleasureRuntime.CrestCorruptionScale:0.##}x faster at this stage, and "
+            + $"{PleasureRuntime.Profile.Corruption.ScaleFor(0, PleasureRuntime.CrestMaxLevel, true):0.##}x "
+            + "once it sublimates (SPEC005 5.5).");
+    }
+
+    /// <summary>
+    /// Watches for the crest reaching its ceiling by any route (SPEC005 3章 昇華済み).
+    ///
+    /// The MOD's own apply path already latches what it does itself, but it is not the only way the
+    /// status arrives: enemies apply it too, and one that applies it at full level has sublimated
+    /// the body just as surely. Both SPEC005 coefficients hang off this flag, so missing that route
+    /// leaves the run reading the curse's numbers while wearing the mark.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void TrackCrestSublimation()
+    {
+        if (PleasureRuntime.CrestSublimated)
+        {
+            return;
+        }
+
+        // The ceiling is asked for until it is known, then never again. Without it there is no way
+        // to tell a first stock from a last one.
+        if (!PleasureRuntime.CrestMaxLevelKnown)
+        {
+            try
+            {
+                AbnormalManager? manager = ManagerList.Abnormal;
+                if (manager is not null
+                    && manager.TryGetData(AbnormalType.LustMarkCurse, out AbnormalData? data)
+                    && data is not null)
+                {
+                    PleasureRuntime.CrestMaxLevel = Math.Max(1, data.MaxLevel);
+                    PleasureRuntime.CrestMaxLevelKnown = true;
+                }
+            }
+            catch (Exception)
+            {
+                // Loading is asynchronous; "not yet" is not "never", and it is asked again next frame.
+                return;
+            }
+        }
+
+        LatchSublimation(PleasureRuntime.CrestLevel);
+    }
+
+    /// <summary>
+    /// Records that the crest has reached its last stock (SPEC003 FR-273, SPEC005 3章).
+    ///
+    /// Sublimation is defined by the stock the body is carrying, not by who put it there. An enemy
+    /// can apply the crest, and applying it at the ceiling is the same irreversible event as
+    /// corruption earning its way up to one — the definition says 付与経路を問わず. Before this was
+    /// shared, the latch lived only inside the MOD's own apply path, so a crest that arrived at full
+    /// level from an enemy left the run permanently on the wrong side of the cliff: corruption kept
+    /// the curse's coefficient (FR-419) and pleasure lost the mark's multiplier (FR-408) while the
+    /// game showed the mark.
+    /// </summary>
+    /// <returns>True when this call was the sublimation.</returns>
+    [HideFromIl2Cpp]
+    private bool LatchSublimation(int level)
+    {
+        // A ceiling that has not been read from the game yet is 1, and latching on that would call
+        // the very first curse stock a sublimation (FR-421).
+        if (!PleasureRuntime.CrestMaxLevelKnown
+            || PleasureRuntime.CrestSublimated
+            || level < PleasureRuntime.CrestMaxLevel)
+        {
+            return false;
+        }
+
+        PleasureRuntime.CrestSublimated = true;
+        PleasureRuntime.CrestDebtDirty = true;
+        RaiseCrestProgressEffect(level, sublimated: true);
+        PleasureRuntime.Log?.LogInfo(
+            $"The lust crest reached its final stock ({level} of {PleasureRuntime.CrestMaxLevel}) "
+            + "and has sublimated into the mark itself: no cure will take it off for the rest of "
+            + "this run. A new game starts a new run and clears it (FR-273). Corruption is now "
+            + $"gained {PleasureRuntime.CrestCorruptionScale:0.##}x faster, and pleasure "
+            + $"{PleasureRuntime.Profile.Pleasure.CrestScale:0.##}x (SPEC005 5.2, 5.5).");
+        return true;
+    }
+
+    /// <summary>
+    /// Shows the haze that marks the curse advancing (SPEC005 5.4, FR-413, FR-414).
+    ///
+    /// Raised where the status actually lands rather than where the debt is decided. The observer
+    /// defers putting a stock on while an event, a hold, a defeat performance or a pause is running
+    /// (SPEC003 FR-274), and the haze belongs to the moment the body changed, not to the moment the
+    /// change became due.
+    ///
+    /// Only ever on the way up, and that is the caller's guarantee rather than a second check here:
+    /// it has already established that the level rose. A "highest stage seen" latch of our own
+    /// would be one more thing to clear at the start of a run, and forgetting to clear it would
+    /// silently swallow the haze for the whole of the next one.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void RaiseCrestProgressEffect(int stage, bool sublimated)
+    {
+        CrestFxTuning tuning = PleasureRuntime.Profile.CrestFx;
+        if (!tuning.HasEffect)
+        {
+            return;
+        }
+
+        float intensity = CrestProgressEffect.Intensity(
+            stage,
+            PleasureRuntime.CrestMaxLevel,
+            sublimated,
+            tuning.IntensityPerStage);
+        if (intensity <= 0f)
+        {
+            return;
+        }
+
+        PleasureRuntime.CrestFxIntensity = intensity;
+        PleasureRuntime.CrestFxUntil = Time.timeAsDouble + tuning.DurationSeconds;
     }
 
     /// <summary>
@@ -1071,6 +1208,83 @@ public sealed class PleasureObserver : MonoBehaviour
             + $"{PleasureRuntime.Corruption?.Value ?? 0f:F2}.");
 
         ApplyClimaxLimit(lelia, status, dead);
+        GrantRegenBuff();
+    }
+
+    /// <summary>
+    /// Gives a sublimated body the regeneration it just earned (SPEC005 5.1, FR-402, FR-404).
+    ///
+    /// After the limit has been applied rather than before it. A climax that ends the run does not
+    /// pay out: the buff would start on a corpse, and a restoration racing the death it was caused
+    /// by is exactly the kind of thing that leaves HP at 1 and nobody able to say why (DEC-410).
+    ///
+    /// Sublimation is the condition, not merely wearing the crest. The curse is still something the
+    /// player can undo, and paying a reward for a state they can walk back would make walking it
+    /// back a mistake (DEC-402).
+    /// </summary>
+    [HideFromIl2Cpp]
+    private static void GrantRegenBuff()
+    {
+        RegenBuffTrack? regen = PleasureRuntime.Regen;
+        if (regen is null
+            || !PleasureRuntime.Profile.Regen.HasEffect
+            || !PleasureRuntime.CrestSublimated
+            || PleasureRuntime.ClimaxDeathFired)
+        {
+            return;
+        }
+
+        double before = regen.Remaining;
+        regen.OnQualifyingClimax();
+        PleasureRuntime.LogTransition(
+            $"The lust mark turned a climax into recovery: the succubus buff runs for "
+            + $"{regen.Remaining:F1}s (was {before:F1}s).");
+    }
+
+    /// <summary>
+    /// Spends the buff and hands back what it restored (SPEC005 5.1 回復, FR-406).
+    ///
+    /// Suspended rather than spent whenever the game is not actually running. A buff that drained
+    /// behind a pause menu, through a defeat performance or over a death would be a buff the player
+    /// paid a climax for and never received.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private static void UpdateRegenBuff(double delta, bool dead)
+    {
+        RegenBuffTrack? regen = PleasureRuntime.Regen;
+        if (regen is null || !regen.IsActive)
+        {
+            return;
+        }
+
+        if (dead)
+        {
+            // The run is over, so the recovery it bought is over with it (FR-404).
+            PleasureRuntime.DiscardRegen("the player died");
+            return;
+        }
+
+        // An event playing is its own condition, not a paused clock: a cutscene runs at ordinary
+        // time scale, and spending the buff behind one would burn what a climax was paid for on
+        // something the player is only watching (FR-406).
+        if (delta <= 0d
+            || Time.timeScale <= 0f
+            || PleasureRuntime.IsDefeatPerformance
+            || IsCinematic())
+        {
+            return;
+        }
+
+        RegenTick tick = regen.Advance(delta);
+        if (!tick.IsEmpty)
+        {
+            PlayerVitals.Restore(tick.Hp, tick.Mp);
+        }
+
+        if (!regen.IsActive)
+        {
+            PleasureRuntime.LogTransition("The succubus regeneration buff ran out.");
+        }
     }
 
     /// <summary>
@@ -1116,8 +1330,605 @@ public sealed class PleasureObserver : MonoBehaviour
         PlayerHealth.Kill(lelia, $"climax {count} reached the limit");
     }
 
+    /// <summary>
+    /// Rolls for a stagger when the player acts on an empty MP bar (SPEC005 5.3, FR-409, FR-410).
+    ///
+    /// The conditions are an AND and every one of them is checked here rather than inside the
+    /// scheduler, because every one of them is a question only the game can answer. Wearing the
+    /// crest is not enough on its own: an enemy can put it on a barely-corrupted player, and
+    /// punishing that player for a state they were handed rather than earned is not what this is
+    /// for (DEC-405).
+    ///
+    /// A hold, an event, the gallery, a defeat performance and a paused clock all suppress it
+    /// outright. A stagger played over any of those is how a penalty becomes a progression bug
+    /// (DEC-404).
+    /// </summary>
     [HideFromIl2Cpp]
-    private void DecayWhenFree(bool bound)
+    private void UpdateMpPenalty(bool bound, bool dead)
+    {
+        MpZeroStunScheduler? scheduler = PleasureRuntime.Stun;
+        MpPenaltyTuning tuning = PleasureRuntime.Profile.MpPenalty;
+        if (scheduler is null)
+        {
+            return;
+        }
+
+        // Read every frame the debug panel is open, even when the penalty is switched off. What
+        // makes "it is not firing" diagnosable is seeing which of the seven conditions is false and
+        // whether the keys are being read at all; a mechanism that reports nothing until it is
+        // already working is the one that got reported as unverifiable (利用者REVIEW 2026-08-10).
+        bool wantDiagnostics = _mpPanel;
+        if (!tuning.HasEffect && !wantDiagnostics)
+        {
+            return;
+        }
+
+        MpPenaltyState state = ReadMpPenaltyState(tuning, bound, dead);
+        _mpState = state;
+
+        if (!tuning.HasEffect)
+        {
+            // Diagnostics only. The scheduler is deliberately not advanced: an inert penalty must
+            // not accumulate press counts that would make it look as though it had been rolling.
+            return;
+        }
+
+        // The scheduler is told about the inputs whether or not the conditions hold, so a key that
+        // was already down when they became true is not mistaken for a fresh press.
+        // The roll is deferred, not drawn here. UnityEngine.Random is the game's own generator, and
+        // taking a value from it every frame would reshuffle every roll the game and the other MODs
+        // make from it — for a lottery that only runs on a press (§10).
+        if (!scheduler.Evaluate(
+                state.ConditionsMet,
+                state.HeldInputs,
+                Time.unscaledTimeAsDouble,
+                static () => UnityEngine.Random.value))
+        {
+            return;
+        }
+
+        // A last, redundant guard, separate from the condition set above. While bound, the arrow
+        // keys are the resistance input, and playing a stagger over resistance is strictly
+        // forbidden (利用者指示 2026-08-10): it would punish the exact input the hold demands. The
+        // condition set already excludes a hold; this line is here so no future edit to that set
+        // can quietly remove the rule.
+        if (bound || PleasureRuntime.IsBound)
+        {
+            return;
+        }
+
+        PlayStagger();
+    }
+
+    /// <summary>
+    /// Every fact the MP0 penalty turns on, read once a frame (SPEC005 5.3).
+    ///
+    /// One struct rather than seven booleans computed inline, so the debug panel shows exactly the
+    /// values the rule ran on rather than re-reading them a frame later and disagreeing.
+    /// </summary>
+    private readonly record struct MpPenaltyState(
+        bool Corrupted,
+        float CorruptionFraction,
+        bool CrestWorn,
+        bool MpEmpty,
+        int Mp,
+        int MpMax,
+        bool Bound,
+        bool Dead,
+        bool Paused,
+        bool Cinematic,
+        IReadOnlyCollection<string> HeldInputs,
+        IReadOnlyCollection<string> AllInputsDown)
+    {
+        public bool ConditionsMet =>
+            Corrupted && CrestWorn && MpEmpty && !Bound && !Dead && !Paused && !Cinematic;
+    }
+
+    [HideFromIl2Cpp]
+    private MpPenaltyState ReadMpPenaltyState(MpPenaltyTuning tuning, bool bound, bool dead)
+    {
+        CorruptionTrack? corruption = PleasureRuntime.Corruption;
+        float fraction = corruption is not null && corruption.Cap > 0f
+            ? corruption.Value / corruption.Cap
+            : 0f;
+
+        var mp = -1;
+        var mpMax = -1;
+        try
+        {
+            var bar = PlayerVitals.Mp;
+            if (bar is not null)
+            {
+                mp = bar.Current;
+                mpMax = bar.Max;
+            }
+        }
+        catch (Exception)
+        {
+            // Left at -1, which the panel renders as unreadable rather than as zero.
+        }
+
+        // Both the configured set and every known input. The second is what answers "is the key
+        // being read at all" when the configured set is the thing under suspicion.
+        var held = new List<string>(tuning.TriggerInputs.Count);
+        foreach (string input in tuning.TriggerInputs)
+        {
+            if (IsInputDown(input))
+            {
+                held.Add(input);
+            }
+        }
+
+        var down = new List<string>(StunInputs.Known.Count);
+        foreach (string input in StunInputs.Known)
+        {
+            if (IsInputDown(input))
+            {
+                down.Add(input);
+            }
+        }
+
+        return new MpPenaltyState(
+            corruption is not null && corruption.Cap > 0f && fraction >= tuning.CorruptionFraction,
+            fraction,
+            PleasureRuntime.IsCrestWorn,
+            PlayerVitals.IsMpEmpty,
+            mp,
+            mpMax,
+            bound,
+            dead,
+            Time.timeScale <= 0f,
+            IsCinematic(),
+            held,
+            down);
+    }
+
+    /// <summary>
+    /// The keys each action is bound to (利用者確認 2026-08-10).
+    ///
+    /// X attack, C sword magic, V bow magic, Z jump, ←→ move. Down is crouch and is deliberately
+    /// absent: crouching is how you wait, and punishing waiting is not what the penalty is for.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private static string? ActionFor(KeyCode key) => key switch
+    {
+        KeyCode.X or KeyCode.JoystickButton2 => StunInputs.Attack,
+        KeyCode.C or KeyCode.V or KeyCode.JoystickButton3 => StunInputs.Magic,
+        KeyCode.Z or KeyCode.JoystickButton0 => StunInputs.Jump,
+        KeyCode.LeftArrow or KeyCode.RightArrow => StunInputs.Move,
+        _ => null,
+    };
+
+    /// <summary>
+    /// Records action keys from IMGUI's own key events (付録A A-403).
+    ///
+    /// The events are observed and never consumed: the game reads its input through its own manager
+    /// rather than through IMGUI, but consuming here would still be taking something that was not
+    /// ours to take.
+    ///
+    /// This exists because polling <c>UnityEngine.Input</c> reports nothing on this build — the
+    /// panel's key row sat at <c>--</c> through every press (利用者REVIEW 2026-08-10). IMGUI key
+    /// events are the reading that demonstrably arrives here, since every debug key in this file
+    /// is driven by them. Raw key codes are tracked rather than action names, so releasing one
+    /// arrow while the other is held does not read as "movement stopped".
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void ObserveActionKeys(UnityEngine.Event current)
+    {
+        try
+        {
+            if (current.type == EventType.KeyDown)
+            {
+                if (ActionFor(current.keyCode) is not null)
+                {
+                    _eventKeys.Add(current.keyCode);
+                }
+            }
+            else if (current.type == EventType.KeyUp)
+            {
+                _eventKeys.Remove(current.keyCode);
+            }
+        }
+        catch (Exception)
+        {
+            // An unreadable event is not evidence of a press.
+        }
+    }
+
+    /// <summary>
+    /// Whether one action is being asked for right now.
+    ///
+    /// Two readings, unioned. Polling <c>UnityEngine.Input</c> is tried first and is the better one
+    /// when it works — it is frame-accurate and sees the pad — but on this build it answers nothing
+    /// at all, so IMGUI's key events carry it. Which of the two is answering is reported on the F4
+    /// panel rather than inferred, because "the key is not pressed" and "the API cannot say" are
+    /// the two readings that had to be told apart (付録A A-403).
+    /// </summary>
+    [HideFromIl2Cpp]
+    private bool IsInputDown(string input)
+    {
+        if (PollInputDown(input))
+        {
+            _inputPollAnswered = true;
+            return true;
+        }
+
+        foreach (KeyCode key in _eventKeys)
+        {
+            if (string.Equals(ActionFor(key), input, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The legacy polling reading, with its failure recorded rather than swallowed.
+    ///
+    /// The first version caught and returned false, which is exactly why the panel could not say
+    /// whether the key was up or the API was refusing: both looked like <c>--</c>.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private bool PollInputDown(string input)
+    {
+        if (_inputPollBroken is not null)
+        {
+            return false;
+        }
+
+        try
+        {
+            return input switch
+            {
+                StunInputs.Attack => Input.GetKey(KeyCode.X) || Input.GetKey(KeyCode.JoystickButton2),
+                StunInputs.Magic => Input.GetKey(KeyCode.C)
+                    || Input.GetKey(KeyCode.V)
+                    || Input.GetKey(KeyCode.JoystickButton3),
+                StunInputs.Jump => Input.GetKey(KeyCode.Z) || Input.GetKey(KeyCode.JoystickButton0),
+                StunInputs.Move => Input.GetKey(KeyCode.LeftArrow) || Input.GetKey(KeyCode.RightArrow),
+                _ => false,
+            };
+        }
+        catch (Exception exception)
+        {
+            _inputPollBroken = exception.GetType().Name + ": " + exception.Message;
+            PleasureRuntime.Log?.LogInfo(
+                "A-403: polling UnityEngine.Input is not available on this build "
+                + $"({_inputPollBroken}). The MP0 penalty reads the action keys from IMGUI key "
+                + "events instead, which is what the debug keys already use.");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Plays the game's own no-MP stagger (SPEC005 FR-411).
+    ///
+    /// The playback path has not been settled. The ISIL reading (付録A A-401, 2026-08-10) found
+    /// what the vanilla stagger actually is — the magic action running in its empty-shot mode
+    /// (<c>MagicArrow.IsEmptyShot</c>: MP is checked in <c>MagicArrow.OnUpdateAction</c> and spent
+    /// in <c>_CreateArrow</c> via <c>SubMPForMagic</c>) — but not a way to run that motion from
+    /// outside without starting a cast the player never input, which would break the rule that the
+    /// take being played must describe what is actually happening (SPEC003 FR-228, SPEC001).
+    ///
+    /// Until that is solved, a fire is reported rather than shown. Reported every time, not once:
+    /// the rule — the AND conditions, the press edges, the cooldown — is the part that can be
+    /// verified in game today, and a mechanism that went silent after its first fire was reported
+    /// as unverifiable (利用者REVIEW 2026-08-10). The cooldown keeps the log honest about the rate
+    /// the penalty would actually fire at.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void PlayStagger()
+    {
+        Lelia? lelia = null;
+        try
+        {
+            lelia = ManagerList.Object?.Lelia;
+        }
+        catch (Exception)
+        {
+            // Handled below as "no player to stagger".
+        }
+
+        MagicSword? sword = null;
+        try
+        {
+            sword = lelia?.MagicSword;
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Log?.LogWarning(
+                $"The MP0 stagger could not reach the sword magic action: {exception.Message}");
+        }
+
+        if (sword is null)
+        {
+            if (!_stunUnavailableLogged)
+            {
+                _stunUnavailableLogged = true;
+                PleasureRuntime.Log?.LogWarning(
+                    "The MP0 penalty fired but the sword magic action could not be reached, so "
+                    + "nothing was played. The rule is still being applied; only the motion is "
+                    + "missing.");
+            }
+
+            return;
+        }
+
+        try
+        {
+            // Already mid-cast: leave it alone. Pressing into a running action would either be
+            // ignored or start a combo, and neither is a stagger.
+            if (sword.IsAction)
+            {
+                return;
+            }
+
+            // The game's own input seam. Pressed() and PressedThisFrame() write the two flags on
+            // the action's Call object — the same two the real button writes — and the action's
+            // own OnUpdateAction takes it from there: it reads PlayerStatusManager.UnUsedMagic,
+            // finds no MP (which is condition 3 of this very penalty), and runs the cast in its
+            // empty mode. That is the vanilla MP0 stagger, animation and action lock and all
+            // (A-401: AnimState.Magic_Sword1_Empty, the take the user identified in the gallery).
+            //
+            // Nothing about the motion is chosen here, and no animator state is written. The MOD
+            // says "the button went down"; the game decides what that means. It also cannot cast
+            // by accident — MP is empty by the time this runs, and the empty branch is the only
+            // one reachable. This is what keeps FR-228 honest: the take being played describes
+            // what is actually happening, because she really did try.
+            sword.PressedThisFrame();
+            sword.Pressed();
+
+            PleasureRuntime.Probe(
+                "mp0-stagger-played",
+                "A-401 answered: the MP0 stagger is played by pressing the game's own sword magic "
+                + "action (AttackActionBase.Pressed / PressedThisFrame) while MP is empty. The "
+                + "game runs its empty-cast branch and plays AnimState.Magic_Sword1_Empty itself.");
+            PleasureRuntime.Log?.LogInfo(
+                "[SPEC005] MP0 penalty fired: the body tried to cast with nothing to cast, and the "
+                + "game's own empty-cast stagger is playing.");
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Log?.LogWarning(
+                $"The MP0 stagger could not be started: {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// The SPEC005 panel (F4): what each of its four mechanisms is doing right now.
+    ///
+    /// Written because three of the four ship inert and the fourth has no animation, which between
+    /// them make the whole of SPEC005 unobservable from inside the game. Every line here answers a
+    /// question that was actually asked: is it switched on, is the state right, are the keys even
+    /// being read, and if it is not firing, which gate turned it away.
+    ///
+    /// Read-only. Nothing on this panel changes a setting; the forcing key is separate and says so.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void DrawSpec005Panel()
+    {
+        if (!_mpPanel)
+        {
+            return;
+        }
+
+        PleasureProfile profile = PleasureRuntime.Profile;
+        MpPenaltyTuning mp = profile.MpPenalty;
+        MpPenaltyState state = _mpState;
+        RegenBuffTrack? regen = PleasureRuntime.Regen;
+        MpZeroStunScheduler? stun = PleasureRuntime.Stun;
+        CorruptionTrack? corruption = PleasureRuntime.Corruption;
+
+        var lines = new List<string>(24)
+        {
+            "=== SPEC005 堕落バフ ===   F4 close   F2 force the MP0 penalty",
+            string.Empty,
+            "-- crest / corruption --",
+            $"corruption {corruption?.Value ?? 0f:F2} / {corruption?.Cap ?? 0f:F2}"
+                + $"  ({state.CorruptionFraction:P0})",
+            $"crest level {PleasureRuntime.CrestLevel} of {PleasureRuntime.CrestMaxLevel}"
+                + $"   sublimated {(PleasureRuntime.CrestSublimated ? "YES" : "no")}",
+            $"corruption gain x{PleasureRuntime.CrestCorruptionScale:0.###}"
+                + $"   (curse ceiling +{profile.Corruption.CurseGainMax:0.##},"
+                + $" sublimated x{profile.Corruption.ScaleFor(0, PleasureRuntime.CrestMaxLevel, true):0.##})",
+            $"pleasure gain x{(PleasureRuntime.CrestSublimated ? profile.Pleasure.CrestScale : 1f):0.###}"
+                + $"   (crest term {profile.Pleasure.CrestScale:0.##} once sublimated)",
+            string.Empty,
+            "-- succubus regen buff --",
+            profile.Regen.HasEffect
+                ? $"{regen?.Remaining ?? 0d:F1}s left"
+                    + $"   {profile.Regen.HpPerSecond:0.##} HP/s, {profile.Regen.MpPerSecond:0.##} MP/s"
+                    + $"   (+{profile.Regen.DurationPerClimax:0.#}s per climax)"
+                : "INERT — set Regen.RegenDurationPerClimax and HpRegenPerSecond/MpRegenPerSecond",
+            $"MP recovery path: {PleasureRuntime.MpRecoveryWorks switch
+            {
+                true => "works",
+                false => "does NOT work on this build",
+                _ => "not tried yet",
+            }}",
+            string.Empty,
+            "-- MP0 penalty --",
+            mp.HasEffect
+                ? $"ON   chance {mp.Chance:P0} per press   cooldown {mp.CooldownSeconds:0.#}s"
+                    + $"   inputs {string.Join("/", mp.TriggerInputs)}"
+                : "OFF — set MpPenalty.Enabled=true AND MpPenalty.StunChance above 0",
+            $"conditions: {DescribeMpConditions(state, mp)}",
+            $"=> {(state.ConditionsMet ? "ALL MET (a press would roll)" : "NOT MET")}",
+        };
+
+        // The row that answers "is anything being read at all". Every known input, not just the
+        // configured ones, because when the configured set is what is under suspicion, a set that
+        // shows nothing is indistinguishable from an input API that returns nothing.
+        var keys = new List<string>(StunInputs.Known.Count);
+        foreach (string input in StunInputs.Known)
+        {
+            bool down = state.AllInputsDown.Contains(input);
+            bool armed = mp.TriggerInputs.Contains(input);
+            keys.Add($"{input}{(armed ? string.Empty : "(off)")}:{(down ? "DOWN" : "--")}");
+        }
+
+        lines.Add($"keys now: {string.Join("  ", keys)}");
+        lines.Add(
+            "key source: "
+            + (_inputPollBroken is not null
+                ? $"IMGUI events (UnityEngine.Input failed — {_inputPollBroken})"
+                : _inputPollAnswered
+                    ? "UnityEngine.Input polling + IMGUI events"
+                    : "IMGUI events (UnityEngine.Input has never reported a press)"));
+        lines.Add(
+            stun is null
+                ? "scheduler: absent"
+                : $"presses {stun.PressCount}   rolls {stun.RollCount}   fires {stun.FireCount}"
+                    + $"   cooldown {stun.CooldownRemainingAt(Time.unscaledTimeAsDouble):F1}s");
+        lines.Add($"last press: {stun?.LastOutcome ?? "(none seen)"}");
+        lines.Add(string.Empty);
+        lines.Add(
+            "stagger: the game's own empty-cast (AnimState.Magic_Sword1_Empty), started by "
+            + "pressing its sword magic action while MP is empty.");
+
+        // Right-hand side. The left is where the game keeps the portrait and its gauges, and the
+        // panel sat on top of all of it (利用者REVIEW 2026-08-10). Nothing of the game's own lives
+        // in the top right.
+        const float width = 720f;
+        const float margin = 16f;
+        const float lineHeight = 19f;
+        float height = (lines.Count * lineHeight) + 20f;
+        float left = Math.Max(margin, Screen.width - width - margin);
+
+        // Drawn as a flat fill rather than a GUI.Box: the default skin's box is translucent and
+        // the text underneath it was competing with whatever the scene happened to be.
+        OverlayPainter.Fill(new Rect(left, margin, width, height), new Color(0.04f, 0.03f, 0.06f, 0.88f));
+        OverlayPainter.Fill(new Rect(left, margin, width, 2f), new Color(1f, 0.45f, 0.72f, 0.85f));
+
+        for (var index = 0; index < lines.Count; index++)
+        {
+            string line = lines[index];
+
+            // Three colours, and each one means something: a heading, a state that stops the
+            // mechanism, and everything else. Reading the panel should not require reading it all.
+            Color colour = line.StartsWith("===", StringComparison.Ordinal)
+                ? new Color(1f, 0.65f, 0.82f, 1f)
+                : line.Contains("NO ", StringComparison.Ordinal)
+                    || line.Contains("NOT ", StringComparison.Ordinal)
+                    || line.Contains("OFF", StringComparison.Ordinal)
+                    || line.Contains("INERT", StringComparison.Ordinal)
+                    || line.Contains("BOUND", StringComparison.Ordinal)
+                    || line.Contains("BELOW", StringComparison.Ordinal)
+                        ? new Color(1f, 0.78f, 0.42f, 1f)
+                        : line.Contains("ALL MET", StringComparison.Ordinal)
+                            || line.Contains("DOWN", StringComparison.Ordinal)
+                            ? new Color(0.62f, 1f, 0.68f, 1f)
+                            : new Color(0.92f, 0.92f, 0.95f, 1f);
+
+            OverlayPainter.Text(
+                new Rect(left + 12f, margin + 8f + (index * lineHeight), width - 24f, lineHeight),
+                line,
+                colour);
+        }
+    }
+
+    /// <summary>
+    /// Fires one stagger if the state allows it, without waiting on a press, a roll or a cooldown.
+    ///
+    /// The conditions are still every one of them. What this removes is only the waiting: a
+    /// probability the player cannot see and a cooldown they cannot time. If it reports that the
+    /// conditions were not met, the panel above says which one, and that is the answer rather than
+    /// a failure of the key.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void ForceMpPenaltyForDebugging()
+    {
+        MpPenaltyTuning tuning = PleasureRuntime.Profile.MpPenalty;
+        MpPenaltyState state = ReadMpPenaltyState(tuning, PleasureRuntime.IsBound, IsPlayerDead());
+        _mpState = state;
+
+        if (!state.ConditionsMet)
+        {
+            PleasureRuntime.Log?.LogInfo(
+                "Shift+F4: the MP0 penalty was not fired because the conditions are not met — "
+                + $"{DescribeMpConditions(state, tuning)}. The conditions are never bypassed; press "
+                + "F4 to watch them.");
+            return;
+        }
+
+        PleasureRuntime.Log?.LogInfo(
+            "Shift+F4: forcing the MP0 penalty. The press edge, the roll and the cooldown are "
+            + "short-circuited; the conditions were all met.");
+        PlayStagger();
+    }
+
+    /// <summary>Why the conditions do or do not hold, as one readable line.</summary>
+    [HideFromIl2Cpp]
+    private static string DescribeMpConditions(in MpPenaltyState state, MpPenaltyTuning tuning)
+    {
+        var parts = new List<string>(7);
+        parts.Add(state.CrestWorn ? "crest worn" : "NO crest");
+        parts.Add(state.Corrupted
+            ? $"corruption {state.CorruptionFraction:P0} >= {tuning.CorruptionFraction:P0}"
+            : $"corruption {state.CorruptionFraction:P0} BELOW {tuning.CorruptionFraction:P0}");
+        parts.Add(state.MpEmpty ? "MP empty" : $"MP {state.Mp} NOT empty");
+        if (state.Bound)
+        {
+            parts.Add("BOUND");
+        }
+
+        if (state.Dead)
+        {
+            parts.Add("DEAD");
+        }
+
+        if (state.Paused)
+        {
+            parts.Add("PAUSED");
+        }
+
+        if (state.Cinematic)
+        {
+            parts.Add("CINEMATIC");
+        }
+
+        return string.Join(", ", parts);
+    }
+
+    /// <summary>Whether the game currently has the player in a defeat state.</summary>
+    [HideFromIl2Cpp]
+    private static bool IsPlayerDead()
+    {
+        try
+        {
+            return ManagerList.Object?.Lelia?.IsHP0 == true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Whether an event or the gallery is running, which suppresses the penalty.</summary>
+    [HideFromIl2Cpp]
+    private static bool IsCinematic()
+    {
+        try
+        {
+            if (ManagerList.Object?.IsCinematicEvent == true)
+            {
+                return true;
+            }
+
+            return ManagerList.Gallery?.CurrentTakePlayer is not null;
+        }
+        catch (Exception)
+        {
+            // Unreadable is not evidence that nothing is playing, and the penalty must not fire on
+            // a state nobody confirmed.
+            return true;
+        }
+    }
+
+    [HideFromIl2Cpp]
+    private void DecayWhenFree(bool bound, bool dead)
     {
         double now = Time.timeAsDouble;
         double delta = _lastFrameTime <= 0d ? 0d : now - _lastFrameTime;
@@ -1129,6 +1940,10 @@ public sealed class PleasureObserver : MonoBehaviour
             UpdateBreastSuperLife(status, delta);
             UpdateMilk(status, delta);
         }
+
+        // Being held does not suspend the buff. A hold is where a body that recovers from being
+        // used is meant to be worth having (SPEC005 5.1 効果時間).
+        UpdateRegenBuff(delta, dead);
 
         // Decaying inside a hold would let the player wait out the danger (SPEC003 5.2).
         if (!bound && delta > 0d)
@@ -1368,6 +2183,12 @@ public sealed class PleasureObserver : MonoBehaviour
             return;
         }
 
+        // Observed before anything else, and never consumed. This is the second reading of the
+        // action keys, and on this build it is the only one that answers: polling UnityEngine.Input
+        // returns nothing here (`keys now: --`, 利用者REVIEW 2026-08-10), while IMGUI key events
+        // demonstrably arrive — every debug key below is driven by them.
+        ObserveActionKeys(current);
+
         // F11 applies Breast through the game's own add path, so the escalation can be exercised
         // without hunting for the item. Counting only advances once per frame per list, so one
         // press is one application, exactly as a use of the item is.
@@ -1397,6 +2218,33 @@ public sealed class PleasureObserver : MonoBehaviour
         if (current.type == EventType.KeyDown && current.keyCode == KeyCode.F8)
         {
             CorruptForDebugging();
+            current.Use();
+            return;
+        }
+
+        // F4 opens the SPEC005 panel. Every mechanism SPEC005 adds ships inert or invisible — the
+        // regen buff is off until it is tuned, the corruption staging only shows up as a rate, and
+        // the MP0 penalty has no animation to play — so without somewhere to read their live state
+        // the only available report is "I cannot tell whether this works" (利用者REVIEW 2026-08-10).
+        if (current.type == EventType.KeyDown && current.keyCode == KeyCode.F4)
+        {
+            _mpPanel = !_mpPanel;
+            current.Use();
+            return;
+        }
+
+        // F2 forces one stagger. A key of its own rather than Shift+F4: the modified press was
+        // reported as not working, and a plain function key is the mechanism every other debug key
+        // here already proves (利用者REVIEW 2026-08-10). Nothing is gained by asking a modifier to
+        // be reliable when the thing being debugged is input reliability.
+        //
+        // The force short-circuits the press edge, the roll and the cooldown and nothing else: the
+        // seven conditions are still required, so what it proves is that the effect fires when the
+        // state is right, without waiting on a probability. Bypassing the conditions instead would
+        // be testing a different mechanism (the line SPEC004 DEC-316 draws for its debug ops).
+        if (current.type == EventType.KeyDown && current.keyCode == KeyCode.F2)
+        {
+            ForceMpPenaltyForDebugging();
             current.Use();
             return;
         }
@@ -1471,7 +2319,7 @@ public sealed class PleasureObserver : MonoBehaviour
         // Divided by the multiplier so one press is one part whether or not the crest is worn.
         // The gain still goes through the real path — the scale is applied there — but a debug key
         // that jumped two parts once the crest was on skipped the very steps it exists to show.
-        float scale = PleasureRuntime.Profile.Corruption.ScaleFor(PleasureRuntime.IsCrestWorn);
+        float scale = PleasureRuntime.CrestCorruptionScale;
         float step = corruption.Cap / LustCrestArt.PartCount / Math.Max(1f, scale);
         PleasureRuntime.GainCorruption(step);
 
@@ -1879,6 +2727,33 @@ public sealed class PleasureObserver : MonoBehaviour
     }
 
     /// <summary>
+    /// The haze that marks the curse advancing (SPEC005 5.4, FR-413).
+    ///
+    /// The same wash a climax uses, at a strength set by the stage. Reusing it is the point rather
+    /// than an economy: pink over the frame already means "something happened to this body that was
+    /// not chosen", and a stock arriving is that same kind of event (DEC-411).
+    ///
+    /// Nothing here touches <c>Time.timeScale</c> or moves the camera, which is what keeps SPEC001's
+    /// pause detection and trigger identification intact (SPEC003 FR-212).
+    /// </summary>
+    [HideFromIl2Cpp]
+    private void DrawCrestProgressFlash()
+    {
+        double remaining = PleasureRuntime.CrestFxUntil - Time.timeAsDouble;
+        if (remaining <= 0d)
+        {
+            return;
+        }
+
+        float duration = Math.Max(0.01f, PleasureRuntime.Profile.CrestFx.DurationSeconds);
+        var progress = (float)Math.Clamp(remaining / duration, 0d, 1d);
+
+        // Fades out rather than pulsing. A climax is an event with a peak; this is a state settling
+        // onto the body, and it should read as something arriving and staying rather than a flash.
+        DrawVignette(Math.Clamp(progress * PleasureRuntime.CrestFxIntensity, 0f, 1f));
+    }
+
+    /// <summary>
     /// A pink haze closing in from the edges when a climax lands.
     ///
     /// IMGUI has no gradient, so the falloff is nested bands whose alpha drops toward the centre.
@@ -2145,5 +3020,22 @@ public sealed class PleasureObserver : MonoBehaviour
         PleasureRuntime.BinderDisplayName = null;
         BinderIdentityResolver.Forget();
         _wasBound = false;
+
+        // Held keys and a running cooldown do not survive the gap. Whatever was down before a
+        // scene change was not pressed under the conditions in the next one (SPEC005 FR-416).
+        // The observed key set goes too: a key-up delivered while the window had no focus is a
+        // key-up nobody saw, and a key left stuck down would stop registering presses entirely.
+        _eventKeys.Clear();
+        PleasureRuntime.Stun?.Reset();
+        PleasureRuntime.CrestFxUntil = 0d;
+
+        // This is the scene-change path — Poll suspends whenever the managers go unready — so it is
+        // where the buff has to end (FR-416, AC-414).
+        PleasureRuntime.DiscardRegen("play was suspended");
+
+        // Dropped so the first frame back does not charge the buff, the decay and the milk for the
+        // whole of the loading screen. Time went on passing while nothing was being advanced, and
+        // paying that gap out in one lump is not what any of the three per-second rates mean.
+        _lastFrameTime = 0d;
     }
 }

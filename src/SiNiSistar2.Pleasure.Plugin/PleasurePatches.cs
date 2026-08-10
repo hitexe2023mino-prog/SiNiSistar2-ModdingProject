@@ -158,7 +158,12 @@ internal static class DamageProbePatches
 
             float before = meter.Value;
             PleasureRuntime.GainCorruption(PleasureRuntime.Profile.Corruption.PerSexualHit);
-            if (meter.AddSexualHit(corruption?.Value ?? 0f))
+
+            // Corruption is read after the gain, so this hit's own contribution counts towards the
+            // pleasure it produces. The crest term is separate and binary: the curse stages do not
+            // take it, because their sensitivity is already in the corruption above
+            // (SPEC005 5.2.1, DEC-408).
+            if (meter.AddSexualHit(corruption?.Value ?? 0f, PleasureRuntime.CrestSublimated))
             {
                 PleasureRuntime.PendingClimax = true;
             }
@@ -303,6 +308,12 @@ internal static class SavePointPatches
             PleasureRuntime.Probe(
                 $"savepoint-activated-{isObelisk}",
                 $"A-7 answered: SavePointMenu.SetObeliskMode ran with isObelisk={isObelisk}.");
+
+            // The buff goes whatever the reset rule says (SPEC005 FR-407, DEC-412). A save point is
+            // where the run is put down for a moment, and the heat of it goes out there. Tying the
+            // discard to ResetAtObeliskOnly instead would leave an ordinary save point as a place
+            // to keep the recovery while shedding nothing for it.
+            PleasureRuntime.DiscardRegen(isObelisk ? "an obelisk was used" : "a save point was used");
 
             ClimaxTuning climax = PleasureRuntime.Profile.Climax;
             if (!climax.Enabled || (climax.ResetAtObeliskOnly && !isObelisk))

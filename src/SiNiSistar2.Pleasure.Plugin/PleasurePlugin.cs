@@ -106,8 +106,14 @@ public sealed class PleasurePlugin : BasePlugin
         PleasureRuntime.Meter = new PleasureMeter(
             profile.Pleasure.GainPerHit,
             profile.Pleasure.CorruptionScale,
-            profile.Pleasure.DecayPerSecond);
+            profile.Pleasure.DecayPerSecond,
+            profile.Pleasure.CrestScale);
         PleasureRuntime.Corruption = new CorruptionTrack(profile.Corruption.Cap);
+        PleasureRuntime.Regen = new RegenBuffTrack(profile.Regen);
+        // Built even when the penalty is switched off. It rolls for nothing in that state — the
+        // update path returns before advancing it — but the F4 panel needs something to report,
+        // and "the scheduler is absent" is not an answer anyone can act on.
+        PleasureRuntime.Stun = new MpZeroStunScheduler(profile.MpPenalty);
         PleasureRuntime.Milk = new MilkReservoir(
             profile.BreastSuper.MilkPerSexualHit,
             profile.BreastSuper.MilkDrainPerSecond);
@@ -219,6 +225,8 @@ public sealed class PleasurePlugin : BasePlugin
                   + "applications."
                 : string.Empty));
 
+        LogCorruptionBonus(profile);
+
         Log.LogInfo(
             "Press F7 to fire a climax and F8 to add one crest part's worth of corruption, for "
             + "checking the climax performance and the lust crest without playing to them. Both go "
@@ -252,6 +260,61 @@ public sealed class PleasurePlugin : BasePlugin
                 + "A-50 (whether HP can be kept off a sexual hit) and A-51 (whether the climax "
                 + "limit can take HP to 0).");
         }
+    }
+
+    /// <summary>
+    /// Reports what SPEC005 adds, and what it is not doing yet and why (FR-418).
+    ///
+    /// Written out rather than left to be inferred from the config file. Three of these four
+    /// mechanisms ship inert, and a mechanism that is silently doing nothing is indistinguishable
+    /// from one that is broken — which is the failure this log exists to prevent.
+    /// </summary>
+    private void LogCorruptionBonus(PleasureProfile profile)
+    {
+        CorruptionTuning corruption = profile.Corruption;
+        int stocks = Math.Max(1, PleasureRuntime.CrestMaxLevel);
+        Log.LogInfo(
+            "SPEC005 堕落バフ: "
+            + $"regen={(profile.Regen.HasEffect ? $"{profile.Regen.DurationPerClimax:0.#}s per climax, "
+                + $"{profile.Regen.HpPerSecond:0.##} HP/s and {profile.Regen.MpPerSecond:0.##} MP/s" : "off")}; "
+            + $"crest pleasure x{profile.Pleasure.CrestScale:0.##} once sublimated; "
+            + $"corruption staging curse +{corruption.CurseGainMax:0.##} at the last curable stock "
+            + $"-> x{corruption.ScaleFor(0, stocks, true):0.##} at sublimation; "
+            + $"mp0 penalty={(profile.MpPenalty.HasEffect ? $"{profile.MpPenalty.Chance:P0} per press of "
+                + $"{string.Join("/", profile.MpPenalty.TriggerInputs)}" : "off")}; "
+            + $"crest haze={(profile.CrestFx.HasEffect ? "on" : "off")}.");
+
+        if (!profile.Regen.HasEffect)
+        {
+            Log.LogInfo(
+                "The succubus buff is inert: set Regen.RegenDurationPerClimax and at least one of "
+                + "Regen.HpRegenPerSecond / Regen.MpRegenPerSecond. Until 付録A A-405 it ships this "
+                + "way deliberately (FR-415).");
+        }
+
+        if (corruption.CurseGainMax <= 0f)
+        {
+            Log.LogInfo(
+                "The curse stages do not accelerate corruption yet (Corruption.CorruptionCurseGainMax "
+                + "is 0), so only sublimation changes the rate. 付録A A-406 asks how much "
+                + "acceleration still leaves a player able to cure the curse and get out.");
+        }
+
+        if (!profile.MpPenalty.HasEffect)
+        {
+            Log.LogInfo(
+                "The MP0 penalty is OFF, so it cannot fire and nothing about it can be observed. "
+                + "To try it: set MpPenalty.Enabled=true AND MpPenalty.StunChance above 0 (1.0 "
+                + "makes every qualifying press fire) in "
+                + "BepInEx/config/community.sinisistar2.pleasure.cfg, then restart.");
+        }
+
+        Log.LogInfo(
+            "Press F4 in game for the SPEC005 panel (top right): it shows the regen buff, the "
+            + "crest stage and its coefficients, and — for the MP0 penalty — every one of its "
+            + "conditions, which keys are being read right now, and why the last press did or did "
+            + "not fire. F2 forces one stagger; it skips the press edge, the roll and the "
+            + "cooldown, and never the conditions.");
     }
 
     public override bool Unload()
@@ -381,10 +444,117 @@ public sealed class PleasurePlugin : BasePlugin
             "Corruption",
             "CorruptionCrestGainScale",
             2f,
-            "What one unit of corruption becomes while the lust crest is worn. The crest's own "
+            "What one unit of corruption becomes once the lust mark is permanent. The crest's own "
             + "flavour is that the body has been made sensitive, so it is applied to the rate. This "
             + "is also what makes an enemy putting the crest on an uncorrupted player serious: "
-            + "nothing has been lost yet, but everything from here costs more. Never below 1.");
+            + "nothing has been lost yet, but everything from here costs more. Never below 1, and "
+            + "it must stay above 1+CorruptionCurseGainMax so that sublimating costs something "
+            + "(SPEC005 5.5).");
+        ConfigEntry<float> curseGainMax = Config.Bind(
+            "Corruption",
+            "CorruptionCurseGainMax",
+            0f,
+            "What the LAST curable curse stock adds to the rate corruption accumulates at; the "
+            + "stocks below it get a proportional share. The curse is the stage that can still be "
+            + "lifted and the mark is the one that cannot, so the curse accelerates gently and "
+            + "sublimation jumps to CorruptionCrestGainScale outright — the discontinuity is what "
+            + "makes the point of no return cost something. 0 leaves the curse stages exactly as "
+            + "they were, which is the shipped state until 付録A A-406. Keep it small: more "
+            + "corruption means more stocks and more stocks mean more corruption, and this is that "
+            + "loop's gain.");
+        ConfigEntry<float> crestPleasure = Config.Bind(
+            "Crest",
+            "CrestPleasureGainScale",
+            1.25f,
+            "What pleasure gain is multiplied by once the lust mark is permanent. Fixed rather than "
+            + "staged: how far the body has gone is already carried by CorruptionGainScale, and a "
+            + "second term that also grew with the stage would be the same idea kept in two places. "
+            + "The curse stages do not take it. This is the one value here that is not waiting on a "
+            + "measurement, so it applies from the moment the MOD is added; set it to 1 to turn it "
+            + "off. Never below 1.");
+
+        ConfigEntry<bool> regenEnabled = Config.Bind(
+            "Regen",
+            "Enabled",
+            true,
+            "Whether a sublimated body earns recovery by climaxing (SPEC005 5.1).");
+        ConfigEntry<float> regenPerClimax = Config.Bind(
+            "Regen",
+            "RegenDurationPerClimax",
+            0f,
+            "Seconds of slow HP/MP recovery one climax grants, once the lust mark is permanent. It "
+            + "is paid for with a climax, which spends one of the run's remaining ones and moves "
+            + "the player towards the limit that ends it. 0 never grants it and is the shipped "
+            + "state.");
+        ConfigEntry<float> regenCap = Config.Bind(
+            "Regen",
+            "RegenDurationCap",
+            0f,
+            "A ceiling on the banked duration, in seconds. 0 means no ceiling: climaxing again adds "
+            + "to what is left rather than merely refreshing it. It cannot run away — clearing the "
+            + "climax count needs a save point, and a save point also discards this.");
+        ConfigEntry<float> hpRegen = Config.Bind(
+            "Regen", "HpRegenPerSecond", 0f, "HP restored per second while the buff runs.");
+        ConfigEntry<float> mpRegen = Config.Bind(
+            "Regen",
+            "MpRegenPerSecond",
+            0f,
+            "MP restored per second while the buff runs. This is the way out of the MP0 penalty, "
+            + "and the reason accepting the enemy is worth doing when the bar is empty.");
+
+        ConfigEntry<bool> mpPenaltyEnabled = Config.Bind(
+            "MpPenalty",
+            "Enabled",
+            false,
+            "Whether acting on an empty MP bar can stagger a sufficiently corrupted, marked body "
+            + "(SPEC005 5.3). The stagger is the game's own empty-cast: the MOD presses the "
+            + "game's sword magic action, and with no MP to spend the game plays "
+            + "AnimState.Magic_Sword1_Empty and locks the action itself. It never fires while "
+            + "bound: the arrow keys are the resistance input there.");
+        ConfigEntry<float> mpPenaltyFraction = Config.Bind(
+            "MpPenalty",
+            "MpPenaltyCorruptionFraction",
+            1f,
+            "The share of CorruptionCap the corruption must reach before the penalty applies. 1 "
+            + "means the whole track: the body has to be as far gone as it can get. Held together "
+            + "with wearing the crest by an AND — an enemy can put the crest on a barely corrupted "
+            + "player, and punishing them for a state they were handed rather than earned is not "
+            + "what this is for.");
+        ConfigEntry<float> stunChance = Config.Bind(
+            "MpPenalty",
+            "StunChance",
+            0.2f,
+            "Chance, per press of a trigger input, that the press staggers. 0 never staggers. "
+            + "Roughly one press in five: acting still works, but acting in front of something is "
+            + "a gamble. StunCooldownSeconds bounds it from the other side, so staggers never "
+            + "chain whatever this is set to.");
+        ConfigEntry<float> stunCooldown = Config.Bind(
+            "MpPenalty",
+            "StunCooldownSeconds",
+            3f,
+            "Seconds after a stagger during which no further roll is made, so a run of presses "
+            + "cannot chain into a lock the player has no way to act out of.");
+        ConfigEntry<string> stunInputs = Config.Bind(
+            "MpPenalty",
+            "StunTriggerInputs",
+            string.Join(",", StunInputs.Defaults),
+            "Which inputs roll. Known names: " + string.Join(", ", StunInputs.Known) + ". Magic is "
+            + "deliberately absent: the game already staggers every time magic is cast with no MP, "
+            + "so rolling for it either changes nothing or adds a second stagger to the game's own.");
+
+        ConfigEntry<bool> crestFxEnabled = Config.Bind(
+            "CrestFx",
+            "Enabled",
+            true,
+            "Whether a pink haze marks each curse stock arriving and the sublimation (SPEC005 5.4).");
+        ConfigEntry<float> crestFxSeconds = Config.Bind(
+            "CrestFx", "CrestFxDurationSeconds", 1.2f, "How long that haze lasts.");
+        ConfigEntry<float> crestFxIntensity = Config.Bind(
+            "CrestFx",
+            "CrestFxIntensityPerStage",
+            0.2f,
+            "How much strength each stage adds to the haze, so the last warning and the point of no "
+            + "return do not read the same as the first.");
 
         ConfigEntry<int> breastAfter = Config.Bind(
             "BreastSuper",
@@ -532,6 +702,21 @@ public sealed class PleasurePlugin : BasePlugin
             CorruptionCap = cap.Value,
             CorruptionCrestAtFraction = crestAt.Value,
             CorruptionCrestGainScale = crestScale.Value,
+            CorruptionCurseGainMax = curseGainMax.Value,
+            CrestPleasureGainScale = crestPleasure.Value,
+            RegenEnabled = regenEnabled.Value,
+            RegenDurationPerClimax = regenPerClimax.Value,
+            RegenDurationCap = regenCap.Value,
+            HpRegenPerSecond = hpRegen.Value,
+            MpRegenPerSecond = mpRegen.Value,
+            MpPenaltyEnabled = mpPenaltyEnabled.Value,
+            MpPenaltyCorruptionFraction = mpPenaltyFraction.Value,
+            StunChance = stunChance.Value,
+            StunCooldownSeconds = stunCooldown.Value,
+            StunTriggerInputs = stunInputs.Value,
+            CrestFxEnabled = crestFxEnabled.Value,
+            CrestFxDurationSeconds = crestFxSeconds.Value,
+            CrestFxIntensityPerStage = crestFxIntensity.Value,
             BreastSuperAfterApplications = breastAfter.Value,
             BreastSuperCorruptionThreshold = breastThreshold.Value,
             BreastSuperReplacesBreast = breastReplaces.Value,
