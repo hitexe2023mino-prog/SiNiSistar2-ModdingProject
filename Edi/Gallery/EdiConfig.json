@@ -50,6 +50,18 @@
         "Channel": "breast-right",
         "Min": 0,
         "Max": 100
+      },
+      "Vorze UFO TW Rotate: 1 (1)": {
+        "Variant": "a10-main",
+        "Channel": "unassigned",
+        "Min": 0,
+        "Max": 100
+      },
+      "Vorze UFO TW Rotate: 2 (1)": {
+        "Variant": "a10-main",
+        "Channel": "unassigned",
+        "Min": 0,
+        "Max": 100
       }
     }
   }

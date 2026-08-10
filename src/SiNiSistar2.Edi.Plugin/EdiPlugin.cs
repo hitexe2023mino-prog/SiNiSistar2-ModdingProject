@@ -12,7 +12,7 @@ public sealed class EdiPlugin : BasePlugin
 {
     public const string PluginGuid = "community.sinisistar2.edi";
     public const string PluginName = "SiNiSistar2 EDI Integration";
-    public const string PluginVersion = "1.0.0";
+    public const string PluginVersion = "1.2.0";
 
     private readonly CancellationTokenSource _lifetime = new();
     private EdiHttpClient? _ediClient;
@@ -49,6 +49,20 @@ public sealed class EdiPlugin : BasePlugin
             "BaseUrl",
             "http://127.0.0.1:5601/",
             "Loopback base URL that serves the funscript authoring GUI. Non-loopback is rejected.");
+        ConfigEntry<string> authoringKey = Config.Bind(
+            "Authoring",
+            "OpenGuiKey",
+            "F6",
+            "Key that opens the authoring GUI in the default browser while the game runs. A "
+            + "UnityEngine.KeyCode name; empty or 'None' disables the key. F7 to F11 are taken by "
+            + "the pleasure MOD's screens.");
+        ConfigEntry<bool> openAuthoringOnStart = Config.Bind(
+            "Authoring",
+            "OpenGuiOnStart",
+            false,
+            "Open the authoring GUI in the default browser as the game starts. Off by default: a "
+            + "browser stealing focus during launch is not what someone starting the game asked "
+            + "for. The key above is the usual way in.");
 
         string mappingPath = Path.Combine(Paths.ConfigPath, PluginGuid, "mappings.json");
         MappingValidationResult validation = MappingRepository.Load(mappingPath);
@@ -186,6 +200,8 @@ public sealed class EdiPlugin : BasePlugin
             Log.LogError(error);
         }
 
+        string? authoringGuiUrl = _authoring?.BaseUri.ToString();
+        KeyCode openKey = ParseKey(authoringKey.Value);
         _observer = AddComponent<RuntimeObserver>();
         _observer.Configure(
             coordinator,
@@ -194,7 +210,25 @@ public sealed class EdiPlugin : BasePlugin
             _catalog,
             live,
             Math.Max(0f, pollInterval.Value),
-            Log);
+            Log,
+            authoringGuiUrl,
+            openKey);
+
+        if (openAuthoringOnStart.Value)
+        {
+            AuthoringGuiLauncher.Open(authoringGuiUrl, Log, "OpenGuiOnStart is enabled");
+        }
+
+        // Said plainly and near the URL, because a key nobody knows about is the same as no key.
+        if (authoringGuiUrl is not null)
+        {
+            Log.LogInfo(
+                openKey == KeyCode.None
+                    ? $"Press nothing to open the authoring GUI: Authoring.OpenGuiKey is disabled. "
+                      + $"It is served at {authoringGuiUrl}."
+                    : $"Press {openKey} in game to open the funscript authoring GUI in your browser "
+                      + $"({authoringGuiUrl}). Change the key with Authoring.OpenGuiKey.");
+        }
 
         _readinessTask = StartUpAsync(
             authoringStore.GalleryRoot,
@@ -207,6 +241,30 @@ public sealed class EdiPlugin : BasePlugin
             + $"globalMetadataSha256={metadataHash}, triggerCapture=always, session={_session.OutputPath}, "
             + $"catalog={_catalog.Path}, authoringGui={_authoring?.BaseUri.ToString() ?? "disabled"}, "
             + $"endpoint={uri}.");
+    }
+
+    /// <summary>
+    /// Reads the configured hotkey, or <c>None</c> when it is empty or unrecognised.
+    ///
+    /// An unrecognised name is reported rather than silently dropped: a key that does nothing reads
+    /// as a broken feature, and the reason it does nothing is a typo the user can fix.
+    /// </summary>
+    private KeyCode ParseKey(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return KeyCode.None;
+        }
+
+        if (Enum.TryParse(name!.Trim(), ignoreCase: true, out KeyCode key))
+        {
+            return key;
+        }
+
+        Log.LogWarning(
+            $"Authoring.OpenGuiKey '{name}' is not a UnityEngine.KeyCode name, so no key opens the "
+            + "authoring GUI. Use a name such as 'F6', or leave it empty to disable it on purpose.");
+        return KeyCode.None;
     }
 
     public override bool Unload()

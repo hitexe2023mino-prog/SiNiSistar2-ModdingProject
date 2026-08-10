@@ -30,6 +30,21 @@ const el = (id) => document.getElementById(id);
 
 const keyOf = (t) => `${t.context}|${t.actorId}|${t.animationId}|${t.phase}|${t.stageId}`;
 
+const keyPayload = (t) => ({
+  context: t.context,
+  actorId: t.actorId,
+  animationId: t.animationId,
+  phase: t.phase,
+  stageId: t.stageId,
+});
+
+// Matches EventKey.ToString() on the MOD side, which is how link results name their targets.
+const keyText = (t) => `${t.context}/${t.actorId}/${t.animationId}/${t.phase}/${t.stageId}`;
+
+// A stage that has not been played, or whose binder could not be named, can never be mapped, so it
+// is not offered as a target either (FR-060).
+const isAuthorable = (t) => t.animationId !== '*' && t.actorId !== 'unidentified-binder';
+
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 function setStatus(kind, text) {
@@ -60,19 +75,22 @@ async function loadCatalog() {
   renderCatalog();
 }
 
+function matchesNeedle(t, needle) {
+  if (!needle) {
+    return true;
+  }
+  return [
+    t.actorDisplayName, t.actorId, t.displayName, t.stageId, t.animationId, t.context,
+    // So "#2" and "2" both find the stage shown as 2 in the game.
+    typeof t.displayNumber === 'number' ? `#${t.displayNumber}` : null,
+  ]
+    .filter(Boolean)
+    .some((value) => String(value).toLowerCase().includes(needle));
+}
+
 function visibleTriggers() {
   const needle = el('filter').value.trim().toLowerCase();
-  if (!needle) {
-    return state.triggers;
-  }
-  return state.triggers.filter((t) =>
-    [
-      t.actorDisplayName, t.actorId, t.displayName, t.stageId, t.animationId, t.context,
-      // So "#2" and "2" both find the stage shown as 2 in the game.
-      typeof t.displayNumber === 'number' ? `#${t.displayNumber}` : null,
-    ]
-      .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(needle)));
+  return needle ? state.triggers.filter((t) => matchesNeedle(t, needle)) : state.triggers;
 }
 
 // Prefer the game's own localized names; fall back to the internal identifiers.
@@ -137,6 +155,16 @@ function renderCatalog() {
       const badge = document.createElement('span');
       badge.className = 'badge static';
       badge.textContent = '未再生';
+      name.append(badge);
+    }
+
+    if ((trigger.sharedWith || []).length > 0) {
+      const badge = document.createElement('span');
+      badge.className = 'badge shared';
+      badge.textContent = trigger.isLinked
+        ? `共有 ← ${trigger.sharedWith.length + 1}段階`
+        : `共有 → ${trigger.sharedWith.length + 1}段階`;
+      badge.title = `同じ波形を再生する段階:\n${trigger.sharedWith.join('\n')}`;
       name.append(badge);
     }
 
@@ -238,10 +266,12 @@ function selectFiller(filler) {
     + `\nDefinitions.csv: EndTime=${filler.definitionEndTime ?? 'なし'}`
     + ` / Loop=${filler.definitionLoop ?? '?'}`;
   el('duration').value = state.duration;
+  el('linkInfo').hidden = true;
   setStatus('', '');
 
   renderFillers();
   renderVariantBar();
+  simReset();
   draw();
 }
 
@@ -406,7 +436,44 @@ async function selectTrigger(trigger) {
 
   renderCatalog();
   renderVariantBar();
+  renderLinkInfo();
+  simReset();
   draw();
+}
+
+// The waveform on screen may belong to several stages at once. Editing it then changes all of
+// them, so that has to be visible before the first point is dragged.
+function renderLinkInfo() {
+  const node = el('linkInfo');
+  const trigger = state.selected;
+  const shared = trigger ? (trigger.sharedWith || []) : [];
+  if (!trigger || shared.length === 0) {
+    node.hidden = true;
+    node.replaceChildren();
+    return;
+  }
+
+  node.hidden = false;
+  node.replaceChildren();
+
+  const label = document.createElement('span');
+  label.textContent = trigger.isLinked
+    ? `この段階は別の段階の波形を共有しています（全 ${shared.length + 1} 段階）。ここでの編集は共有している段階すべてに反映されます。`
+    : `この波形は他の ${shared.length} 段階でも再生されます。編集はそれら全てに反映されます。`;
+  node.append(label);
+
+  if (trigger.isLinked) {
+    const unlink = document.createElement('button');
+    unlink.type = 'button';
+    unlink.textContent = 'リンク解除（この段階専用の波形にする）';
+    unlink.addEventListener('click', unlinkSelected);
+    node.append(unlink);
+  }
+
+  const list = document.createElement('div');
+  list.className = 'sharedList';
+  list.textContent = `同じ波形の段階:\n${shared.join('\n')}`;
+  node.append(list);
 }
 
 function renderVariantBar() {
@@ -689,6 +756,405 @@ function draw() {
       ctx.fill();
     }
   }
+
+  // Simulation playhead: the moving devices below and this line are one picture, so the reader
+  // can tie "this part of the curve" to "this motion" (SPEC001 6.7-16).
+  if (sim.playing || sim.timeMs > 0) {
+    const x = toX(clamp(sim.timeMs, 0, state.duration), area);
+    ctx.strokeStyle = '#4fbf7b';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x, area.y);
+    ctx.lineTo(x, area.y + area.h);
+    ctx.stroke();
+    ctx.fillStyle = '#4fbf7b';
+    ctx.beginPath();
+    ctx.moveTo(x - 5, area.y);
+    ctx.lineTo(x + 5, area.y);
+    ctx.lineTo(x, area.y + 7);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+// ------------------------------------------- device-motion simulation (SPEC001 6.7-16, FR-065)
+
+// Mirrors ButtplugDevice.SendCmd in EDI: a rotate command's speed is the segment slope divided
+// by 450 units/s (clamped to 1), and the spin direction flips at a uniform random 500–2500 ms
+// interval that has nothing to do with the waveform. Keep in step with the EDI source.
+const ROTATE_FULL_SPEED_UNITS_PER_SECOND = 450;
+const ROTATE_FLIP_MIN_MS = 500;
+const ROTATE_FLIP_MAX_MS = 2500;
+
+// Visual full-speed spin. The real rotor is faster, but past ~2.5 turns/s the animation aliases
+// on a 60 Hz screen and reads as flicker, which defeats the point of showing speed.
+const SIM_ROTOR_MAX_TURNS_PER_SECOND = 2.2;
+
+const sim = {
+  playing: false,
+  timeMs: 0,
+  lastFrameAt: null,
+  raf: 0,
+  // variant -> { angle, direction, flipInMs }
+  rotors: {},
+};
+
+const nextFlipInterval = () =>
+  ROTATE_FLIP_MIN_MS + Math.random() * (ROTATE_FLIP_MAX_MS - ROTATE_FLIP_MIN_MS);
+
+// The roster decides what a variant drives; 'a10-main' is the linear piston, everything else in
+// this MOD's roster is a rotor. The set of devices always comes from the catalog, never from here.
+const isPistonVariant = (variant) => variant === 'a10-main';
+
+function simTargets() {
+  return (state.catalog && state.catalog.outputs ? state.catalog.outputs : [])
+    .map((output) => ({ output, points: state.scripts[output.variant] || [] }));
+}
+
+const simLoops = () => (isFillerMode() ? true : el('repeat').checked);
+
+/** Linear interpolation over a point list; what the drawn line commands at a moment. */
+function sampleAt(points, timeMs) {
+  if (points.length === 0) {
+    return null;
+  }
+  if (timeMs <= points[0].at) {
+    return points[0].pos;
+  }
+  for (let index = 1; index < points.length; index += 1) {
+    if (timeMs <= points[index].at) {
+      const a = points[index - 1];
+      const b = points[index];
+      const span = b.at - a.at;
+      return span <= 0 ? b.pos : a.pos + ((b.pos - a.pos) * (timeMs - a.at)) / span;
+    }
+  }
+  return points[points.length - 1].pos;
+}
+
+/** Where the carriage actually is: the reachable trace, not the drawn line (AC-067). */
+function reachablePosAt(points, timeMs) {
+  const trace = simulateDevice(points);
+  return trace.length > 1 ? sampleAt(trace, timeMs) : sampleAt(points, timeMs);
+}
+
+/**
+ * The rotation intensity a rotor is commanded at a moment: the slope of the active segment,
+ * normalized by the 450 units/s full-speed constant (AC-068). Before the first point there is
+ * no command yet, so the rotor is still.
+ */
+function rotorSpeedNormAt(points, timeMs) {
+  if (points.length < 2 || timeMs < points[0].at) {
+    return 0;
+  }
+  for (let index = 1; index < points.length; index += 1) {
+    if (timeMs <= points[index].at) {
+      const a = points[index - 1];
+      const b = points[index];
+      const span = b.at - a.at;
+      if (span <= 0) {
+        return 0;
+      }
+      const unitsPerSecond = (Math.abs(b.pos - a.pos) * 1000) / span;
+      return Math.min(1, unitsPerSecond / ROTATE_FULL_SPEED_UNITS_PER_SECOND);
+    }
+  }
+  return 0;
+}
+
+function updateSimControls() {
+  el('simToggle').textContent = sim.playing ? '⏸ 一時停止' : '▶ 動作シミュレーション';
+  el('simClock').textContent = `${Math.round(clamp(sim.timeMs, 0, state.duration))} / ${state.duration} ms`;
+}
+
+/** Stops playback and rewinds. Called whenever another stage or filler is loaded. */
+function simReset() {
+  if (sim.raf) {
+    cancelAnimationFrame(sim.raf);
+    sim.raf = 0;
+  }
+  sim.playing = false;
+  sim.timeMs = 0;
+  sim.lastFrameAt = null;
+  sim.rotors = {};
+  updateSimControls();
+  drawSim();
+}
+
+function simFrame(now) {
+  sim.raf = 0;
+  if (!sim.playing) {
+    return;
+  }
+  if (el('editor').hidden || !isEditing()) {
+    simReset();
+    return;
+  }
+
+  const dt = sim.lastFrameAt === null ? 0 : Math.min(100, now - sim.lastFrameAt);
+  sim.lastFrameAt = now;
+  const duration = Math.max(1, state.duration);
+  const loops = simLoops();
+  let atEnd = false;
+  sim.timeMs += dt;
+  if (sim.timeMs >= duration) {
+    if (loops) {
+      sim.timeMs %= duration;
+    } else {
+      // Play once, then the device sits still — the same thing the real gallery does (5.2.9).
+      sim.timeMs = duration;
+      atEnd = true;
+    }
+  }
+
+  for (const { output, points } of simTargets()) {
+    if (isPistonVariant(output.variant) || points.length < 2) {
+      continue;
+    }
+    let rotor = sim.rotors[output.variant];
+    if (!rotor) {
+      rotor = { angle: 0, direction: 1, flipInMs: nextFlipInterval() };
+      sim.rotors[output.variant] = rotor;
+    }
+    rotor.flipInMs -= dt;
+    while (rotor.flipInMs <= 0) {
+      rotor.direction = -rotor.direction;
+      rotor.flipInMs += nextFlipInterval();
+    }
+    const norm = atEnd ? 0 : rotorSpeedNormAt(points, sim.timeMs);
+    rotor.angle += (rotor.direction * norm * SIM_ROTOR_MAX_TURNS_PER_SECOND * 2 * Math.PI * dt) / 1000;
+  }
+
+  draw();
+  drawSim();
+  updateSimControls();
+
+  if (atEnd) {
+    sim.playing = false;
+    updateSimControls();
+    return;
+  }
+  sim.raf = requestAnimationFrame(simFrame);
+}
+
+// --- rendering ---
+
+const SIM_COLORS = {
+  text: '#e6e9ef',
+  muted: '#97a0b0',
+  line: '#333a47',
+  well: '#232833',
+  accent: '#5aa9e6',
+  ok: '#4fbf7b',
+  warn: '#e0a340',
+};
+
+function drawSim() {
+  const canvas = el('simCanvas');
+  if (!canvas) {
+    return;
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const targets = simTargets();
+  if (targets.length === 0) {
+    return;
+  }
+
+  const cellW = canvas.width / targets.length;
+  const atEnd = !simLoops() && sim.timeMs >= state.duration;
+  targets.forEach(({ output, points }, index) => {
+    ctx.save();
+    ctx.translate(index * cellW, 0);
+    if (index > 0) {
+      ctx.strokeStyle = SIM_COLORS.line;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0.5, 12);
+      ctx.lineTo(0.5, canvas.height - 12);
+      ctx.stroke();
+    }
+
+    const hasWave = points.length >= 2;
+    ctx.fillStyle = hasWave ? SIM_COLORS.text : SIM_COLORS.muted;
+    ctx.font = '600 13px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(output.displayName || output.id, cellW / 2, 22);
+    ctx.fillStyle = SIM_COLORS.muted;
+    ctx.font = '11px "Segoe UI", sans-serif';
+    ctx.fillText(output.variant, cellW / 2, 38);
+
+    if (isPistonVariant(output.variant)) {
+      drawPistonCell(ctx, cellW, canvas.height, points, hasWave);
+    } else {
+      drawRotorCell(ctx, cellW, canvas.height, output.variant, points, hasWave, atEnd);
+    }
+
+    if (!hasWave) {
+      ctx.fillStyle = SIM_COLORS.muted;
+      ctx.font = '11px "Segoe UI", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('波形なし — 動きません', cellW / 2, canvas.height - 10);
+    }
+    ctx.restore();
+  });
+}
+
+/** Vertical track and carriage. The carriage follows the reachable trace; a dashed marker shows
+    the drawn line, so a stroke the piston cannot finish is visible as the two separating. */
+function drawPistonCell(ctx, cellW, cellH, points, hasWave) {
+  const trackW = 46;
+  const trackX = (cellW - trackW) / 2;
+  const trackY = 52;
+  const trackH = cellH - trackY - 30;
+
+  ctx.strokeStyle = SIM_COLORS.line;
+  ctx.fillStyle = SIM_COLORS.well;
+  ctx.lineWidth = 1;
+  roundedRect(ctx, trackX, trackY, trackW, trackH, 8);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = SIM_COLORS.muted;
+  ctx.font = '10px "Segoe UI", sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('100', trackX - 6, trackY + 8);
+  ctx.fillText('0', trackX - 6, trackY + trackH);
+
+  if (!hasWave) {
+    return;
+  }
+
+  const t = clamp(sim.timeMs, 0, state.duration);
+  const posToY = (pos) => trackY + 14 + (1 - pos / 100) * (trackH - 28);
+
+  // Drawn target (what the author asked for), as a dashed marker behind the carriage.
+  const drawn = sampleAt(points, t);
+  if (drawn !== null) {
+    const y = posToY(drawn);
+    ctx.strokeStyle = SIM_COLORS.warn;
+    ctx.setLineDash([4, 3]);
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(trackX - 4, y);
+    ctx.lineTo(trackX + trackW + 4, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // The carriage itself, at the position the device can actually reach.
+  const reached = reachablePosAt(points, t);
+  if (reached !== null) {
+    const y = posToY(reached);
+    ctx.fillStyle = SIM_COLORS.accent;
+    roundedRect(ctx, trackX + 4, y - 12, trackW - 8, 24, 6);
+    ctx.fill();
+    ctx.fillStyle = SIM_COLORS.text;
+    ctx.font = '11px "Segoe UI", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(`${Math.round(reached)}`, trackX + trackW + 10, y + 4);
+  }
+}
+
+/** Spinning rotor with an intensity ring: the ring is what the waveform commands (slope / 450),
+    the spin direction is the random flip the real device performs (AC-068). */
+function drawRotorCell(ctx, cellW, cellH, variant, points, hasWave, atEnd) {
+  const cx = cellW / 2;
+  const cy = 52 + (cellH - 52 - 30) / 2;
+  const radius = Math.min(52, (cellH - 52 - 44) / 2);
+
+  const t = clamp(sim.timeMs, 0, state.duration);
+  const norm = hasWave && !atEnd ? rotorSpeedNormAt(points, t) : 0;
+  const rotor = sim.rotors[variant];
+
+  // Intensity ring: full track in line color, commanded intensity on top of it.
+  ctx.strokeStyle = SIM_COLORS.line;
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius + 10, 0, Math.PI * 2);
+  ctx.stroke();
+  if (norm > 0) {
+    ctx.strokeStyle = SIM_COLORS.accent;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius + 10, -Math.PI / 2, -Math.PI / 2 + norm * Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Rotor blades.
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rotor ? rotor.angle : 0);
+  const bladeColor = hasWave ? (norm > 0 ? SIM_COLORS.accent : SIM_COLORS.muted) : SIM_COLORS.line;
+  for (let blade = 0; blade < 3; blade += 1) {
+    ctx.save();
+    ctx.rotate((blade * 2 * Math.PI) / 3);
+    ctx.fillStyle = bladeColor;
+    ctx.beginPath();
+    ctx.ellipse(0, -radius * 0.55, radius * 0.24, radius * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.fillStyle = SIM_COLORS.well;
+  ctx.strokeStyle = SIM_COLORS.line;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * 0.22, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  if (hasWave) {
+    const direction = rotor ? rotor.direction : 1;
+    ctx.fillStyle = norm > 0 ? SIM_COLORS.text : SIM_COLORS.muted;
+    ctx.font = '11px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(
+      `強度 ${Math.round(norm * 100)}% ${direction > 0 ? '⟳' : '⟲'}`,
+      cx,
+      cy + radius + 28,
+    );
+  }
+}
+
+function roundedRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function attachSimControls() {
+  el('simToggle').addEventListener('click', () => {
+    if (!isEditing()) {
+      return;
+    }
+    if (sim.playing) {
+      sim.playing = false;
+      if (sim.raf) {
+        cancelAnimationFrame(sim.raf);
+        sim.raf = 0;
+      }
+      updateSimControls();
+      return;
+    }
+    if (sim.timeMs >= state.duration) {
+      sim.timeMs = 0;
+      sim.rotors = {};
+    }
+    sim.playing = true;
+    sim.lastFrameAt = null;
+    updateSimControls();
+    sim.raf = requestAnimationFrame(simFrame);
+  });
+
+  el('simStop').addEventListener('click', () => {
+    simReset();
+    draw();
+  });
 }
 
 function hitTest(px, py) {
@@ -840,12 +1306,15 @@ async function save() {
     }
     lines.push(`マッピング更新: ${body.mappingUpdated ? '完了' : '未実施'}`);
     lines.push(`繰り返し再生: ${el('repeat').checked ? 'する' : 'しない（1回で停止）'}`);
+    if ((trigger.sharedWith || []).length > 0) {
+      lines.push(`この波形を共有する他の ${trigger.sharedWith.length} 段階にも反映されました。`);
+    }
     if ((body.motionWarnings || []).length > 0) {
       lines.push('', '動きの注意（保存は完了しています）:');
       lines.push(...body.motionWarnings);
     }
     setStatus(body.motionWarnings && body.motionWarnings.length ? 'warn' : 'ok', lines.join('\n'));
-    await loadCatalog();
+    await refreshSelectedFromCatalog();
     return;
   }
 
@@ -999,6 +1468,210 @@ async function copyFromSelected() {
   draw();
 }
 
+// ------------------------------------------------- applying to other stages
+
+// Which stage the event picks depends on what the player was doing when it started — idle, walking,
+// falling — while the motion on screen is all but the same. 共有 states that once: the stages play
+// one waveform, and a later correction reaches all of them. 複製 is for the cases where they should
+// drift apart afterwards.
+const applyTargets = new Set();
+
+function applyMode() {
+  const chosen = document.querySelector('input[name="applyMode"]:checked');
+  return chosen ? chosen.value : 'link';
+}
+
+function setApplyStatus(kind, text) {
+  const node = el('applyStatus');
+  node.className = `status ${kind}`;
+  node.textContent = text;
+}
+
+function openApplyDialog() {
+  if (isFillerMode()) {
+    setStatus('warn', 'fillerはトリガーではないため、他の段階へ適用できません。');
+    return;
+  }
+
+  const trigger = state.selected;
+  if (!trigger) {
+    return;
+  }
+
+  // The MOD applies what is on disk, not what is on the canvas, because EDI can only play a
+  // gallery it has already read (6.7-6).
+  if ((trigger.authoredVariants || []).length === 0) {
+    setStatus('warn', 'この段階にはまだ保存済みの波形がありません。先に保存してください。');
+    return;
+  }
+
+  applyTargets.clear();
+  el('applyFilter').value = '';
+  el('applyApprove').checked = false;
+  setApplyStatus('', '');
+  renderApplyList();
+  el('applyDialog').showModal();
+}
+
+function renderApplyList() {
+  const list = el('applyList');
+  const needle = el('applyFilter').value.trim().toLowerCase();
+  const source = state.selected;
+  list.replaceChildren();
+
+  const candidates = state.triggers.filter((t) =>
+    keyOf(t) !== keyOf(source) && isAuthorable(t) && matchesNeedle(t, needle));
+
+  if (candidates.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = '該当する段階がありません。';
+    list.append(empty);
+    return;
+  }
+
+  for (const trigger of candidates) {
+    const key = keyOf(trigger);
+    const label = document.createElement('label');
+
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = applyTargets.has(key);
+    box.addEventListener('change', () => {
+      if (box.checked) {
+        applyTargets.add(key);
+      } else {
+        applyTargets.delete(key);
+      }
+    });
+
+    const text = document.createElement('div');
+    const name = document.createElement('div');
+    name.textContent = `${numberLabel(trigger)} ${actorLabel(trigger)} — ${stageLabel(trigger)}`;
+    const sub = document.createElement('div');
+    sub.className = 'sub';
+    const clip = trigger.clipLengthSeconds
+      ? `${Math.round(trigger.clipLengthSeconds * 1000)}ms`
+      : '長さ未取得';
+    const held = trigger.isLinked
+      ? '既に他段階と共有中'
+      : (trigger.authoredVariants || []).length
+        ? `作成済: ${trigger.authoredVariants.join(', ')}`
+        : '未作成';
+    sub.textContent = `${trigger.animationId} · ${trigger.phase} · ${clip} · ${held}`;
+    text.append(name, sub);
+
+    label.append(box, text);
+    list.append(label);
+  }
+}
+
+async function applyToTargets() {
+  const source = state.selected;
+  const targets = state.triggers.filter((t) => applyTargets.has(keyOf(t)));
+  if (targets.length === 0) {
+    setApplyStatus('warn', '適用先の段階を1つ以上選んでください。');
+    return;
+  }
+
+  const mode = applyMode();
+  const { ok, body } = await api('/api/link', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      source: keyPayload(source),
+      targets: targets.map(keyPayload),
+      mode,
+      approveMismatch: el('applyApprove').checked,
+    }),
+  });
+
+  if (!body) {
+    setApplyStatus('err', '適用要求に失敗しました。');
+    return;
+  }
+
+  const label = (targetText) => {
+    const trigger = state.triggers.find((t) => keyText(t) === targetText);
+    return trigger ? `${numberLabel(trigger)} ${actorLabel(trigger)} / ${stageLabel(trigger)}` : targetText;
+  };
+
+  const done = (body.targets || []).filter((outcome) => outcome.success);
+  const failed = (body.targets || []).filter((outcome) => !outcome.success);
+  const lines = [];
+  if (body.errors && body.errors.length) {
+    lines.push(...body.errors);
+  }
+  if (done.length) {
+    lines.push(
+      mode === 'link'
+        ? `${done.length}段階を ${body.gallery} へ共有しました:`
+        : `${done.length}段階へ複製しました:`);
+    lines.push(...done.map((outcome) => `  ${label(outcome.target)}`));
+  }
+  for (const outcome of failed) {
+    lines.push(`${label(outcome.target)}: ${[...outcome.errors, ...outcome.warnings].join(' / ')}`);
+  }
+  if (failed.some((outcome) => outcome.errors.length === 0 && outcome.warnings.length > 0)) {
+    lines.push('差異を意図している場合は下のチェックを入れて再実行してください。');
+  }
+
+  await refreshSelectedFromCatalog();
+
+  if (ok && body.success) {
+    el('applyDialog').close();
+    setStatus('ok', lines.join('\n'));
+    return;
+  }
+
+  setApplyStatus(failed.length && done.length ? 'warn' : 'err', lines.join('\n'));
+  renderApplyList();
+}
+
+async function unlinkSelected() {
+  const trigger = state.selected;
+  const { ok, body } = await api('/api/unlink', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      key: keyPayload(trigger),
+      repeat: el('repeat').checked,
+      approveLoopMismatch: el('approveLoop').checked,
+    }),
+  });
+
+  if (!body) {
+    setStatus('err', 'リンク解除の要求に失敗しました。');
+    return;
+  }
+
+  if (ok && body.success) {
+    await refreshSelectedFromCatalog();
+    setStatus('ok',
+      `リンクを解除しました。この段階は専用の波形 ${body.gallery} を持ちます。\n`
+      + `${body.writtenPaths.join('\n')}`);
+    return;
+  }
+
+  const lines = [...(body.errors || []), ...(body.loopWarnings || [])];
+  setStatus('err', lines.join('\n') || 'リンクを解除できませんでした。');
+}
+
+// The mapping changed but the canvas did not, so the row is refreshed in place instead of being
+// re-selected, which would throw away unsaved edits.
+async function refreshSelectedFromCatalog() {
+  const key = state.selected ? keyOf(state.selected) : null;
+  await loadCatalog();
+  if (key) {
+    const refreshed = state.triggers.find((t) => keyOf(t) === key);
+    if (refreshed) {
+      state.selected = refreshed;
+    }
+  }
+  renderCatalog();
+  renderLinkInfo();
+}
+
 function attachControls() {
   el('reload').addEventListener('click', loadCatalog);
   el('filter').addEventListener('input', renderCatalog);
@@ -1086,6 +1759,10 @@ function attachControls() {
   });
 
   el('copyFrom').addEventListener('click', openCopyDialog);
+  el('applyTo').addEventListener('click', openApplyDialog);
+  el('applyFilter').addEventListener('input', renderApplyList);
+  el('applyCancel').addEventListener('click', () => el('applyDialog').close());
+  el('applyConfirm').addEventListener('click', applyToTargets);
   el('copyConfirm').addEventListener('click', () => { window.setTimeout(copyFromSelected, 0); });
   el('save').addEventListener('click', () => (isFillerMode() ? saveFiller() : save()));
   el('preview').addEventListener('click', preview);
@@ -1097,6 +1774,7 @@ function attachControls() {
 
 attachCanvasHandlers();
 attachControls();
+attachSimControls();
 loadCatalog();
 updatePlayingBanner();
 

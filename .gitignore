@@ -1,4 +1,6 @@
 # .exe
+# GitHub rejects any push carrying a blob over 100 MB, and Edi.exe is 210 MB.
+# The game and EDI executables stay out of the repository entirely.
 *.exe
 
 # resource files

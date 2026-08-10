@@ -121,7 +121,21 @@ public sealed class PlaybackCoordinator
             if (!_mappings.TryResolve(observation.Key, out _))
             {
                 _diagnostics.RecordEvent(observation);
-                if (_mappings.Classify(observation.Key) == MappingDisposition.Unclassified
+                if (observation.Key.IsUnidentifiedActor)
+                {
+                    // Saying "author a funscript for it" here would be wrong advice: the trigger is
+                    // shared by every unidentified binder, so authoring is refused (FR-060). What
+                    // needs fixing is the identification, and this line is the evidence for it.
+                    if (_warnedUnknownEvents.Add(observation.Key))
+                    {
+                        _warning?.Invoke(
+                            $"Hold observed but its binder could not be identified ({observation.Key}). "
+                            + "The trigger is catalogued so the hold is not lost, but no funscript can "
+                            + "be authored for it, because it stands for every unidentified binder at "
+                            + "once. Report this line with the scene and the enemy.");
+                    }
+                }
+                else if (_mappings.Classify(observation.Key) == MappingDisposition.Unclassified
                     && _warnedUnknownEvents.Add(observation.Key))
                 {
                     _warning?.Invoke(

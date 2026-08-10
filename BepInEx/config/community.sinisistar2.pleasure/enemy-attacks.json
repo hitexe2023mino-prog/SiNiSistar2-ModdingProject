@@ -3,767 +3,1101 @@
   "note": "kind: Auto decides from the statuses the attack inflicts, Sexual always raises pleasure, NonSexual never does. NonSexual outranks everything. Edit in game with F10.",
   "enemies": [
     {
+      "id": "EnmID_BloodMagicHand",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Bobel",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Bobel_Barnacle",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Bobel_Dark",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_DemiHumanL",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_DemiHumanL_Masked",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_DemiHumanM",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_DemiHumanM_Axe",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_DemiHumanM_Axe_Summon",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_DemiHumanM_Club",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_DemiHumanM_Spear",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_DemiHumanM_Stone",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_DemiHumanS",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_DemiHumanS_Escape",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_DemiHuman_Boss",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Enenuth",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_EnenuthMollusk",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_EnenuthMother",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_EnenuthNest",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_EnenuthTentacle",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Enenuth_Jellyfish",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Enenuth_Jellyfish_MP",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Enenuth_MP",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Eye",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_FlyBug",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Frog_L",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Frog_M",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Funghoul",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Gravekeeper",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Hag",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_LeechBabySplash",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_LeechBabySplashObj",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_LeechBoss",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_LeechGluttony",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_LeechMan",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_MeatBall",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_MeatBall_s",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_MeatBoss",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_MeatCeiling",
+      "kind": "Sexual",
+      "seen": true,
+      "displayName": "腸の天井"
+    },
+    {
+      "id": "EnmID_MeatEggMass",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_MeatTentacleCeiling",
+      "kind": "Sexual",
+      "seen": true,
+      "displayName": "吸引する触手"
+    },
+    {
+      "id": "EnmID_MeatTentacleCloudy",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_MeatTentacleCloudy_ForBoss",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_MeatTentacleCluster",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_MeatTentacleMan",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_MeatTentacleWall",
+      "kind": "Sexual",
+      "seen": true,
+      "displayName": "迫る壁の触手"
+    },
+    {
+      "id": "EnmID_MeatTentacleWall_N",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_MeatWomb1",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_MeatWombBaby",
+      "kind": "Sexual",
+      "seen": true,
+      "displayName": "触手の幼体"
+    },
+    {
+      "id": "EnmID_MeatWorm1",
+      "kind": "Sexual",
+      "seen": true,
+      "displayName": "大口のワーム"
+    },
+    {
+      "id": "EnmID_MeatWormShooter",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_MeatWormVore",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_MidasTouch",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Mimic",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_MiscarriedFetus",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Mother",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_PictureFrameBig",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_PictureFrame_Insect1",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_PictureFrame_Scythe1",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_PictureFrame_Spear",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_PigDining",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_PigParasite",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_PriestRod_C_Air",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_PriestRod_H",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_PriestTown",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_PriestVillage",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Priest_Boss_Eye",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Priest_Scythe",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Priest_Slime",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Priest_Slime_Human",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Rat",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Region",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Seere",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_SisterOAC",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_SisterTentacle",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_SlugM",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Slug_Boss",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Slug_S",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_SnailBrain_s",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Snail_Brain",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_SpiderEgg",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_SpiderHuntsman",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_SpiderS",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_SwampLeech",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_SwampLeech_Adult",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_TreeBoss",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_VillageMeatWall",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_VillagerAges",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_VillagerFatA",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_VillagerFemale",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_VillagerFemaleParasite",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_VillagerFemale_C_Cru",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_VillagerMale",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_VillagerMaleParasite",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_VillagerMiddleMale",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_VillagerMiddleMaleParasiteL",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_VillagerMiddleMale_A_Pig",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_VillagerRegion",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_Zombie",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_ZombieCoffin1",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_ZombieCoffin2",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_ZombieCoffinBase",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_ZombieCru",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_ZombieCruBase",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_ZombieG",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_ZombieG_SpIdle",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_ZombieSpawner",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
+      "id": "EnmID_ZombieTomb",
+      "kind": "Auto",
+      "seen": false
+    },
+    {
       "id": "GaID_Attack",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Bobel",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_BobelDarktacle",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Bobel_Barnacle",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Breast",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Breast_Leech",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Cliff",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_ContinueSewage",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Damage",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_DemihumanBoss",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_DemihumanL",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_DemihumanL_Mask",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_DemihumanM",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_DemihumanM_Mask",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_DemihumanRaidBoss",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_DemihumanS",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Demihuman_Prison",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Drunk",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Enenuth",
-      "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "kind": "Sexual",
+      "seen": true,
+      "displayName": "小エネヌト"
     },
     {
       "id": "GaID_EnenuthMollusk",
-      "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "kind": "Sexual",
+      "seen": true,
+      "displayName": "エネヌト・軟体"
     },
     {
       "id": "GaID_EnenuthMother",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Enenuth_JellyFish",
       "kind": "Sexual",
-      "seen": true,
-      "note": null,
-      "Setting": 1
+      "seen": true
     },
     {
       "id": "GaID_FlyBug",
-      "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "kind": "Sexual",
+      "seen": true,
+      "displayName": "大羽虫"
     },
     {
       "id": "GaID_Frog_L",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Frog_M",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Funghoul",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Ghoul",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Gravekeeper",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Hag",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Hunchback",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_LeechBaby",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_LeechBoss",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_LeechGluttony",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_LeechMan",
-      "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "kind": "Sexual",
+      "seen": true,
+      "displayName": "ヒル人間"
     },
     {
       "id": "GaID_Livor",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_MeatBall",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_MeatBoss",
-      "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "kind": "Sexual",
+      "seen": true,
+      "displayName": "胃の忌み子"
     },
     {
       "id": "GaID_MeatCeiling",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_MeatEggMass",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_MeatTentacleCeiling",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_MeatTentacleCloudy",
-      "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "kind": "Sexual",
+      "seen": true,
+      "displayName": "粘液に潜む触手"
     },
     {
       "id": "GaID_MeatTentacleCluster",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_MeatTentacleMan",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_MeatTentacleWall",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_MeatWomb1",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_MeatWombBaby",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_MeatWorm1",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_MeatWormShooter",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_MeatWormVore",
-      "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "kind": "Sexual",
+      "seen": true,
+      "displayName": "腸のワーム"
     },
     {
       "id": "GaID_MidasTouch",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_MiddleMaleParasiteL",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Mimic",
-      "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "kind": "Sexual",
+      "seen": true
     },
     {
       "id": "GaID_NoItem",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Other_1",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Other_2",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Other_3",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_OuterOne",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Ovaries",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Parasite",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_PictureFrame",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_PictureFrameBig",
       "kind": "Sexual",
       "seen": true,
-      "note": "carried over from Pleasure.SexualEnemyIds",
-      "Setting": 1
+      "note": "carried over from Pleasure.SexualEnemyIds"
     },
     {
       "id": "GaID_PictureFrameInsect",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_PigDining",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_PigParasite",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_PriestBossEye",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_PriestRod_C_Air",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_PriestRod_H",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_PriestSlime",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_PriestTown",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_PriestVillage",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Priest_Scythe",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Region",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Ruffian",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Seere",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_SistarTentacle",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_SisterOAC",
-      "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "kind": "NonSexual",
+      "seen": true,
+      "displayName": "忌み子の乳母"
     },
     {
       "id": "GaID_SlugBoss",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_SlugM",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_SlugS",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_SnailBrain",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_SnailBrain_s",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_SpiderEgg",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_SpiderHuntsman",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_SpiderS",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_StoneEye",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Swamp",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_SwampLeech",
-      "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "kind": "Sexual",
+      "seen": true,
+      "displayName": "沼ヒル"
     },
     {
       "id": "GaID_SwampLeech_Adult",
-      "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "kind": "Sexual",
+      "seen": true,
+      "displayName": "子抱えヒル"
     },
     {
       "id": "GaID_TreasureBox",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_TreeBoss",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_VillageMeatWall",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_VillagerAges",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_VillagerFat",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_VillagerFemale",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_VillagerFemaleParasite",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_VillagerMM_Before",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_VillagerMale",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_VillagerMaleParasite",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_VillagerMiddleMale",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_VillagerMiddleMale_A_Pig",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_VillagerRegion",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Walk",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Zombie",
-      "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "kind": "NonSexual",
+      "seen": true,
+      "displayName": "ゾンビ"
     },
     {
       "id": "GaID_ZombieCoffin",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_ZombieCru",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_ZombieSpawner",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_ZombieTomb",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     },
     {
       "id": "GaID_Zombification",
       "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
-    },
-    {
-      "id": "None",
-      "kind": "Auto",
-      "seen": false,
-      "note": null,
-      "Setting": 0
+      "seen": false
     }
   ]
 }

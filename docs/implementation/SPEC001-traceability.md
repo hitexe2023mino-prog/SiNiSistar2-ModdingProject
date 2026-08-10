@@ -1,6 +1,12 @@
 # SPEC001 implementation traceability
 
-Normative source: [`docs/specifications/SPEC001.md`](../specifications/SPEC001.md) (revised 2026-08-06, CHG-014 〜 CHG-036). This document records implementation and verification only; it does not change the specification.
+Normative source: [`docs/specifications/SPEC001.md`](../specifications/SPEC001.md) (revised 2026-08-09, CHG-014 〜 CHG-040). This document records implementation and verification only; it does not change the specification.
+
+**CHG-040（2026-08-09）。** 敗北の観測を `Lelia.IsHP0` から `Lelia.LeliaDeadState`（`Live`/`HP0`/`GameOver`）へ移した。利用者のカタログでは `game-over` 11件がすべて `actorId=lelia` で、`Dungeon_Swamp_Boss` の3件（`Damage3_Wall` 0.73s、`Damage3_Wall_Down` 0.68s、`Idle_Injured` 2.32s）はいずれも被弾クリップだった。同じ敵の敗北take `GaID_SwampLeech_Adult/Go_End1` はギャラリーに5.85秒として登録されている。つまり**演出そのものはトリガーになっておらず**、演出の間にプレイヤーのアニメータが移り変わるたびに別の鍵が生まれていた。あわせて敗北を拘束より先に判定するようにした（拘束されたまま敗北する経路では `hold` が続き敗北が観測されない）。`RedAlert.IsStartRed` も候補だったが、赤アラートは敗北を伴わずに出ることがあるため採らず、Harmonyパッチも要さなかった。
+
+**CHG-039（2026-08-09）。** ある段階の波形を複数の他段階へ適用できるようにした。既定は共有（リンク）で、適用先のトリガーが元の段階のギャラリー名を指すだけであり、`.funscript` は複製されない。再生側は元から `outputs[].gallery` を読むだけなので、再生経路の変更はない。GUIの編集・試聴・保存の対象ギャラリーは `AuthoringStore.ResolveGallery` の結果へ切り替えた（FR-063）。段階ごとに動きを変えたい場合のために複製も選べる。
+
+**CHG-037（2026-08-09）。** 拘束トリガーの `actorId` を6.2.1の順序で解決するようにした。それまでは `Bind.BinderEnemy.GalleryEnemyID` を直接使っており、(1) 未登録の敵がすべて `hold/None/…` を共有し（利用者のカタログで6件）、(2) `EnemyObject` でない拘束者（`ParasiteTentacle`、`ParasiteBullet`、`StoneEye`）の拘束はトリガーが1件も出ていなかった。既存カタログの `hold` 行21件は新しい鍵で作り直される。`.funscript` は未作成のため移行不要。
 
 Manual and hardware verification steps live in [`docs/testing/SPEC001-test-scenarios.md`](../testing/SPEC001-test-scenarios.md). Rows below marked as pending device or in-game evidence are the ones those scenarios cover.
 
@@ -73,6 +79,14 @@ Status meanings:
 | FR-055 | `OutputGate.Suppress` stops the device before it stops forwarding | `SuppressingAnOpenOutputStopsTheDeviceFirst` | Tested |
 | FR-056 | every roster output needs a `defaultFillers` key; `null` means silent | `EveryOutputNeedsADefaultFillerKeyEvenIfItIsNull` | Tested |
 | FR-057 | `GalleryRegistration.FindStrayVariants` reports a variant no output claims | `EveryGalleryVariantBelongsToAnOutputInTheRoster` | Tested |
+| FR-058 | `BinderActorId.Resolve` walks `GalleryEnemyID` → `EnemyID` → `ActorIds.FromObjectName`, reading the binder through `Bind.Binder` as well as `Bind.BinderEnemy`; `ActorIds.IsUsable` rejects `None` | `ActorIdTests.UnsetNamesNoActor`, `UnitySuffixesAreNotPartOfTheActor`, `DifferentBindersGetDifferentKeys`; AC-056 in game | Tested / unverified |
+| FR-059 | `RuntimeObserver.ObserveGameplay` no longer requires `BinderEnemy` to observe a hold; an unnameable binder becomes `ActorIds.UnidentifiedBinder` | `ActorIdTests.TheUnidentifiedBinderIsItsOwnActor`; AC-057 in game | Tested / unverified |
+| FR-061 | `Authoring.OpenGuiKey` (default `F6`) read in `RuntimeObserver.OnGUI`; `AuthoringGuiLauncher.Open` shells out to the default browser and swallows failures; `Authoring.OpenGuiOnStart` opens it at load; the startup log names the key | Build-time only so far — the key path needs the game; AC-059 in game | Implemented / unverified |
+| FR-062 | `AuthoringStore.LinkAsync` / `UnlinkAsync`; `POST /api/link` (`mode: link|copy`) and `POST /api/unlink` in `AuthoringServer`; the GUI's 「この波形を他の段階へ…」 dialog, the shared badge in the catalog list, and the link banner with 「リンク解除」 | `LinkedTriggerTests` (8 cases: sharing without a second asset, editing through a link, clip-length approval, unmappable targets, unsaved source, unlink, unlink of an unlinked stage, two-gallery fallback); GUI behaviour driven through a jsdom harness; AC-060〜AC-063 in game | Tested / unverified in game |
+| FR-063 | `AuthoringStore.ResolveGallery` reads the gallery from the mapping; `LoadExisting`, `SaveAsync`, `/api/script`, `/api/catalog`, and preview all use it | `LinkedTriggerTests.EditingALinkedStageWritesTheSharedGallery`, `AnEntryNamingTwoGalleriesResolvesToTheStagesOwnGallery` | Tested |
+| FR-064 | `RuntimeObserver.ReadDeadState` / `ObserveGameOver` / `ForgetGameOver`; the defeat branch runs before the hold branch; the key is latched per `LeliaDeadState` stage and cleared by `SetNoEvent` and `Shutdown` | No automated coverage — the plugin layer has no test harness. AC-064 and AC-065 in game (TS-507) | Implemented / unverified |
+| FR-065 | The simulation section of `authoring/editor.js` (`simFrame`, `reachablePosAt`, `rotorSpeedNormAt`, `drawSim`) plus the `simPanel` markup; pure GUI, no server or API change. Piston motion reuses the `simulateDevice` reachable trace; rotor speed is segment slope / 450 with 500–2500 ms random direction flips, mirroring `ButtplugDevice.SendCmd` | Verified 2026-08-10 against a stub API server in a browser: slope→intensity values (0.25 / 0.556), drawn-vs-reachable divergence (77.5 vs 62.5 at 600 ms), rotor angle advance (0.3456 rad = theoretical), non-loop end stop, loop wrap, playhead pixels, no console errors, and zero HTTP traffic from the simulation (AC-066〜AC-068). No jsdom harness yet | Tested (stub browser run) |
+| FR-060 | `EventKey.IsUnidentifiedActor` / `IsAuthorable`; `AuthoringStore.Save` refuses the key; `MappingRepository.TryResolve` refuses it even when hand-written; `PlaybackCoordinator.ObserveEvent` warns about identification rather than authoring | `ActorIdTests.AnUnidentifiedActorCanNeverCarryAScript`, `AHandWrittenMappingForAnUnidentifiedActorIsNotHonoured`; AC-058 in game | Tested / unverified |
 
 ## Acceptance criteria
 
@@ -314,6 +328,26 @@ distinct, correctly named enemy:
 
 Both previously reported misattributions are gone (子抱えヒル was 大羽虫, 外なる者の呪い was 巨大豚),
 which closes findings 7, 10, and 11 and verifies FR-031 and FR-032 in-game.
+
+### EDI device-send thread-safety, revision E7 (2026-08-09)
+
+`Edilog20260809.txt` (21:28–21:33) recorded the piston's `LinearAsync` failing 26 times in a row
+with `InvalidOperationException` inside `ButtplugMessage.GetName`, starting the moment three
+devices began one gallery together, while both UFO devices kept playing. Buttplug 4.0.0 caches
+message metadata in an unlocked static `Dictionary`, and EDI's per-device playback tasks serialize
+concurrently, so racing first-time lookups can corrupt the cache; the affected message type then
+fails on every send until the process restarts. This is the field failure previously perceived as
+"A10 and UFO timing is unstable" — the channel model itself routed correctly throughout the log
+(`Rotate: 1 → ufo-left`, `Rotate: 2 → ufo-right`, strict variant resolution refused every
+cross-variant request).
+
+Fixed as SPEC001 7.4.2 E7: `ButtplugMessageMetadataPrewarm` resolves every message type once,
+single-threaded, in the `ButtplugProvider` constructor, making the cache read-only for the life of
+the process. Covered by `Edi.Core.Tests/Devices/ButtplugMessageMetadataPrewarmTests` (16 threads ×
+1000 lookups over all message types; `LinearCmd`/`RotateCmd`/`StopDeviceCmd` proven pre-resolved).
+All 137 Edi.Core tests pass. Deployed `Edi.exe` SHA-256
+`D5B47F31442D598B881E10C104FAF1DA7CB82D6601F25FA6BDDF12434C50178D`; the prior binary is kept as
+`Edi/Edi.exe.bak-pre-spec001-e7`. The fix takes effect on the next `Edi.exe` start.
 
 ## Outstanding verification
 

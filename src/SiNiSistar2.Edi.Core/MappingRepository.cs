@@ -106,6 +106,15 @@ public sealed class MappingRepository
 
     public bool TryResolve(EventKey key, out EventMapping mapping)
     {
+        // An unidentified actor stands for more than one binder, so a mapping filed under it would
+        // give them all the same waveform (SPEC001 FR-060). The authoring side refuses to write such
+        // an entry; this refuses to honour one that reached the file by hand.
+        if (key.IsUnidentifiedActor)
+        {
+            mapping = null!;
+            return false;
+        }
+
         lock (_eventLock)
         {
             if (_events.TryGetValue(key, out var candidate) && candidate.Disposition == "mapped")

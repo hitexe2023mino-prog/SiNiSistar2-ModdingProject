@@ -8,24 +8,192 @@
   "outputs": [
     {
       "id": "main",
-      "displayName": "A10ピストンSA",
+      "displayName": "A10\u30D4\u30B9\u30C8\u30F3SA",
       "ediDeviceName": "Vorze Piston",
       "ediVariant": "a10-main"
     },
     {
       "id": "breast-left",
-      "displayName": "U.F.O TW 左",
+      "displayName": "U.F.O TW \u5DE6",
       "ediDeviceName": "Vorze UFO TW Rotate: 1",
       "ediVariant": "ufo-left"
     },
     {
       "id": "breast-right",
-      "displayName": "U.F.O TW 右",
+      "displayName": "U.F.O TW \u53F3",
       "ediDeviceName": "Vorze UFO TW Rotate: 2",
       "ediVariant": "ufo-right"
     }
   ],
   "events": [
+    {
+      "id": "authored-sinisistar2-095d2970cfb6223a89ff",
+      "context": "hold",
+      "actorId": "GaID_SwampLeech_Adult",
+      "animationId": "Idle_Injured",
+      "phase": "loop",
+      "stageId": "Idle_Injured",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-095d2970cfb6223a89ff"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
+      "id": "authored-sinisistar2-0a46496e33afd840a996",
+      "context": "gallery",
+      "actorId": "GaID_PriestRod_H",
+      "animationId": "GO2",
+      "phase": "reaction",
+      "stageId": "GO2",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-0a46496e33afd840a996"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
+      "id": "authored-sinisistar2-155e8951a6d56afba4e9",
+      "context": "hold",
+      "actorId": "GaID_Enenuth",
+      "animationId": "Idle",
+      "phase": "loop",
+      "stageId": "Idle",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-155e8951a6d56afba4e9"
+        },
+        {
+          "id": "breast-left",
+          "gallery": "sinisistar2-155e8951a6d56afba4e9"
+        },
+        {
+          "id": "breast-right",
+          "gallery": "sinisistar2-155e8951a6d56afba4e9"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
+      "id": "authored-sinisistar2-15da08afcd491bda7f3e",
+      "context": "gallery",
+      "actorId": "GaID_EnenuthMother",
+      "animationId": "Continue",
+      "phase": "reaction",
+      "stageId": "Continue",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-15da08afcd491bda7f3e"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
+      "id": "authored-sinisistar2-2a395323adef9064467f",
+      "context": "gallery",
+      "actorId": "GaID_Region",
+      "animationId": "Continue",
+      "phase": "reaction",
+      "stageId": "Continue",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-2a395323adef9064467f"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
+      "id": "authored-sinisistar2-2ebaebb727ec50d30257",
+      "context": "hold",
+      "actorId": "GaID_Enenuth",
+      "animationId": "Down",
+      "phase": "loop",
+      "stageId": "Down",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-2ebaebb727ec50d30257"
+        },
+        {
+          "id": "breast-left",
+          "gallery": "sinisistar2-2ebaebb727ec50d30257"
+        },
+        {
+          "id": "breast-right",
+          "gallery": "sinisistar2-2ebaebb727ec50d30257"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
+      "id": "authored-sinisistar2-3186b538ce8ef189e52c",
+      "context": "gallery",
+      "actorId": "GaID_EnenuthMother",
+      "animationId": "Failure",
+      "phase": "reaction",
+      "stageId": "Failure",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-3186b538ce8ef189e52c"
+        },
+        {
+          "id": "breast-left",
+          "gallery": "sinisistar2-3186b538ce8ef189e52c"
+        },
+        {
+          "id": "breast-right",
+          "gallery": "sinisistar2-3186b538ce8ef189e52c"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
+      "id": "authored-sinisistar2-3a3a258f5e6c46b54e1f",
+      "context": "gallery",
+      "actorId": "GaID_Region",
+      "animationId": "Go1",
+      "phase": "reaction",
+      "stageId": "Go1",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-3a3a258f5e6c46b54e1f"
+        },
+        {
+          "id": "breast-left",
+          "gallery": "sinisistar2-3a3a258f5e6c46b54e1f"
+        },
+        {
+          "id": "breast-right",
+          "gallery": "sinisistar2-3a3a258f5e6c46b54e1f"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
     {
       "id": "authored-sinisistar2-3c72dc385e33bcb21786",
       "context": "gallery",
@@ -42,12 +210,305 @@
       ],
       "seekMode": "animation-time",
       "ignoreReason": null
+    },
+    {
+      "id": "authored-sinisistar2-4e8df68905f4a6f896b9",
+      "context": "hold",
+      "actorId": "GaID_LeechMan",
+      "animationId": "Idle_Broken",
+      "phase": "loop",
+      "stageId": "Idle_Broken",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-4e8df68905f4a6f896b9"
+        },
+        {
+          "id": "breast-left",
+          "gallery": "sinisistar2-4e8df68905f4a6f896b9"
+        },
+        {
+          "id": "breast-right",
+          "gallery": "sinisistar2-4e8df68905f4a6f896b9"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
+      "id": "authored-sinisistar2-549b9cacec94ac5b8d82",
+      "context": "hold",
+      "actorId": "GaID_SwampLeech",
+      "animationId": "Idle_Broken",
+      "phase": "loop",
+      "stageId": "Idle_Broken",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-549b9cacec94ac5b8d82"
+        },
+        {
+          "id": "breast-left",
+          "gallery": "sinisistar2-549b9cacec94ac5b8d82"
+        },
+        {
+          "id": "breast-right",
+          "gallery": "sinisistar2-549b9cacec94ac5b8d82"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
+      "id": "authored-sinisistar2-69f16b6f217451a7691d",
+      "context": "hold",
+      "actorId": "GaID_LeechMan",
+      "animationId": "Idle_Injured",
+      "phase": "loop",
+      "stageId": "Idle_Injured",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-69f16b6f217451a7691d"
+        },
+        {
+          "id": "breast-left",
+          "gallery": "sinisistar2-69f16b6f217451a7691d"
+        },
+        {
+          "id": "breast-right",
+          "gallery": "sinisistar2-69f16b6f217451a7691d"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
+      "id": "authored-sinisistar2-7c8e66aba77550605789",
+      "context": "hold",
+      "actorId": "EnmID_MeatWorm1",
+      "animationId": "Idle_Injured",
+      "phase": "loop",
+      "stageId": "Idle_Injured",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-7c8e66aba77550605789"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
+      "id": "authored-sinisistar2-7df69f1eb3dcb1d38d2d",
+      "context": "hold",
+      "actorId": "GaID_SwampLeech",
+      "animationId": "Down",
+      "phase": "loop",
+      "stageId": "Down",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-7df69f1eb3dcb1d38d2d"
+        },
+        {
+          "id": "breast-left",
+          "gallery": "sinisistar2-7df69f1eb3dcb1d38d2d"
+        },
+        {
+          "id": "breast-right",
+          "gallery": "sinisistar2-7df69f1eb3dcb1d38d2d"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
+      "id": "authored-sinisistar2-8436e5762719679f9864",
+      "context": "hold",
+      "actorId": "EnmID_MeatWorm1",
+      "animationId": "Idle_Broken",
+      "phase": "loop",
+      "stageId": "Idle_Broken",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-8436e5762719679f9864"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
+      "id": "authored-sinisistar2-8ba0d3e104a29c64f788",
+      "context": "hold",
+      "actorId": "GaID_EnenuthMollusk",
+      "animationId": "Down",
+      "phase": "loop",
+      "stageId": "Down",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-8ba0d3e104a29c64f788"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
+      "id": "authored-sinisistar2-8f7d7cbefef64e64e8c6",
+      "context": "gallery",
+      "actorId": "GaID_VillagerMiddleMale_A_Pig",
+      "animationId": "Continue_Hold_Breast2",
+      "phase": "reaction",
+      "stageId": "Continue_Hold_Breast2",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-8f7d7cbefef64e64e8c6"
+        },
+        {
+          "id": "breast-left",
+          "gallery": "sinisistar2-8f7d7cbefef64e64e8c6"
+        },
+        {
+          "id": "breast-right",
+          "gallery": "sinisistar2-8f7d7cbefef64e64e8c6"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
+      "id": "authored-sinisistar2-9af6f3bf4c37a87ddc05",
+      "context": "gallery",
+      "actorId": "GaID_VillagerMiddleMale_A_Pig",
+      "animationId": "Continue_Hold",
+      "phase": "reaction",
+      "stageId": "Continue_Hold",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-9af6f3bf4c37a87ddc05"
+        },
+        {
+          "id": "breast-left",
+          "gallery": "sinisistar2-9af6f3bf4c37a87ddc05"
+        },
+        {
+          "id": "breast-right",
+          "gallery": "sinisistar2-9af6f3bf4c37a87ddc05"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
+      "id": "authored-sinisistar2-ac3b435c0e904bd62b3c",
+      "context": "hold",
+      "actorId": "GaID_FlyBug",
+      "animationId": "Idle_Broken",
+      "phase": "loop",
+      "stageId": "Idle_Broken",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-ac3b435c0e904bd62b3c"
+        },
+        {
+          "id": "breast-left",
+          "gallery": "sinisistar2-ac3b435c0e904bd62b3c"
+        },
+        {
+          "id": "breast-right",
+          "gallery": "sinisistar2-ac3b435c0e904bd62b3c"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
+      "id": "authored-sinisistar2-dc016bc78b49e460720c",
+      "context": "hold",
+      "actorId": "GaID_FlyBug",
+      "animationId": "Idle_Injured",
+      "phase": "loop",
+      "stageId": "Idle_Injured",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-dc016bc78b49e460720c"
+        },
+        {
+          "id": "breast-left",
+          "gallery": "sinisistar2-dc016bc78b49e460720c"
+        },
+        {
+          "id": "breast-right",
+          "gallery": "sinisistar2-dc016bc78b49e460720c"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
+      "id": "authored-sinisistar2-ff21f20fd2ba7fa39cca",
+      "context": "gallery",
+      "actorId": "GaID_VillagerMiddleMale_A_Pig",
+      "animationId": "GO2_Milk",
+      "phase": "reaction",
+      "stageId": "GO2_Milk",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-ff21f20fd2ba7fa39cca"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
+      "id": "authored-sinisistar2-ffed5e0bb2551631a5ad",
+      "context": "hold",
+      "actorId": "GaID_SwampLeech",
+      "animationId": "Idle",
+      "phase": "loop",
+      "stageId": "Idle",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-ffed5e0bb2551631a5ad"
+        },
+        {
+          "id": "breast-left",
+          "gallery": "sinisistar2-ffed5e0bb2551631a5ad"
+        },
+        {
+          "id": "breast-right",
+          "gallery": "sinisistar2-ffed5e0bb2551631a5ad"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
     }
   ],
   "statusRules": [
     {
       "statusId": "Breast",
-      "displayName": "膨乳",
+      "displayName": "\u81A8\u4E73",
       "disposition": "mapped",
       "outputs": [
         {

@@ -55,6 +55,8 @@
         <div id="triggerMeta" class="muted"></div>
       </div>
 
+      <div id="linkInfo" class="linkInfo" hidden></div>
+
       <div class="variantBar" id="variantBar"></div>
       <div id="channelPreview" class="channelPreview muted"></div>
 
@@ -65,6 +67,17 @@
         </div>
       </div>
 
+      <div class="simPanel">
+        <div class="simHead">
+          <button id="simToggle" type="button">▶ 動作シミュレーション</button>
+          <button id="simStop" type="button" title="停止して先頭へ戻す">■</button>
+          <span id="simClock" class="muted simClock">0 ms</span>
+          <span class="muted simNote">ブラウザ内の再現表示です。デバイスにもEDIにも何も送らず、保存前の波形をそのまま動かします。
+            UFOの回転方向は実機同様0.5〜2.5秒ごとにランダムに反転するため、反転の瞬間だけは実機と一致しません。</span>
+        </div>
+        <canvas id="simCanvas" width="900" height="230"></canvas>
+      </div>
+
       <div class="controls">
         <label>長さ (ms)
           <input id="duration" type="number" min="100" step="10">
@@ -72,6 +85,7 @@
         <button id="fitLoop" type="button">クリップ長に合わせる</button>
         <button id="simplify" type="button" title="曲線を細かく標本化した点列を、ピストンが実際に表現できる折り返し点だけに減らします。">折り返し点だけに減らす</button>
         <button id="copyFrom" type="button">別の段階から複製</button>
+        <button id="applyTo" type="button" title="いま編集している段階の波形を、他の段階でも再生させます。共有にすると1つの波形を複数の段階が参照するため、あとから修正すると全てに反映されます。">この波形を他の段階へ…</button>
         <button id="mirrorSide" type="button">反対側にコピー</button>
         <button id="clear" type="button">この波形を消去</button>
       </div>
@@ -98,6 +112,28 @@
       <button id="copyConfirm" value="ok" class="primary">複製</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="applyDialog">
+  <h3>この波形を再生する段階を選ぶ</h3>
+  <div class="applyMode">
+    <label class="inline">
+      <input type="radio" name="applyMode" value="link" checked>
+      <span><strong>共有</strong>（リンク）— 1つの波形を複数の段階で再生します。あとで波形を修正すると、共有している段階すべてに反映されます。</span>
+    </label>
+    <label class="inline">
+      <input type="radio" name="applyMode" value="copy">
+      <span><strong>複製</strong>（コピー）— 段階ごとに独立した波形を作ります。以後は別々に編集できます。</span>
+    </label>
+  </div>
+  <input id="applyFilter" type="search" placeholder="敵名・番号・段階で絞り込み" autocomplete="off">
+  <div id="applyList" class="applyList"></div>
+  <label class="inline muted"><input id="applyApprove" type="checkbox"> クリップ長の差異と既存波形の未使用化を承認</label>
+  <div id="applyStatus" class="status"></div>
+  <div class="dialogButtons">
+    <button id="applyCancel" type="button">キャンセル</button>
+    <button id="applyConfirm" type="button" class="primary">適用</button>
+  </div>
 </dialog>
 
 <script src="editor.js"></script>

@@ -7,6 +7,7 @@ using SiNiSistar2.Damage;
 using SiNiSistar2.EventLabel;
 using SiNiSistar2.Obj;
 using SiNiSistar2.Pleasure.Core;
+using SiNiSistar2.UI;
 using SiNiSistar2.UI.Gallery;
 
 namespace SiNiSistar2.Pleasure.Plugin;
@@ -26,7 +27,7 @@ public sealed class PleasurePlugin : BasePlugin
 {
     public const string PluginGuid = "community.sinisistar2.pleasure";
     public const string PluginName = "SiNiSistar2 Pleasure";
-    public const string PluginVersion = "1.1.0";
+    public const string PluginVersion = "1.2.1";
 
     private const string ExpectedGameAssemblySha256 =
         "B869493305BBE587598C8709E7FE271F00D79D37803C6A8241946D6A6297499D";
@@ -186,21 +187,22 @@ public sealed class PleasurePlugin : BasePlugin
             FindMethod(typeof(AbnormalData), nameof(AbnormalData.OnTryAddedOverMax)),
             typeof(OverMaxPatches),
             postfix: nameof(OverMaxPatches.OnTryAddedOverMaxPostfix));
-        applied += Patch(
-            "item-use",
-            FindMethod(typeof(InventoryHandler), nameof(InventoryHandler.PlayItemEvent), typeof(ItemID)),
-            typeof(ItemUsePatches),
-            postfix: nameof(ItemUsePatches.PlayItemEventPostfix));
+        // InventoryHandler.PlayItemEvent is deliberately NOT patched: it returns UniTask, a
+        // struct, and detouring a struct-returning IL2CPP method corrupts the returned task and
+        // hangs or skips the item's own event. RemoveItem below is the void-returning witness.
         applied += Patch(
             "item-consumed",
             FindMethod(typeof(InventoryHandler), nameof(InventoryHandler.RemoveItem), typeof(ItemID)),
             typeof(ItemUsePatches),
             postfix: nameof(ItemUsePatches.RemoveItemPostfix));
+        // SavePointAsyncLabel.ExecutionOneAsync also returns UniTask and must not be detoured —
+        // doing so made the save dialog close by itself, taking saving and levelling with it.
+        // SetObeliskMode is void, runs as the menu opens, and carries the obelisk flag.
         applied += Patch(
             "save-point",
-            AccessTools.Method(typeof(SavePointAsyncLabel), nameof(SavePointAsyncLabel.ExecutionOneAsync)),
+            AccessTools.Method(typeof(SavePointMenu), nameof(SavePointMenu.SetObeliskMode)),
             typeof(SavePointPatches),
-            postfix: nameof(SavePointPatches.ExecutionOneAsyncPostfix));
+            postfix: nameof(SavePointPatches.SetObeliskModePostfix));
 
         _observer = AddComponent<PleasureObserver>();
 
@@ -726,6 +728,16 @@ public sealed class PleasurePlugin : BasePlugin
         }
 
         EnemyAttackCatalog catalog = load.Catalog;
+        if (catalog.DiscardedUnsetDeclaration is { } discarded)
+        {
+            Log.LogWarning(
+                $"The enemy catalogue had a 'None' row set to {discarded}. 'None' means the game left "
+                + "the enemy's id unset, so that row stood for every unidentified captor at once and "
+                + "could not be carried anywhere in particular. It has been dropped. Enemies of that "
+                + "kind now get a row of their own the first time they take hold; declare them again "
+                + "with F10 (SPEC003 5.3.1).");
+        }
+
         bool isNew = catalog.Count == 0 && !load.Locked;
         if (isNew)
         {
@@ -747,21 +759,36 @@ public sealed class PleasurePlugin : BasePlugin
     }
 
     /// <summary>
-    /// Every <c>GalleryEnemyID</c> the build defines. An empty answer is not fatal: the catalogue
-    /// then fills in as enemies are met, which is worse but still works.
+    /// Every enemy identifier the build can be asked for ahead of time (SPEC003 FR-237).
+    ///
+    /// Both enumerations, because neither covers the whole cast: of the 108 names in each, only 66
+    /// suffixes are shared. Listing only the gallery's names left the 42 enemies that have an
+    /// <c>EnemyID</c> and no gallery entry unnameable until they had already held the player, which
+    /// is the wrong way round for a screen whose purpose is deciding before that happens.
+    ///
+    /// <c>None</c> is excluded from both: it means "not set" and names no enemy (FR-281). An empty
+    /// answer is not fatal — the catalogue then fills in as enemies are met, which is worse but
+    /// still works.
     /// </summary>
     private IReadOnlyCollection<string> KnownEnemyIds()
     {
-        try
+        var ids = new List<string>();
+        Collect(typeof(GalleryEnemyID));
+        Collect(typeof(EnemyID));
+        return ids;
+
+        void Collect(Type enumeration)
         {
-            return Enum.GetNames(typeof(GalleryEnemyID));
-        }
-        catch (Exception exception)
-        {
-            Log.LogWarning(
-                $"Could not enumerate GalleryEnemyID: {exception.Message}. The enemy catalogue will "
-                + "list only enemies that have been met.");
-            return Array.Empty<string>();
+            try
+            {
+                ids.AddRange(Enum.GetNames(enumeration).Where(EnemyIds.IsUsable));
+            }
+            catch (Exception exception)
+            {
+                Log.LogWarning(
+                    $"Could not enumerate {enumeration.Name}: {exception.Message}. The enemy "
+                    + "catalogue will list only enemies that have been met from that set.");
+            }
         }
     }
 

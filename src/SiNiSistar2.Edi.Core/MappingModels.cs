@@ -127,7 +127,132 @@ public readonly record struct EventKey(
     public bool IsUnobservedPlaceholder =>
         string.Equals(AnimationId, UnobservedAnimationId, StringComparison.Ordinal);
 
+    /// <summary>
+    /// Whether this key's actor stands for "we could not tell who" rather than for one binder
+    /// (SPEC001 6.2.1, FR-060).
+    ///
+    /// Such a key is recorded so that a hold which really happened leaves a trace, but it can never
+    /// carry a mapping: every binder that lands on it would then be given the same waveform, and the
+    /// whole point of authoring per trigger is that different events feel different.
+    /// </summary>
+    public bool IsUnidentifiedActor =>
+        string.Equals(ActorId, ActorIds.UnidentifiedBinder, StringComparison.Ordinal);
+
+    /// <summary>Whether a funscript may be authored and played for this key.</summary>
+    public bool IsAuthorable => !IsUnobservedPlaceholder && !IsUnidentifiedActor;
+
     public override string ToString() => $"{Context}/{ActorId}/{AnimationId}/{Phase}/{StageId}";
+}
+
+/// <summary>
+/// How a hold's <c>actorId</c> is spelled (SPEC001 6.2.1).
+///
+/// The rules here are the part that can be tested without the game: what counts as a usable
+/// identifier, and how an object name becomes one. Reading the values off the binder belongs to the
+/// plugin, which is the only side that can see the game.
+/// </summary>
+public static class ActorIds
+{
+    /// <summary>Marks an actor named after its object rather than by a game identifier.</summary>
+    public const string ObjectPrefix = "obj:";
+
+    /// <summary>Both of the game's enemy enumerations spell "not set" this way.</summary>
+    public const string Unset = "None";
+
+    /// <summary>
+    /// The actor of a hold whose binder could not be named at all.
+    ///
+    /// A distinct value rather than <see cref="Unset"/> or a skipped observation. Skipping leaves no
+    /// trace of a hold that really happened, and <c>None</c> would put unrelated binders on one key.
+    /// </summary>
+    public const string UnidentifiedBinder = "unidentified-binder";
+
+    /// <summary>
+    /// Names Unity scenes reuse for structure rather than for identity.
+    ///
+    /// The target build is full of them: hold colliders and attack areas hang off objects called
+    /// <c>Root</c> under every character. An actor id built from such a name would put unrelated
+    /// binders on one trigger key, which is the same harm as <see cref="Unset"/> wearing a different
+    /// spelling.
+    /// </summary>
+    private static readonly HashSet<string> StructuralNames =
+        new(StringComparer.Ordinal) { "Root", "Base" };
+
+    /// <summary>Whether a game-side enumeration name identifies anything (SPEC001 FR-058).</summary>
+    public static bool IsUsable(string? id) =>
+        !string.IsNullOrWhiteSpace(id) && !string.Equals(id, Unset, StringComparison.Ordinal);
+
+    /// <summary>Whether a scene object's name is one the game reuses for structure.</summary>
+    public static bool IsStructuralName(string? objectName) =>
+        objectName is not null && StructuralNames.Contains(objectName.Trim());
+
+    /// <summary>
+    /// An actor id built from a scene object's name, or null when the name says nothing.
+    ///
+    /// Unity's <c>(Clone)</c> and <c> (2)</c> suffixes are removed: they record how the object was
+    /// created, not what it is, and leaving them in would give one binder a different trigger key
+    /// per spawn.
+    /// </summary>
+    public static string? FromObjectName(string? objectName)
+    {
+        if (string.IsNullOrWhiteSpace(objectName))
+        {
+            return null;
+        }
+
+        string trimmed = objectName!.Trim();
+        bool changed = true;
+        while (changed && trimmed.Length > 0)
+        {
+            changed = false;
+            trimmed = trimmed.TrimEnd();
+
+            if (trimmed.EndsWith("(Clone)", StringComparison.Ordinal))
+            {
+                trimmed = trimmed[..^"(Clone)".Length];
+                changed = true;
+                continue;
+            }
+
+            int open = trimmed.LastIndexOf('(');
+            if (open >= 0 && trimmed.EndsWith(")", StringComparison.Ordinal))
+            {
+                string inside = trimmed[(open + 1)..^1];
+                if (inside.Length > 0 && inside.All(char.IsDigit))
+                {
+                    trimmed = trimmed[..open];
+                    changed = true;
+                }
+            }
+        }
+
+        trimmed = trimmed.Trim();
+        if (trimmed.Length == 0 || IsStructuralName(trimmed))
+        {
+            return null;
+        }
+
+        return ObjectPrefix + trimmed;
+    }
+
+    /// <summary>
+    /// An actor id built from the binder's own type, used when its object name does not identify it.
+    ///
+    /// A binder that lives on an object called <c>Root</c> still has a class of its own —
+    /// <c>ParasiteTentacle</c>, <c>StoneEye</c> — and that class is what the player experiences as
+    /// "the thing that grabbed me". It is a weaker identity than a prefab name because two enemies
+    /// could share a component, but it never merges binders that behave differently.
+    /// </summary>
+    public static string? FromTypeName(string? typeName)
+    {
+        if (string.IsNullOrWhiteSpace(typeName))
+        {
+            return null;
+        }
+
+        string trimmed = typeName!.Trim();
+        return trimmed.Length == 0 ? null : ObjectPrefix + trimmed;
+    }
 }
 
 public sealed record EventObservation(

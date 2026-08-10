@@ -150,7 +150,9 @@ internal sealed class EnemyCatalogEditor
             + "NonSexual never does.",
             Faint);
 
-        string captor = PleasureRuntime.BinderEnemyId ?? "(not held)";
+        string captor = PleasureRuntime.BinderEnemyId is { } id
+            ? PleasureRuntime.BinderDisplayName is { } named ? $"{named}  ({id})" : id
+            : "(not held)";
         OverlayPainter.Text(
             new Rect(panel.x + 16f, panel.y + 50f, panel.width - 32f, 22f),
             $"Holding you now: {captor}",
@@ -194,9 +196,21 @@ internal sealed class EnemyCatalogEditor
 
         bool isCaptor = string.Equals(row.Id, PleasureRuntime.BinderEnemyId, StringComparison.Ordinal);
         OverlayPainter.Text(
-            new Rect(area.x + 24f, area.y + 1f, area.width - 190f, RowHeight),
+            new Rect(area.x + 24f, area.y + 1f, area.width - 340f, RowHeight),
             isCaptor ? $"► {row.Id}" : row.Id,
             selected || isCaptor ? Bright : Faint);
+
+        // The name the game itself uses, for the rows that have earned one by holding the player.
+        // The identifier stays: it is what the file is keyed on, and a list showing only names would
+        // hide the fact that two rows can describe the same creature (SPEC003 DEC-261).
+        if (row.DisplayName is { } displayName)
+        {
+            OverlayPainter.Text(
+                new Rect(area.xMax - 320f, area.y + 1f, 160f, RowHeight),
+                displayName,
+                selected || isCaptor ? Bright : Faint);
+        }
+
         OverlayPainter.Text(
             new Rect(area.xMax - 160f, area.y + 1f, 150f, RowHeight),
             SettingLabel(row.Setting),
@@ -228,7 +242,8 @@ internal sealed class EnemyCatalogEditor
 
     private Rect PanelArea()
     {
-        float width = Math.Min(620f, Screen.width * 0.8f);
+        // Wider than it was: a row now carries an identifier, a name and a setting side by side.
+        float width = Math.Min(760f, Screen.width * 0.86f);
         float height = Math.Min(Screen.height * 0.82f, 720f);
         var area = new Rect(
             (Screen.width - width) / 2f,
@@ -241,8 +256,8 @@ internal sealed class EnemyCatalogEditor
     }
 
     /// <summary>
-    /// The rows, rebuilt only when the list itself could have changed. Sorting 108 entries every
-    /// frame of an open menu is waste, and the order must not shuffle under the cursor when a row's
+    /// The rows, rebuilt only when the list itself could have changed. Sorting the whole catalogue
+    /// — both enumerations, so over two hundred rows — every frame of an open menu is waste, and the order must not shuffle under the cursor when a row's
     /// setting changes.
     /// </summary>
     private IReadOnlyList<EnemyAttackRow> Rows()
@@ -262,7 +277,7 @@ internal sealed class EnemyCatalogEditor
 
     /// <summary>
     /// Opens on the enemy currently holding the player. That is nearly always the one the screen was
-    /// opened to settle, and hunting for it in a list of 108 is the tedious part.
+    /// opened to settle, and hunting for it in a list of over two hundred is the tedious part.
     /// </summary>
     private void SelectCurrentCaptor()
     {
