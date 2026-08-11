@@ -335,11 +335,14 @@ internal static class SavePointPatches
             }
 
             // Corruption is deliberately untouched: it is the one-way track, and the reset point
-            // is not a way down (SPEC003 FR-219).
+            // is not a way down (SPEC003 FR-219). The diary's tallies are untouched for the same
+            // reason — they record what happened, not what is still owed (SPEC006 FR-603).
             PleasureRuntime.Log?.LogInfo(
                 $"Climax count reset from {before} to 0 at a "
                 + $"{(isObelisk ? "obelisk" : "save point")}. Corruption is unchanged at "
-                + $"{PleasureRuntime.Corruption?.Value ?? 0f:F2}.");
+                + $"{PleasureRuntime.Corruption?.Value ?? 0f:F2}, and the diary still holds "
+                + $"{PleasureRuntime.ActorClimaxes.Total} climaxes and "
+                + $"{PleasureRuntime.Debuffs.Total} status applications.");
         }
         catch (Exception exception)
         {

@@ -294,6 +294,17 @@ public sealed class EnemyAttackCatalog : IEnemyAttackOverrides
             ? entry.Setting
             : EnemyAttackSetting.Auto;
 
+    /// <summary>
+    /// What the game calls this enemy, or null when it has never said (SPEC006 FR-613).
+    ///
+    /// The catalogue already records the name of every captor met, because <c>MarkSeen</c> is given
+    /// it as the hold begins. The statistics page reads it from here rather than looking the enemy
+    /// up again: the enemy that made the player climax an hour ago is long gone, and the name it had
+    /// is the only thing left to show.
+    /// </summary>
+    public string? DisplayNameFor(string enemyId) =>
+        _entries.TryGetValue(enemyId, out EnemyAttackEntry? entry) ? entry.DisplayName : null;
+
     public void Set(string enemyId, EnemyAttackSetting setting, string? note = null)
     {
         if (!EnemyIds.IsUsable(enemyId))
