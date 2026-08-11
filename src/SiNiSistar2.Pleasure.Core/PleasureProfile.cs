@@ -491,6 +491,7 @@ public static class PleasureProfileFactory
         foreach ((string key, float value) in new[]
                  {
                      ("MpPenaltyCorruptionFraction", options.MpPenaltyCorruptionFraction),
+                     ("MpPenaltyMpFraction", options.MpPenaltyMpFraction),
                      ("StunChance", options.StunChance),
                      ("StunCooldownSeconds", options.StunCooldownSeconds),
                  })
@@ -543,7 +544,8 @@ public static class PleasureProfileFactory
             Math.Clamp(options.MpPenaltyCorruptionFraction, 0f, 1f),
             Math.Clamp(options.StunChance, 0f, 1f),
             options.StunCooldownSeconds,
-            accepted);
+            accepted,
+            Math.Clamp(options.MpPenaltyMpFraction, 0f, 1f));
     }
 
     private static CrestFxTuning BuildCrestFx(PleasureOptions options, List<string> errors)

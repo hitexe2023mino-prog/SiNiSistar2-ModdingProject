@@ -145,6 +145,38 @@ public sealed class CrestPleasureAndValidationTests
         Assert.Equal(1f, result.Profile.MpPenalty.CorruptionFraction, 3);
     }
 
+    /// <summary>
+    /// The MP gate is a fifth of the bar, not exactly nothing (利用者決定 2026-08-10, CHG-517).
+    ///
+    /// Zero is a state the player passes through rather than sits in, so a penalty keyed to it is
+    /// met by accident and never planned around.
+    /// </summary>
+    [Fact]
+    public void TheMpPenaltyFiresBelowAFractionOfTheBarRatherThanAtZero()
+    {
+        PleasureValidation result = PleasureProfileFactory.Create(
+            new PleasureOptions { MpPenaltyEnabled = true, StunChance = 1f },
+            Array.Empty<string>());
+
+        Assert.Equal(0.2f, result.Profile.MpPenalty.MpFraction, 3);
+    }
+
+    /// <summary>A share above the whole bar is meaningless; it is clamped rather than obeyed.</summary>
+    [Fact]
+    public void TheMpGateIsClampedToTheBar()
+    {
+        PleasureValidation result = PleasureProfileFactory.Create(
+            new PleasureOptions
+            {
+                MpPenaltyEnabled = true,
+                StunChance = 1f,
+                MpPenaltyMpFraction = 4f,
+            },
+            Array.Empty<string>());
+
+        Assert.Equal(1f, result.Profile.MpPenalty.MpFraction, 3);
+    }
+
     [Fact]
     public void UnknownStunInputsAreIgnoredWithoutLosingTheKnownOnes()
     {
@@ -164,16 +196,33 @@ public sealed class CrestPleasureAndValidationTests
     }
 
     /// <summary>
-    /// AC-413: nothing here changes the game until it is tuned, apart from the one settled value
-    /// the user fixed (FR-415).
+    /// AC-413, updated (利用者決定 2026-08-10, CHG-516): a value the user has settled is not
+    /// "waiting on a measurement" any more, and FR-415 only asks unmeasured values to be inert.
+    /// The regen buff went unfelt in the first verification pass precisely because
+    /// RegenDurationPerClimax shipped at 0 — correct per the old rule, indistinguishable from
+    /// broken in play. It is a settled value now, the same way CrestPleasureGainScale already was.
+    ///
+    /// The MP0 penalty and the curse-stage acceleration are the two that remain genuinely
+    /// unmeasured (付録A A-406) and stay inert by default.
     /// </summary>
     [Fact]
-    public void ShippedDefaultsLeaveEveryNewMechanismInert()
+    public void ShippedDefaultsLeaveOnlyTheUnmeasuredMechanismsInert()
     {
         PleasureValidation result = PleasureProfileFactory.Create(new PleasureOptions(), Array.Empty<string>());
 
-        Assert.False(result.Profile.Regen.HasEffect);
+        Assert.True(result.Profile.Regen.HasEffect);
+        Assert.Equal(15f, result.Profile.Regen.DurationPerClimax, 3);
+        Assert.Equal(2f, result.Profile.Regen.HpPerSecond, 3);
+        Assert.Equal(2f, result.Profile.Regen.MpPerSecond, 3);
+
+        // MpPenalty.Enabled itself still ships off — A-401 answers how the stagger plays, not
+        // whether the penalty should be on by default. Disabled collapses every field to its own
+        // zeroes regardless of what the options held, so the settled threshold and chance are
+        // covered separately, with Enabled=true, in AZeroChancePenaltyCountsThePressAndSaysItIsOff
+        // and TheMpPenaltyRequiresTheCorruptionToBeAtItsCap.
         Assert.False(result.Profile.MpPenalty.HasEffect);
+        Assert.Equal(MpPenaltyTuning.Disabled, result.Profile.MpPenalty);
+
         Assert.Equal(0f, result.Profile.Corruption.CurseGainMax, 3);
         Assert.Equal(1.25f, result.Profile.Pleasure.CrestScale, 3);
     }

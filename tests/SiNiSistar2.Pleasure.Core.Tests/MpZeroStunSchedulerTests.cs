@@ -9,7 +9,7 @@ public sealed class MpZeroStunSchedulerTests
     private static readonly string[] Nothing = Array.Empty<string>();
 
     private static MpZeroStunScheduler Scheduler(float chance = 1f, float cooldown = 3f) =>
-        new(new MpPenaltyTuning(true, 0.5f, chance, cooldown, StunInputs.Defaults));
+        new(new MpPenaltyTuning(true, 0.5f, chance, cooldown, StunInputs.Defaults, 0.2f));
 
     private static Func<float> Roll(float value) => () => value;
 
@@ -216,7 +216,7 @@ public sealed class MpZeroStunSchedulerTests
     public void AZeroChancePenaltyCountsThePressAndSaysItIsOff()
     {
         var scheduler = new MpZeroStunScheduler(
-            new MpPenaltyTuning(true, 0.5f, 0f, 3f, StunInputs.Defaults));
+            new MpPenaltyTuning(true, 0.5f, 0f, 3f, StunInputs.Defaults, 0.2f));
 
         Assert.False(scheduler.Evaluate(true, Attack, 0d, Roll(0f)));
         Assert.Equal(1, scheduler.PressCount);

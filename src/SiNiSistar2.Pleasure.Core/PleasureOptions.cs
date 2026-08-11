@@ -209,8 +209,17 @@ public sealed record PleasureOptions
     /// <summary>Whether the succubus regeneration buff is active at all (SPEC005 5.1).</summary>
     public bool RegenEnabled { get; init; } = true;
 
-    /// <summary>Seconds of regeneration one qualifying climax adds. 0 never grants the buff.</summary>
-    public float RegenDurationPerClimax { get; init; }
+    /// <summary>
+    /// Seconds of regeneration one qualifying climax adds. 0 never grants the buff.
+    ///
+    /// 15 seconds is a settled figure rather than one waiting on a measurement (利用者決定
+    /// 2026-08-10): the shipped-inert default (0) was the reason the buff went unnoticed in the
+    /// first verification pass — "0 never grants it" is correct behaviour, but it reads
+    /// indistinguishably from a mechanism that is broken. Fifteen seconds against a limit around
+    /// five climaxes (base 3 + durability) is long enough inside one hold to matter, short enough
+    /// that it does not carry past the next one uninvited.
+    /// </summary>
+    public float RegenDurationPerClimax { get; init; } = 15f;
 
     /// <summary>
     /// A ceiling on the banked duration. 0 means no ceiling was asked for, which is the shipped
@@ -218,9 +227,16 @@ public sealed record PleasureOptions
     /// </summary>
     public float RegenDurationCap { get; init; }
 
-    public float HpRegenPerSecond { get; init; }
+    /// <summary>
+    /// HP restored per second while the buff runs.
+    ///
+    /// 2/s against a maximum around 100 empties the deficit in roughly a minute rather than at
+    /// once — felt, not decisive (利用者決定 2026-08-10).
+    /// </summary>
+    public float HpRegenPerSecond { get; init; } = 2f;
 
-    public float MpRegenPerSecond { get; init; }
+    /// <summary>MP restored per second while the buff runs. See <see cref="HpRegenPerSecond"/>.</summary>
+    public float MpRegenPerSecond { get; init; } = 2f;
 
     /// <summary>
     /// Whether an empty MP bar makes acting unreliable (SPEC005 5.3).
@@ -255,6 +271,16 @@ public sealed record PleasureOptions
     /// this is set to, staggers cannot chain.
     /// </summary>
     public float StunChance { get; init; } = 0.2f;
+
+    /// <summary>
+    /// The share of the MP bar below which acting becomes unreliable (SPEC005 5.3 適用条件3).
+    ///
+    /// A fifth of the bar rather than exactly nothing (利用者決定 2026-08-10). Empty is a state
+    /// the player passes through rather than sits in, so a penalty keyed to it is met by accident
+    /// and never planned around; a threshold gives the approach to empty a meaning of its own.
+    /// 0 restores the original "only at zero" reading.
+    /// </summary>
+    public float MpPenaltyMpFraction { get; init; } = 0.2f;
 
     public float StunCooldownSeconds { get; init; } = 3f;
 
