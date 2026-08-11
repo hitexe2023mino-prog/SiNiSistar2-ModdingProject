@@ -35,25 +35,47 @@ internal static class PlayerVitals
     }
 
     /// <summary>
-    /// Whether the MP bar is empty (SPEC005 5.3 適用条件3).
+    /// How full the MP bar is, from 0 to 1, or -1 when it cannot be read.
     ///
-    /// False when it cannot be read. An unreadable bar is not evidence of an empty one, and the
-    /// penalty must never fire on a state nobody confirmed (the same rule SPEC002 FR-123 sets for
-    /// an unidentifiable target).
+    /// -1 rather than 0 for the unreadable case, so a bar nobody could read is never mistaken for
+    /// an empty one. The penalty must not fire on a state nobody confirmed (the same rule
+    /// SPEC002 FR-123 sets for an unidentifiable target).
     /// </summary>
-    internal static bool IsMpEmpty
+    internal static float MpFraction
     {
         get
         {
             try
             {
-                return Mp?.Current <= 0;
+                BattleMainParameter? bar = Mp;
+                if (bar is null)
+                {
+                    return -1f;
+                }
+
+                int max = bar.Max;
+                return max <= 0 ? -1f : Math.Clamp(bar.Current / (float)max, 0f, 1f);
             }
             catch (Exception)
             {
-                return false;
+                return -1f;
             }
         }
+    }
+
+    /// <summary>
+    /// Whether the MP bar is low enough for the penalty to apply (SPEC005 5.3 適用条件3).
+    ///
+    /// A fraction rather than "empty" (利用者決定 2026-08-10). Zero MP is a state the player
+    /// passes through rather than sits in — the bar refills, and a penalty that only bites at
+    /// exactly nothing is one they meet by accident and never plan around. A threshold gives the
+    /// approach to empty a meaning of its own, which is what makes going and getting MP back a
+    /// decision rather than a reflex.
+    /// </summary>
+    internal static bool IsMpLow(float threshold)
+    {
+        float fraction = MpFraction;
+        return fraction >= 0f && fraction < threshold;
     }
 
     /// <summary>

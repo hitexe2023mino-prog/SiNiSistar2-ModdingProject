@@ -329,6 +329,31 @@
       "ignoreReason": null
     },
     {
+      "id": "authored-sinisistar2-82a2cf8cf9b1c8e74a18",
+      "context": "scripted-event",
+      "actorId": "Road_2_2_Livestock_go",
+      "animationId": "Breast2_Idle",
+      "phase": "reaction",
+      "stageId": "default",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-82a2cf8cf9b1c8e74a18"
+        },
+        {
+          "id": "breast-left",
+          "gallery": "sinisistar2-82a2cf8cf9b1c8e74a18"
+        },
+        {
+          "id": "breast-right",
+          "gallery": "sinisistar2-82a2cf8cf9b1c8e74a18"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
       "id": "authored-sinisistar2-8436e5762719679f9864",
       "context": "hold",
       "actorId": "EnmID_MeatWorm1",
@@ -388,6 +413,31 @@
       "ignoreReason": null
     },
     {
+      "id": "authored-sinisistar2-967a90d414eaa13c5209",
+      "context": "scripted-event",
+      "actorId": "Road_2_2_Livestock",
+      "animationId": "Breast2_Idle",
+      "phase": "reaction",
+      "stageId": "default",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-967a90d414eaa13c5209"
+        },
+        {
+          "id": "breast-left",
+          "gallery": "sinisistar2-967a90d414eaa13c5209"
+        },
+        {
+          "id": "breast-right",
+          "gallery": "sinisistar2-967a90d414eaa13c5209"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
       "id": "authored-sinisistar2-9af6f3bf4c37a87ddc05",
       "context": "gallery",
       "actorId": "GaID_VillagerMiddleMale_A_Pig",
@@ -407,6 +457,23 @@
         {
           "id": "breast-right",
           "gallery": "sinisistar2-9af6f3bf4c37a87ddc05"
+        }
+      ],
+      "seekMode": "animation-time",
+      "ignoreReason": null
+    },
+    {
+      "id": "authored-sinisistar2-9c1063d02e3cf90705b2",
+      "context": "scripted-event",
+      "actorId": "Road_2_2_Livestock",
+      "animationId": "Idle_Injured",
+      "phase": "reaction",
+      "stageId": "default",
+      "disposition": "mapped",
+      "outputs": [
+        {
+          "id": "main",
+          "gallery": "sinisistar2-9c1063d02e3cf90705b2"
         }
       ],
       "seekMode": "animation-time",

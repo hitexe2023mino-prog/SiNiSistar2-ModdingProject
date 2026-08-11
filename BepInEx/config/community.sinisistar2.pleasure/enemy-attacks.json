@@ -657,7 +657,8 @@
     {
       "id": "GaID_Enenuth_JellyFish",
       "kind": "Sexual",
-      "seen": true
+      "seen": true,
+      "displayName": "エネヌト・浮遊体"
     },
     {
       "id": "GaID_FlyBug",

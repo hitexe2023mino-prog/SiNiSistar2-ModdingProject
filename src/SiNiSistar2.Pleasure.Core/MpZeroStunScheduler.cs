@@ -26,10 +26,11 @@ public sealed record MpPenaltyTuning(
     float CorruptionFraction,
     float Chance,
     float CooldownSeconds,
-    IReadOnlyList<string> TriggerInputs)
+    IReadOnlyList<string> TriggerInputs,
+    float MpFraction)
 {
     public static MpPenaltyTuning Disabled { get; } =
-        new(false, 0f, 0f, 0f, Array.Empty<string>());
+        new(false, 0f, 0f, 0f, Array.Empty<string>(), 0f);
 
     public bool HasEffect => Enabled && Chance > 0f && TriggerInputs.Count > 0;
 }
