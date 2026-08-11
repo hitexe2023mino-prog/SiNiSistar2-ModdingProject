@@ -25,6 +25,10 @@ internal static class BreastPatches
     private static IntPtr _lastCountedList = IntPtr.Zero;
     private static bool _identityReported;
 
+    /// <summary>Which statuses the diary has already counted this frame (SPEC006 DEC-603).</summary>
+    private static readonly HashSet<(IntPtr List, AbnormalType Type)> _countedThisFrame = new();
+    private static int _statisticsFrame = int.MinValue;
+
     /// <summary><c>AbnormalList.AddAbnormal(AbnormalType, int, DamageStack)</c>.</summary>
     internal static void AddByTypePostfix(AbnormalList __instance, AbnormalType __0) =>
         Observe(__instance, __0, "AddAbnormal(AbnormalType)");
@@ -103,6 +107,8 @@ internal static class BreastPatches
                     + $"{SafeLevel(list, type)}, timeScale {Time.timeScale}.");
             }
 
+            CountForStatistics(list, type, isPlayer);
+
             if (!isPlayer || type != AbnormalType.Breast)
             {
                 return;
@@ -178,6 +184,72 @@ internal static class BreastPatches
         {
             PleasureRuntime.Log?.LogWarning($"Breast escalation failed for this application: {exception}");
         }
+    }
+
+    /// <summary>
+    /// Counts one status ailment for the diary (SPEC006 FR-601, DEC-606).
+    ///
+    /// Here rather than on the damage stack. The stack carries what an attack declared it would
+    /// apply, which is not what landed — the game rolls for it and SPEC002 moves those odds — so a
+    /// count taken there would drift from what the player actually suffered exactly when they were
+    /// most likely to be reading it. This postfix runs on the game's own add path, so anything that
+    /// reaches it is a status the player is now carrying, whatever put it there: a hit, an item or
+    /// an authored event all count the same (SPEC003 FR-244).
+    ///
+    /// Two applications are deliberately not counted, both for the reasons the escalation already
+    /// refuses them: the gallery forces statuses on to play a scene back, and a save being restored
+    /// re-adds everything it held. Counting either would let the diary be filled in by watching a
+    /// replay or by loading a game (FR-248).
+    /// </summary>
+    private static void CountForStatistics(AbnormalList list, AbnormalType type, bool isPlayer)
+    {
+        if (!isPlayer
+            || type == AbnormalType.None
+            || !PleasureRuntime.GameplayStarted
+            || IsGalleryActive()
+            || !ClaimStatisticThisFrame(list, type))
+        {
+            return;
+        }
+
+        // The name is read here and nowhere else, because here is the only place it can be read.
+        // AbnormalNameID lives on the attached AbnormalData, and an unattached template reports
+        // None (SPEC003 付録A A-28). By the time the page asks, the status may be long gone.
+        PleasureRuntime.Debuffs.Record(type.ToString(), StatsPublisher.NameOfAttached(list, type));
+    }
+
+    /// <summary>
+    /// Counts one application per frame per status per list (SPEC006 DEC-603).
+    ///
+    /// Separate from <see cref="ClaimThisFrame"/>, which is deliberately blind to the type because
+    /// the escalation only ever asks about <c>Breast</c>. Sharing it here would have let the first
+    /// status of a frame silence every other status applied in the same frame, and an attack that
+    /// applies two is ordinary.
+    ///
+    /// A set rather than a single remembered key, because the overloads that report one application
+    /// are not guaranteed to be adjacent once several statuses land together — and a stale
+    /// single-slot memory would count the same status twice rather than miss it.
+    /// </summary>
+    private static bool ClaimStatisticThisFrame(AbnormalList list, AbnormalType type)
+    {
+        IntPtr handle;
+        try
+        {
+            handle = list.Pointer;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+
+        int frame = Time.frameCount;
+        if (frame != _statisticsFrame)
+        {
+            _statisticsFrame = frame;
+            _countedThisFrame.Clear();
+        }
+
+        return _countedThisFrame.Add((handle, type));
     }
 
     /// <summary>
@@ -459,5 +531,7 @@ internal static class BreastPatches
     {
         _lastCountedFrame = int.MinValue;
         _lastCountedList = IntPtr.Zero;
+        _statisticsFrame = int.MinValue;
+        _countedThisFrame.Clear();
     }
 }

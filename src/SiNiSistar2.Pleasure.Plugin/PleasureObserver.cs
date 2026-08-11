@@ -282,6 +282,10 @@ public sealed class PleasureObserver : MonoBehaviour
         UpdateMpPenalty(bound, dead);
         ProbeSaveSlot();
 
+        // Last, so what the page serves is the state this frame settled on rather than the state it
+        // started from (SPEC006 4.5).
+        StatsPublisher.Publish(status.m_MaxDurability);
+
         _wasBound = bound;
     }
 
@@ -1198,6 +1202,13 @@ public sealed class PleasureObserver : MonoBehaviour
         PleasureRuntime.PendingClimax = false;
         PleasureRuntime.Meter?.ConsumeClimax();
         PleasureRuntime.Climaxes.Record();
+
+        // The captor is credited from the identity the hold already resolved, never from a lookup of
+        // this MOD's own (SPEC006 FR-604). A climax with nobody named still counts — it goes to the
+        // reserved bucket, so the total stays honest even when the enemy behind it cannot be
+        // (FR-602).
+        PleasureRuntime.ActorClimaxes.Record(PleasureRuntime.BinderEnemyId);
+
         PleasureRuntime.GainCorruption(PleasureRuntime.Profile.Corruption.PerClimax);
 
         PleasureRuntime.ClimaxFlashUntil =
@@ -1410,7 +1421,8 @@ public sealed class PleasureObserver : MonoBehaviour
         bool Corrupted,
         float CorruptionFraction,
         bool CrestWorn,
-        bool MpEmpty,
+        bool MpLow,
+        float MpFraction,
         int Mp,
         int MpMax,
         bool Bound,
@@ -1421,7 +1433,7 @@ public sealed class PleasureObserver : MonoBehaviour
         IReadOnlyCollection<string> AllInputsDown)
     {
         public bool ConditionsMet =>
-            Corrupted && CrestWorn && MpEmpty && !Bound && !Dead && !Paused && !Cinematic;
+            Corrupted && CrestWorn && MpLow && !Bound && !Dead && !Paused && !Cinematic;
     }
 
     [HideFromIl2Cpp]
@@ -1472,7 +1484,8 @@ public sealed class PleasureObserver : MonoBehaviour
             corruption is not null && corruption.Cap > 0f && fraction >= tuning.CorruptionFraction,
             fraction,
             PleasureRuntime.IsCrestWorn,
-            PlayerVitals.IsMpEmpty,
+            PlayerVitals.IsMpLow(tuning.MpFraction),
+            PlayerVitals.MpFraction,
             mp,
             mpMax,
             bound,
@@ -1631,26 +1644,16 @@ public sealed class PleasureObserver : MonoBehaviour
             // Handled below as "no player to stagger".
         }
 
-        MagicSword? sword = null;
-        try
-        {
-            sword = lelia?.MagicSword;
-        }
-        catch (Exception exception)
-        {
-            PleasureRuntime.Log?.LogWarning(
-                $"The MP0 stagger could not reach the sword magic action: {exception.Message}");
-        }
-
-        if (sword is null)
+        AttackActionBase? slot = EquippedMagicSlot(lelia);
+        if (slot is null)
         {
             if (!_stunUnavailableLogged)
             {
                 _stunUnavailableLogged = true;
                 PleasureRuntime.Log?.LogWarning(
-                    "The MP0 penalty fired but the sword magic action could not be reached, so "
-                    + "nothing was played. The rule is still being applied; only the motion is "
-                    + "missing.");
+                    "The MP0 penalty fired but no magic is equipped in either slot, so there is no "
+                    + "cast to fail and nothing was played. The rule is still being applied; only "
+                    + "the motion is missing.");
             }
 
             return;
@@ -1660,31 +1663,38 @@ public sealed class PleasureObserver : MonoBehaviour
         {
             // Already mid-cast: leave it alone. Pressing into a running action would either be
             // ignored or start a combo, and neither is a stagger.
-            if (sword.IsAction)
+            if (slot.IsAction)
             {
                 return;
             }
 
-            // The game's own input seam. Pressed() and PressedThisFrame() write the two flags on
-            // the action's Call object — the same two the real button writes — and the action's
-            // own OnUpdateAction takes it from there: it reads PlayerStatusManager.UnUsedMagic,
-            // finds no MP (which is condition 3 of this very penalty), and runs the cast in its
-            // empty mode. That is the vanilla MP0 stagger, animation and action lock and all
-            // (A-401: AnimState.Magic_Sword1_Empty, the take the user identified in the gallery).
+            // The game's own input seam. PressedThisFrame() writes the flag the action actually
+            // reads — MagicSword.OnUpdateAction tests it at Call+17 before anything else — and the
+            // action takes it from there: it asks PlayerStatusManager.UnUsedMagic, finds no MP
+            // (which is condition 3 of this very penalty), and runs the cast in its empty branch.
+            // That is the vanilla MP0 stagger, animation and action lock and all (A-401:
+            // AnimState.Magic_Sword1_Empty, the take the user identified in the gallery).
+            //
+            // It has to be the equipped slot, not the MagicSword object. Lelia keeps the three
+            // implementations at +480/+488/+496 and the two equipped slots at +568/+584, and
+            // Lelia.OnResponseSection calls UpdateAction on the slots (and Melee) and never on the
+            // implementations. Pressing MagicSword directly set a flag on an object whose
+            // OnUpdateAction is never run, which is why the first version logged a fire every time
+            // and played nothing (利用者REVIEW 2026-08-10).
             //
             // Nothing about the motion is chosen here, and no animator state is written. The MOD
             // says "the button went down"; the game decides what that means. It also cannot cast
-            // by accident — MP is empty by the time this runs, and the empty branch is the only
-            // one reachable. This is what keeps FR-228 honest: the take being played describes
-            // what is actually happening, because she really did try.
-            sword.PressedThisFrame();
-            sword.Pressed();
+            // by accident — MP is empty by the time this runs, so the empty branch is the only one
+            // reachable. This is what keeps FR-228 honest: the take being played describes what is
+            // actually happening, because she really did try.
+            slot.PressedThisFrame();
+            slot.Pressed();
 
             PleasureRuntime.Probe(
                 "mp0-stagger-played",
-                "A-401 answered: the MP0 stagger is played by pressing the game's own sword magic "
-                + "action (AttackActionBase.Pressed / PressedThisFrame) while MP is empty. The "
-                + "game runs its empty-cast branch and plays AnimState.Magic_Sword1_Empty itself.");
+                "A-401 answered: the MP0 stagger is played by pressing the equipped magic slot "
+                + "(Lelia.Magic01/Magic02, AttackActionBase.PressedThisFrame) while MP is empty. "
+                + "The game runs its own empty-cast branch and plays the empty animation itself.");
             PleasureRuntime.Log?.LogInfo(
                 "[SPEC005] MP0 penalty fired: the body tried to cast with nothing to cast, and the "
                 + "game's own empty-cast stagger is playing.");
@@ -1694,6 +1704,53 @@ public sealed class PleasureObserver : MonoBehaviour
             PleasureRuntime.Log?.LogWarning(
                 $"The MP0 stagger could not be started: {exception.Message}");
         }
+    }
+
+    /// <summary>
+    /// The equipped magic the stagger is pressed through (A-401).
+    ///
+    /// Lelia holds the magic implementations (<c>MagicArrow</c>, <c>MagicSword</c>,
+    /// <c>MagicOwl</c>) separately from the two slots the player has equipped, and only the slots
+    /// — with <c>Melee</c> — are handed to <c>UpdateAction</c> each section. So the slot is the
+    /// only object whose press is ever read.
+    ///
+    /// The sword slot is preferred because its empty cast is the motion the take names
+    /// (<c>Magic_Sword1_Empty</c>); any other equipped magic has an empty animation of its own and
+    /// is an equally honest failure to cast, so it is taken rather than playing nothing.
+    /// </summary>
+    [HideFromIl2Cpp]
+    private static AttackActionBase? EquippedMagicSlot(Lelia? lelia)
+    {
+        if (lelia is null)
+        {
+            return null;
+        }
+
+        AttackActionBase? first = null;
+        try
+        {
+            foreach (AttackActionBase? candidate in new[] { lelia.Magic01, lelia.Magic02 })
+            {
+                if (candidate is null)
+                {
+                    continue;
+                }
+
+                if (candidate.TryCast<MagicSword>() is not null)
+                {
+                    return candidate;
+                }
+
+                first ??= candidate;
+            }
+        }
+        catch (Exception exception)
+        {
+            PleasureRuntime.Log?.LogWarning(
+                $"The MP0 stagger could not read the equipped magic slots: {exception.Message}");
+        }
+
+        return first;
     }
 
     /// <summary>
@@ -1752,7 +1809,7 @@ public sealed class PleasureObserver : MonoBehaviour
             "-- MP0 penalty --",
             mp.HasEffect
                 ? $"ON   chance {mp.Chance:P0} per press   cooldown {mp.CooldownSeconds:0.#}s"
-                    + $"   inputs {string.Join("/", mp.TriggerInputs)}"
+                    + $"   MP below {mp.MpFraction:P0}   inputs {string.Join("/", mp.TriggerInputs)}"
                 : "OFF — set MpPenalty.Enabled=true AND MpPenalty.StunChance above 0",
             $"conditions: {DescribeMpConditions(state, mp)}",
             $"=> {(state.ConditionsMet ? "ALL MET (a press would roll)" : "NOT MET")}",
@@ -1868,7 +1925,11 @@ public sealed class PleasureObserver : MonoBehaviour
         parts.Add(state.Corrupted
             ? $"corruption {state.CorruptionFraction:P0} >= {tuning.CorruptionFraction:P0}"
             : $"corruption {state.CorruptionFraction:P0} BELOW {tuning.CorruptionFraction:P0}");
-        parts.Add(state.MpEmpty ? "MP empty" : $"MP {state.Mp} NOT empty");
+        parts.Add(state.MpFraction < 0f
+            ? "MP UNREADABLE"
+            : state.MpLow
+                ? $"MP {state.Mp}/{state.MpMax} ({state.MpFraction:P0}) < {tuning.MpFraction:P0}"
+                : $"MP {state.Mp}/{state.MpMax} ({state.MpFraction:P0}) NOT below {tuning.MpFraction:P0}");
         if (state.Bound)
         {
             parts.Add("BOUND");
@@ -2245,6 +2306,22 @@ public sealed class PleasureObserver : MonoBehaviour
         if (current.type == EventType.KeyDown && current.keyCode == KeyCode.F2)
         {
             ForceMpPenaltyForDebugging();
+            current.Use();
+            return;
+        }
+
+        // Opens the diary in a browser (SPEC006 FR-614). Configurable rather than fixed, because it
+        // is the one key here a player is meant to use — the rest are for debugging — and the game
+        // shares its function keys with whatever else is installed. None means the key is off, which
+        // is also what an unreadable name resolves to.
+        if (current.type == EventType.KeyDown
+            && PleasureRuntime.StatsPageKey != KeyCode.None
+            && current.keyCode == PleasureRuntime.StatsPageKey)
+        {
+            StatsPageLauncher.Open(
+                PleasureRuntime.StatsPageUrl,
+                PleasureRuntime.Log,
+                $"{PleasureRuntime.StatsPageKey} was pressed");
             current.Use();
             return;
         }

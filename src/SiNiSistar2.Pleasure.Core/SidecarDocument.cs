@@ -13,7 +13,7 @@ namespace SiNiSistar2.Pleasure.Core;
 /// </summary>
 public sealed record SidecarDocument
 {
-    public const int CurrentSchemaVersion = 5;
+    public const int CurrentSchemaVersion = 6;
 
     [JsonPropertyName("schemaVersion")]
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
@@ -62,6 +62,21 @@ public sealed record SidecarDocument
     /// </summary>
     [JsonPropertyName("lustCrest")]
     public bool LustCrest { get; init; }
+
+    /// <summary>
+    /// How many climaxes each enemy has to its name, for the life of this save (SPEC006 FR-602).
+    /// Added in schema 6; a file written before it simply has none and starts from empty.
+    /// </summary>
+    [JsonPropertyName("actorClimaxCounts")]
+    public IReadOnlyList<ActorClimaxCount> ActorClimaxCounts { get; init; } =
+        Array.Empty<ActorClimaxCount>();
+
+    /// <summary>
+    /// How many times each status ailment has actually been applied (SPEC006 FR-601). Added in
+    /// schema 6.
+    /// </summary>
+    [JsonPropertyName("debuffCounts")]
+    public IReadOnlyList<DebuffCount> DebuffCounts { get; init; } = Array.Empty<DebuffCount>();
 
     public string Serialize() => JsonSerializer.Serialize(this, SerializerOptions);
 
@@ -133,8 +148,73 @@ public sealed record SidecarDocument
             ClimaxCount = Math.Max(0, document.ClimaxCount),
             BreastAtMaxCount = Math.Max(0, document.BreastAtMaxCount),
             Milk = Math.Clamp(document.Milk, 0f, 1f),
+            ActorClimaxCounts = Clean(
+                document.ActorClimaxCounts,
+                static entry => entry.ActorId,
+                static entry => entry.Count),
+            DebuffCounts = Clean(
+                document.DebuffCounts,
+                static entry => entry.AbnormalType,
+                static entry => entry.Count),
         });
     }
+
+    /// <summary>
+    /// Drops the rows a tally can make no use of: a nameless key, and a count that cannot have been
+    /// reached by counting. Both can only come from a hand-edited or damaged file, and dropping
+    /// them here keeps every reader from having to know that.
+    /// </summary>
+    private static IReadOnlyList<T> Clean<T>(
+        IReadOnlyList<T>? entries,
+        Func<T, string> key,
+        Func<T, int> count)
+    {
+        if (entries is null || entries.Count == 0)
+        {
+            return Array.Empty<T>();
+        }
+
+        var kept = new List<T>(entries.Count);
+        foreach (T entry in entries)
+        {
+            if (entry is not null && !string.IsNullOrWhiteSpace(key(entry)) && count(entry) > 0)
+            {
+                kept.Add(entry);
+            }
+        }
+
+        return kept;
+    }
+}
+
+/// <summary>One enemy's lifetime climax total as the sidecar stores it (SPEC006 4.3).</summary>
+public sealed record ActorClimaxCount
+{
+    [JsonPropertyName("actorId")]
+    public string ActorId { get; init; } = string.Empty;
+
+    [JsonPropertyName("count")]
+    public int Count { get; init; }
+}
+
+/// <summary>One status ailment's lifetime total as the sidecar stores it (SPEC006 4.3).</summary>
+public sealed record DebuffCount
+{
+    [JsonPropertyName("abnormalType")]
+    public string AbnormalType { get; init; } = string.Empty;
+
+    [JsonPropertyName("count")]
+    public int Count { get; init; }
+
+    /// <summary>
+    /// The game's own name for this status, captured when it was applied (SPEC006 FR-613).
+    ///
+    /// Stored rather than resolved on demand, because it can only be read while the status is
+    /// attached to somebody. Without it, every status in the diary would go back to showing its raw
+    /// enumerator name after a reload and stay that way until it was suffered again.
+    /// </summary>
+    [JsonPropertyName("displayName")]
+    public string? DisplayName { get; init; }
 }
 
 public sealed record SidecarParse(SidecarDocument? Document, string? Error, bool UnsupportedSchema)

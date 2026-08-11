@@ -86,7 +86,9 @@ public sealed class SidecarStore
         int climaxCount,
         int breastAtMaxCount = 0,
         float milk = 0f,
-        bool lustCrest = false)
+        bool lustCrest = false,
+        ActorClimaxLedger? actors = null,
+        DebuffCounters? debuffs = null)
     {
         if (_locked.Contains(slotKey))
         {
@@ -101,8 +103,99 @@ public sealed class SidecarStore
             BreastAtMaxCount = Math.Max(0, breastAtMaxCount),
             Milk = Math.Clamp(milk, 0f, 1f),
             LustCrest = lustCrest,
+            ActorClimaxCounts = ToActorRows(actors),
+            DebuffCounts = ToDebuffRows(debuffs),
         };
 
         return JsonFile.WriteAtomically(_root, PathFor(slotKey), document.Serialize());
+    }
+
+    private static IReadOnlyList<ActorClimaxCount> ToActorRows(ActorClimaxLedger? actors)
+    {
+        if (actors is null)
+        {
+            return Array.Empty<ActorClimaxCount>();
+        }
+
+        var rows = new List<ActorClimaxCount>();
+        foreach (KeyValuePair<string, int> entry in actors.Ordered())
+        {
+            rows.Add(new ActorClimaxCount { ActorId = entry.Key, Count = entry.Value });
+        }
+
+        return rows;
+    }
+
+    private static IReadOnlyList<DebuffCount> ToDebuffRows(DebuffCounters? debuffs)
+    {
+        if (debuffs is null)
+        {
+            return Array.Empty<DebuffCount>();
+        }
+
+        var rows = new List<DebuffCount>();
+        foreach (KeyValuePair<string, int> entry in debuffs.Ordered())
+        {
+            rows.Add(new DebuffCount
+            {
+                AbnormalType = entry.Key,
+                Count = entry.Value,
+                DisplayName = debuffs.DisplayNameFor(entry.Key),
+            });
+        }
+
+        return rows;
+    }
+}
+
+/// <summary>
+/// Moves the sidecar's stored rows into and out of the live tallies (SPEC006 4.3).
+///
+/// Kept beside the store rather than inside the tallies so <see cref="LifetimeTally"/> stays a
+/// counter with no idea a file exists, which is what lets it be tested without one.
+/// </summary>
+public static class SidecarStatistics
+{
+    public static void Restore(
+        SidecarDocument document,
+        ActorClimaxLedger? actors,
+        DebuffCounters? debuffs)
+    {
+        actors?.LoadFrom(Rows(document.ActorClimaxCounts, static entry => entry.ActorId, static entry => entry.Count));
+        debuffs?.LoadFrom(Rows(document.DebuffCounts, static entry => entry.AbnormalType, static entry => entry.Count));
+
+        if (debuffs is null)
+        {
+            return;
+        }
+
+        // The names come back with the counts. They were read from the game as each status landed,
+        // and there is no way to work them out again from the type alone (SPEC006 FR-613).
+        foreach (DebuffCount entry in document.DebuffCounts ?? Array.Empty<DebuffCount>())
+        {
+            if (entry is not null)
+            {
+                debuffs.RememberName(entry.AbnormalType, entry.DisplayName);
+            }
+        }
+    }
+
+    private static IEnumerable<KeyValuePair<string, int>> Rows<T>(
+        IReadOnlyList<T>? entries,
+        Func<T, string> key,
+        Func<T, int> count)
+    {
+        if (entries is null)
+        {
+            yield break;
+        }
+
+        foreach (T entry in entries)
+        {
+            if (entry is not null)
+            {
+                yield return new KeyValuePair<string, int>(key(entry), count(entry));
+            }
+        }
     }
 }

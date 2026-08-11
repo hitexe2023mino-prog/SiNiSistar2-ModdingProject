@@ -27,7 +27,10 @@ public sealed class PleasurePlugin : BasePlugin
 {
     public const string PluginGuid = "community.sinisistar2.pleasure";
     public const string PluginName = "SiNiSistar2 Pleasure";
-    public const string PluginVersion = "1.2.1";
+    // 1.3 adds the play-statistics page and takes the sidecar to schema 6 (SPEC006). The version
+    // has to move with the schema: it is how a player tells which build wrote a file that an
+    // earlier one will refuse to read (SPEC006 10章).
+    public const string PluginVersion = "1.3.0";
 
     private const string ExpectedGameAssemblySha256 =
         "B869493305BBE587598C8709E7FE271F00D79D37803C6A8241946D6A6297499D";
@@ -50,6 +53,7 @@ public sealed class PleasurePlugin : BasePlugin
     private string _gameBuildId = "unknown";
     private Harmony? _harmony;
     private PleasureObserver? _observer;
+    private StatsServer? _stats;
 
     public override void Load()
     {
@@ -123,6 +127,7 @@ public sealed class PleasurePlugin : BasePlugin
         PleasureRuntime.Sidecar = new SidecarStore(
             Path.Combine(Paths.BepInExRootPath, "data", PluginGuid),
             _gameBuildId);
+        StartStatsServer();
         PleasureRuntime.Overlay = profile.Overlay;
         PleasureRuntime.SaveOverlay = layout =>
         {
@@ -321,6 +326,7 @@ public sealed class PleasurePlugin : BasePlugin
     {
         _observer?.Shutdown();
         PleasureRuntime.SaveEnemies("unload");
+        StopStatsServer();
 
         foreach (string failure in PleasureRuntime.Ledger.ReleaseAll())
         {
@@ -339,6 +345,142 @@ public sealed class PleasurePlugin : BasePlugin
         PleasureRuntime.Reset();
         PleasureRuntime.Profile = PleasureProfile.Inactive;
         return true;
+    }
+
+    /// <summary>
+    /// Closes the statistics page, waiting only briefly. Unload runs while the game is shutting
+    /// down or reloading plugins, and a socket that will not close must not hold that up.
+    /// </summary>
+    private void StopStatsServer()
+    {
+        StatsServer? server = _stats;
+        _stats = null;
+        if (server is null)
+        {
+            return;
+        }
+
+        try
+        {
+            server.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(3));
+        }
+        catch (Exception exception)
+        {
+            Log.LogWarning($"The statistics page did not shut down cleanly: {exception.Message}");
+        }
+
+        PleasureRuntime.LatestStats = null;
+        PleasureRuntime.StatsPageUrl = null;
+        PleasureRuntime.StatsPageKey = UnityEngine.KeyCode.None;
+        StatsPublisher.Forget();
+    }
+
+    /// <summary>
+    /// Opens the play-statistics page (SPEC006 FR-606, FR-610, FR-611).
+    ///
+    /// Started only once the MOD has something to count. With every mechanism switched off — the
+    /// shipped state until SPEC003 付録A is measured (FR-233) — no patch is applied, nothing is ever
+    /// tallied, and the page would be a permanently empty document listening on a port.
+    ///
+    /// Neither a bad address nor a port already in use is allowed to stop the load. Corruption,
+    /// climaxes and the diary all keep working; what is lost is the ability to look at them
+    /// (FR-611).
+    /// </summary>
+    private void StartStatsServer()
+    {
+        ConfigEntry<bool> enabled = Config.Bind(
+            "Statistics",
+            "StatsPageEnabled",
+            true,
+            "Serve the play statistics page in a browser while the game runs. It is read-only: "
+            + "nothing on it can change the game.");
+        ConfigEntry<string> url = Config.Bind(
+            "Statistics",
+            "StatsPageUrl",
+            "http://127.0.0.1:5602/",
+            "Where the statistics page listens. It must be a loopback address: the page has no "
+            + "authentication and must not be reachable from other machines. 5601 and 5000 are "
+            + "avoided because the EDI MOD uses them (SPEC006 FR-610).");
+
+        ConfigEntry<string> openKey = Config.Bind(
+            "Statistics",
+            "OpenPageKey",
+            "F1",
+            "Key that opens the statistics page in the default browser while the game runs. A "
+            + "UnityEngine.KeyCode name; empty or 'None' disables the key. Every other function key "
+            + "is spoken for: F2, F4 and F7 to F11 by this MOD's own screens, F3 and F5 by the "
+            + "spawn MOD, F6 by the EDI MOD, and F12 by Steam's screenshot.");
+        ConfigEntry<bool> openOnStart = Config.Bind(
+            "Statistics",
+            "OpenPageOnStart",
+            false,
+            "Open the statistics page in the default browser as the game starts. Off by default: a "
+            + "browser stealing focus during launch is not what someone starting the game asked "
+            + "for. The key above is the usual way in.");
+
+        if (!enabled.Value)
+        {
+            Log.LogInfo("The play statistics page is switched off in the configuration.");
+            return;
+        }
+
+        _stats = StatsServer.TryStart(
+            url.Value,
+            () => PleasureRuntime.LatestStats ?? StatsSnapshot.Empty(DateTimeOffset.UtcNow),
+            out IReadOnlyList<string> errors,
+            message => Log.LogInfo(message),
+            message => Log.LogWarning(message));
+
+        foreach (string error in errors)
+        {
+            Log.LogWarning($"{error} Set Statistics.StatsPageUrl in {PluginGuid}.cfg to change it.");
+        }
+
+        if (_stats is null)
+        {
+            return;
+        }
+
+        string served = _stats.BaseUri.ToString();
+        PleasureRuntime.StatsPageUrl = served;
+        PleasureRuntime.StatsPageKey = ParseKey(openKey.Value);
+
+        // Said plainly and next to the URL, because a key nobody knows about is the same as no key.
+        Log.LogInfo(
+            PleasureRuntime.StatsPageKey == UnityEngine.KeyCode.None
+                ? $"Press nothing to open the statistics page: Statistics.OpenPageKey is disabled. "
+                  + $"It is served at {served}."
+                : $"Press {PleasureRuntime.StatsPageKey} in game to open the play statistics page in "
+                  + $"your browser ({served}). Change the key with Statistics.OpenPageKey.");
+
+        if (openOnStart.Value)
+        {
+            StatsPageLauncher.Open(served, Log, "OpenPageOnStart is enabled");
+        }
+    }
+
+    /// <summary>
+    /// Reads the configured hotkey, or <c>None</c> when it is empty or unrecognised.
+    ///
+    /// An unrecognised name is reported rather than silently dropped: a key that does nothing reads
+    /// as a broken feature, and the reason it does nothing is a typo the user can fix.
+    /// </summary>
+    private UnityEngine.KeyCode ParseKey(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return UnityEngine.KeyCode.None;
+        }
+
+        if (Enum.TryParse(name!.Trim(), ignoreCase: true, out UnityEngine.KeyCode key))
+        {
+            return key;
+        }
+
+        Log.LogWarning(
+            $"Statistics.OpenPageKey '{name}' is not a UnityEngine.KeyCode name, so no key opens the "
+            + "statistics page. Use a name such as 'F1', or leave it empty to disable it on purpose.");
+        return UnityEngine.KeyCode.None;
     }
 
     private PleasureOptions BindOptions()
@@ -481,11 +623,12 @@ public sealed class PleasurePlugin : BasePlugin
         ConfigEntry<float> regenPerClimax = Config.Bind(
             "Regen",
             "RegenDurationPerClimax",
-            0f,
+            15f,
             "Seconds of slow HP/MP recovery one climax grants, once the lust mark is permanent. It "
             + "is paid for with a climax, which spends one of the run's remaining ones and moves "
-            + "the player towards the limit that ends it. 0 never grants it and is the shipped "
-            + "state.");
+            + "the player towards the limit that ends it. 0 never grants it; 15 is a settled "
+            + "figure against a limit around five climaxes (base 3 + durability), not a value "
+            + "waiting on a measurement.");
         ConfigEntry<float> regenCap = Config.Bind(
             "Regen",
             "RegenDurationCap",
@@ -494,11 +637,15 @@ public sealed class PleasurePlugin : BasePlugin
             + "to what is left rather than merely refreshing it. It cannot run away — clearing the "
             + "climax count needs a save point, and a save point also discards this.");
         ConfigEntry<float> hpRegen = Config.Bind(
-            "Regen", "HpRegenPerSecond", 0f, "HP restored per second while the buff runs.");
+            "Regen",
+            "HpRegenPerSecond",
+            2f,
+            "HP restored per second while the buff runs. 2/s against a maximum around 100 empties "
+            + "the deficit in roughly a minute rather than at once.");
         ConfigEntry<float> mpRegen = Config.Bind(
             "Regen",
             "MpRegenPerSecond",
-            0f,
+            2f,
             "MP restored per second while the buff runs. This is the way out of the MP0 penalty, "
             + "and the reason accepting the enemy is worth doing when the bar is empty.");
 
@@ -520,6 +667,14 @@ public sealed class PleasurePlugin : BasePlugin
             + "with wearing the crest by an AND — an enemy can put the crest on a barely corrupted "
             + "player, and punishing them for a state they were handed rather than earned is not "
             + "what this is for.");
+        ConfigEntry<float> mpPenaltyMpFraction = Config.Bind(
+            "MpPenalty",
+            "MpPenaltyMpFraction",
+            0.2f,
+            "The share of the MP bar below which acting becomes unreliable. A fifth rather than "
+            + "exactly nothing: empty is a state the player passes through rather than sits in, so "
+            + "a penalty keyed to zero is met by accident and never planned around. 0 restores the "
+            + "original 'only at zero' reading.");
         ConfigEntry<float> stunChance = Config.Bind(
             "MpPenalty",
             "StunChance",
@@ -711,6 +866,7 @@ public sealed class PleasurePlugin : BasePlugin
             MpRegenPerSecond = mpRegen.Value,
             MpPenaltyEnabled = mpPenaltyEnabled.Value,
             MpPenaltyCorruptionFraction = mpPenaltyFraction.Value,
+            MpPenaltyMpFraction = mpPenaltyMpFraction.Value,
             StunChance = stunChance.Value,
             StunCooldownSeconds = stunCooldown.Value,
             StunTriggerInputs = stunInputs.Value,

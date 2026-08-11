@@ -250,4 +250,151 @@ public sealed class SidecarStoreTests : IDisposable
         Assert.True(parse.IsLoaded);
         Assert.False(parse.Document!.LustCrest);
     }
+
+    /// <summary>
+    /// SPEC006 AC-605: a file from before the diary existed starts it empty rather than refusing to
+    /// load. The one thing an upgrade must never do is cost the player the corruption they had.
+    /// </summary>
+    [Fact]
+    public void AFileFromBeforeTheDiaryStartsItEmpty()
+    {
+        SidecarParse parse = SidecarDocument.Parse(
+            """{"schemaVersion":5,"gameBuildId":"x","corruption":6,"climaxCount":2}""");
+
+        Assert.True(parse.IsLoaded);
+        Assert.Empty(parse.Document!.ActorClimaxCounts);
+        Assert.Empty(parse.Document.DebuffCounts);
+        Assert.Equal(6f, parse.Document.Corruption);
+
+        var actors = new ActorClimaxLedger();
+        var debuffs = new DebuffCounters();
+        SidecarStatistics.Restore(parse.Document, actors, debuffs);
+
+        Assert.Equal(0, actors.Total);
+        Assert.Equal(0, debuffs.Total);
+    }
+
+    /// <summary>
+    /// SPEC006 FR-605: what the diary held comes back, enemy by enemy and status by status.
+    /// </summary>
+    [Fact]
+    public void TheDiarySurvivesASaveAndLoad()
+    {
+        SidecarStore store = Store();
+
+        var actors = new ActorClimaxLedger();
+        actors.Record("Worm");
+        actors.Record("Worm");
+        actors.Record(null);
+
+        var debuffs = new DebuffCounters();
+        debuffs.Record("Breast");
+        debuffs.Record("Parasite");
+        debuffs.Record("Breast");
+
+        Assert.Null(store.Save("slot0-Save01", 6f, 2, actors: actors, debuffs: debuffs));
+
+        SidecarLoad load = store.Load("slot0-Save01");
+        Assert.True(load.IsLoaded);
+
+        var restoredActors = new ActorClimaxLedger();
+        var restoredDebuffs = new DebuffCounters();
+        SidecarStatistics.Restore(load.Document!, restoredActors, restoredDebuffs);
+
+        Assert.Equal(2, restoredActors.CountFor("Worm"));
+        Assert.Equal(1, restoredActors.CountFor(ActorClimaxLedger.UnknownActorId));
+        Assert.Equal(3, restoredActors.Total);
+        Assert.Equal("Worm", restoredActors.TopActor()!.Value.Key);
+
+        Assert.Equal(2, restoredDebuffs.CountFor("Breast"));
+        Assert.Equal(1, restoredDebuffs.CountFor("Parasite"));
+    }
+
+    /// <summary>
+    /// SPEC006 FR-613: the names come back with the counts.
+    ///
+    /// They cannot be resolved again after the fact — the game only answers while the status is
+    /// attached to somebody — so a diary that did not store them would go back to raw enumerator
+    /// names on every reload and stay that way until each status was suffered again (付録A A-603).
+    /// </summary>
+    [Fact]
+    public void TheNamesTheGameGaveSurviveAReload()
+    {
+        SidecarStore store = Store();
+
+        var debuffs = new DebuffCounters();
+        debuffs.Record("Breast", "膨乳");
+        debuffs.Record("Parasite", "寄生Lv1");
+        debuffs.Record("MindControl");
+
+        Assert.Null(store.Save("slot0-Save01", 1f, 1, debuffs: debuffs));
+
+        var restored = new DebuffCounters();
+        SidecarStatistics.Restore(store.Load("slot0-Save01").Document!, null, restored);
+
+        Assert.Equal("膨乳", restored.DisplayNameFor("Breast"));
+        Assert.Equal("寄生Lv1", restored.DisplayNameFor("Parasite"));
+        Assert.Null(restored.DisplayNameFor("MindControl"));
+        Assert.Equal(1, restored.CountFor("MindControl"));
+    }
+
+    /// <summary>
+    /// A schema 6 file written before names were stored still loads; those statuses simply have no
+    /// name until they are next applied.
+    /// </summary>
+    [Fact]
+    public void ASchemaSixFileWithoutNamesStillLoads()
+    {
+        SidecarParse parse = SidecarDocument.Parse(
+            """
+            {"schemaVersion":6,"gameBuildId":"x",
+             "debuffCounts":[{"abnormalType":"Breast","count":4}]}
+            """);
+
+        Assert.True(parse.IsLoaded);
+
+        var restored = new DebuffCounters();
+        SidecarStatistics.Restore(parse.Document!, null, restored);
+
+        Assert.Equal(4, restored.CountFor("Breast"));
+        Assert.Null(restored.DisplayNameFor("Breast"));
+    }
+
+    /// <summary>
+    /// A restore replaces the tally rather than adding to it. Loading the same slot twice — which a
+    /// defeat does — must not double every count in the diary.
+    /// </summary>
+    [Fact]
+    public void RestoringTwiceDoesNotDoubleTheDiary()
+    {
+        SidecarStore store = Store();
+
+        var actors = new ActorClimaxLedger();
+        actors.Record("Worm");
+        Assert.Null(store.Save("slot0-Save01", 1f, 1, actors: actors));
+
+        SidecarDocument stored = store.Load("slot0-Save01").Document!;
+        var restored = new ActorClimaxLedger();
+        SidecarStatistics.Restore(stored, restored, null);
+        SidecarStatistics.Restore(stored, restored, null);
+
+        Assert.Equal(1, restored.CountFor("Worm"));
+    }
+
+    /// <summary>A hand-edited row with no name or an impossible count is dropped on read.</summary>
+    [Fact]
+    public void DamagedDiaryRowsAreDropped()
+    {
+        SidecarParse parse = SidecarDocument.Parse(
+            """
+            {"schemaVersion":6,"gameBuildId":"x",
+             "actorClimaxCounts":[{"actorId":"Worm","count":2},{"actorId":"","count":5},
+                                  {"actorId":"Slime","count":-3}],
+             "debuffCounts":[{"abnormalType":"Breast","count":1}]}
+            """);
+
+        Assert.True(parse.IsLoaded);
+        Assert.Single(parse.Document!.ActorClimaxCounts);
+        Assert.Equal("Worm", parse.Document.ActorClimaxCounts[0].ActorId);
+    }
 }

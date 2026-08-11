@@ -201,6 +201,42 @@ internal static class PleasureRuntime
     internal static ClimaxLedger Climaxes { get; } = new();
 
     /// <summary>
+    /// Which enemy has made the player climax, for the life of the save (SPEC006 FR-602).
+    ///
+    /// Beside <see cref="Climaxes"/> rather than inside it, because the two are reset by different
+    /// things: a save point clears the count that the limit is measured against, and leaves this
+    /// alone (SPEC006 DEC-602).
+    /// </summary>
+    internal static ActorClimaxLedger ActorClimaxes { get; } = new();
+
+    /// <summary>How often each status ailment has actually landed on the player (SPEC006 FR-601).</summary>
+    internal static DebuffCounters Debuffs { get; } = new();
+
+    /// <summary>
+    /// The last reading built for the statistics page (SPEC006 4.5).
+    ///
+    /// Published from the observer's own update and only read by the HTTP worker. The page is served
+    /// on a thread pool thread, and reading a Unity object from one is what takes the game down with
+    /// the page — so what crosses the boundary is this finished snapshot and nothing else
+    /// (SPEC001 4.3).
+    /// </summary>
+    internal static volatile StatsSnapshot? LatestStats;
+
+    /// <summary>
+    /// Where the statistics page is served, or null when it is not running (SPEC006 FR-614).
+    ///
+    /// Held here so the in-game key can open it without the observer having to know how the server
+    /// was configured. Null is the answer that stops the key doing anything, which is the right one
+    /// when the port was taken or the page was switched off.
+    /// </summary>
+    internal static string? StatsPageUrl { get; set; }
+
+    /// <summary>
+    /// The key that opens the statistics page, or <c>None</c> to have no key at all (FR-614).
+    /// </summary>
+    internal static UnityEngine.KeyCode StatsPageKey { get; set; } = UnityEngine.KeyCode.None;
+
+    /// <summary>
     /// The regeneration a sublimated body earns by climaxing (SPEC005 5.1).
     ///
     /// Not persisted and not carried across a slot: it is the state of a body right now, in the
@@ -420,6 +456,8 @@ internal static class PleasureRuntime
         CurrentSlotKey = null;
         Corruption?.LoadFrom(0f);
         Climaxes.ResetCount();
+        ActorClimaxes.Reset();
+        Debuffs.Reset();
         Breasts?.Reset();
         Milk?.Reset();
         Meter?.Reset();
@@ -469,6 +507,10 @@ internal static class PleasureRuntime
             case SlotAction.Restore when stored is not null:
                 Corruption?.LoadFrom(stored.Corruption);
                 Climaxes.LoadFrom(stored.ClimaxCount);
+
+                // A file written before schema 6 has neither list, so both start empty and build up
+                // from here. Nothing is inferred for the play that came before (SPEC006 FR-605).
+                SidecarStatistics.Restore(stored, ActorClimaxes, Debuffs);
                 Breasts?.LoadFrom(stored.BreastAtMaxCount);
                 Milk?.LoadFrom(stored.Milk);
                 CrestSublimated = stored.LustCrest;
@@ -477,6 +519,8 @@ internal static class PleasureRuntime
             case SlotAction.Reset:
                 Corruption?.LoadFrom(0f);
                 Climaxes.ResetCount();
+                ActorClimaxes.Reset();
+                Debuffs.Reset();
                 Breasts?.Reset();
                 Milk?.Reset();
                 CrestSublimated = false;
@@ -539,6 +583,8 @@ internal static class PleasureRuntime
             // is the honest reading: there is no record to go back to.
             Corruption?.LoadFrom(0f);
             Climaxes.ResetCount();
+            ActorClimaxes.Reset();
+            Debuffs.Reset();
             Breasts?.Reset();
             Milk?.Reset();
             CrestSublimated = false;
@@ -575,7 +621,9 @@ internal static class PleasureRuntime
             Climaxes.Count,
             Breasts?.Count ?? 0,
             Milk?.Fill ?? 0f,
-            CrestSublimated);
+            CrestSublimated,
+            ActorClimaxes,
+            Debuffs);
         if (failure is not null)
         {
             Log?.LogWarning($"Slot '{CurrentSlotKey}' could not be written ({reason}): {failure}");
