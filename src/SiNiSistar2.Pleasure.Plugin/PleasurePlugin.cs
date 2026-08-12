@@ -7,6 +7,7 @@ using SiNiSistar2.Damage;
 using SiNiSistar2.EventLabel;
 using SiNiSistar2.Obj;
 using SiNiSistar2.Pleasure.Core;
+using SiNiSistar2.Shared;
 using SiNiSistar2.UI;
 using SiNiSistar2.UI.Gallery;
 

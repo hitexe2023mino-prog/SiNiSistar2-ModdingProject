@@ -4,6 +4,7 @@ using BepInEx.Configuration;
 using BepInEx.Unity.IL2CPP;
 using Enemy.Character.Sewage;
 using HarmonyLib;
+using SiNiSistar2.Shared;
 using SiNiSistar2.Spawn.Core;
 using UnityEngine;
 
@@ -332,8 +333,12 @@ public sealed class SpawnPlugin : BasePlugin
     {
         try
         {
-            string gameAssembly = BuildFingerprint.Sha256(Path.Combine(Paths.GameRootPath, "GameAssembly.dll"));
-            string metadata = BuildFingerprint.Sha256(Path.Combine(
+            // Through the shared guard so the 51 MB hash is computed once per process however
+            // many of this repository's MODs are installed (REFACTOR001 RF-001). The expected
+            // hashes below stay here: they are this MOD's own statement of what it was measured
+            // against (RJ-901).
+            string gameAssembly = StartupGuard.Sha256(Path.Combine(Paths.GameRootPath, "GameAssembly.dll"));
+            string metadata = StartupGuard.Sha256(Path.Combine(
                 Paths.GameRootPath, "SiNiSistar2_Data", "il2cpp_data", "Metadata", "global-metadata.dat"));
 
             if (!string.Equals(gameAssembly, BuildFingerprint.ExpectedGameAssemblySha256, StringComparison.OrdinalIgnoreCase)

@@ -33,3 +33,6 @@ scripts/.venv/
 # history once and made the branch unpushable; they are working files, not versioned ones.
 Edi/*.bak-*
 Edi/Edi.exe.bak*
+
+# Byte-code left behind by the validators under .github/scripts/ on every run.
+__pycache__/

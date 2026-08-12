@@ -9,8 +9,15 @@
 | [`create-specification`](create-specification/SKILL.md) | 仕様書がまだなく、アイデアや要求から新しく作る | 新規仕様書、要件、受け入れ条件 |
 | [`refine-specification`](refine-specification/SKILL.md) | 既存仕様に曖昧さ、矛盾、欠落、未決の設計判断がある | 改訂仕様書、設計判断、変更台帳 |
 | [`implement-from-spec`](implement-from-spec/SKILL.md) | 仕様が実装可能で、コード・設定・テストへ反映する | 実装、テスト、要件との対応記録 |
+| [`refine-refactor-plan`](refine-refactor-plan/SKILL.md) | 改善観点や施策が羅列のままで、採否と優先順位が定まっていない | 施策台帳、ディベートの決着記録 |
+| [`implement-refactor-plan`](implement-refactor-plan/SKILL.md) | 施策が確定し、挙動を保ったままコードへ反映する | 実装、テスト、計測結果、施策との対応記録 |
+| [`harden-document`](harden-document/SKILL.md) | 自分が出力した文書を、渡す前に敵対的に検算する | 最優先指摘0件まで反復した文書、レビュー台帳 |
+
+`harden-document` は他のスキルの後段に置く。文書を生成・改訂したスキルの成果物を対象に、ユーザーへ渡す前の検算として使用する。判断が必要な論点に達した場合は修正せず停止し、ユーザーへエスカレーションする。
 
 複数段階を含む依頼では、左から必要な段階だけを順に使用する。仕様作成・改訂を実装スキルへ混ぜず、実装上の都合で規範的な要件を変更しない。
+
+仕様の系列（`create-specification` → `refine-specification` → `implement-from-spec`）は、外部から観測できる挙動を定義・変更する。リファクタの系列（`refine-refactor-plan` → `implement-refactor-plan`）は、挙動を保ったまま内部品質を改善する。リファクタ計画に挙動変更を伴う施策が含まれる場合は、その施策だけを仕様の系列へ引き継ぐ。
 
 ## 共通品質基準
 

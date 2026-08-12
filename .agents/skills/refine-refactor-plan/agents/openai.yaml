@@ -1,0 +1,4 @@
+interface:
+  display_name: "リファクタ計画の精緻化"
+  short_description: "改善観点をディベートで検証し、実施可能な施策台帳にする"
+  default_prompt: "$refine-refactor-plan を使って、このリファクタ計画の各施策をディベートで検証し、優先順位と受け入れ条件を持つ施策台帳へ改訂してください。"

@@ -1411,31 +1411,6 @@ public sealed class PleasureObserver : MonoBehaviour
         PlayStagger();
     }
 
-    /// <summary>
-    /// Every fact the MP0 penalty turns on, read once a frame (SPEC005 5.3).
-    ///
-    /// One struct rather than seven booleans computed inline, so the debug panel shows exactly the
-    /// values the rule ran on rather than re-reading them a frame later and disagreeing.
-    /// </summary>
-    private readonly record struct MpPenaltyState(
-        bool Corrupted,
-        float CorruptionFraction,
-        bool CrestWorn,
-        bool MpLow,
-        float MpFraction,
-        int Mp,
-        int MpMax,
-        bool Bound,
-        bool Dead,
-        bool Paused,
-        bool Cinematic,
-        IReadOnlyCollection<string> HeldInputs,
-        IReadOnlyCollection<string> AllInputsDown)
-    {
-        public bool ConditionsMet =>
-            Corrupted && CrestWorn && MpLow && !Bound && !Dead && !Paused && !Cinematic;
-    }
-
     [HideFromIl2Cpp]
     private MpPenaltyState ReadMpPenaltyState(MpPenaltyTuning tuning, bool bound, bool dead)
     {
@@ -1811,7 +1786,7 @@ public sealed class PleasureObserver : MonoBehaviour
                 ? $"ON   chance {mp.Chance:P0} per press   cooldown {mp.CooldownSeconds:0.#}s"
                     + $"   MP below {mp.MpFraction:P0}   inputs {string.Join("/", mp.TriggerInputs)}"
                 : "OFF — set MpPenalty.Enabled=true AND MpPenalty.StunChance above 0",
-            $"conditions: {DescribeMpConditions(state, mp)}",
+            $"conditions: {state.Describe(mp)}",
             $"=> {(state.ConditionsMet ? "ALL MET (a press would roll)" : "NOT MET")}",
         };
 
@@ -1905,7 +1880,7 @@ public sealed class PleasureObserver : MonoBehaviour
         {
             PleasureRuntime.Log?.LogInfo(
                 "Shift+F4: the MP0 penalty was not fired because the conditions are not met — "
-                + $"{DescribeMpConditions(state, tuning)}. The conditions are never bypassed; press "
+                + $"{state.Describe(tuning)}. The conditions are never bypassed; press "
                 + "F4 to watch them.");
             return;
         }
@@ -1914,43 +1889,6 @@ public sealed class PleasureObserver : MonoBehaviour
             "Shift+F4: forcing the MP0 penalty. The press edge, the roll and the cooldown are "
             + "short-circuited; the conditions were all met.");
         PlayStagger();
-    }
-
-    /// <summary>Why the conditions do or do not hold, as one readable line.</summary>
-    [HideFromIl2Cpp]
-    private static string DescribeMpConditions(in MpPenaltyState state, MpPenaltyTuning tuning)
-    {
-        var parts = new List<string>(7);
-        parts.Add(state.CrestWorn ? "crest worn" : "NO crest");
-        parts.Add(state.Corrupted
-            ? $"corruption {state.CorruptionFraction:P0} >= {tuning.CorruptionFraction:P0}"
-            : $"corruption {state.CorruptionFraction:P0} BELOW {tuning.CorruptionFraction:P0}");
-        parts.Add(state.MpFraction < 0f
-            ? "MP UNREADABLE"
-            : state.MpLow
-                ? $"MP {state.Mp}/{state.MpMax} ({state.MpFraction:P0}) < {tuning.MpFraction:P0}"
-                : $"MP {state.Mp}/{state.MpMax} ({state.MpFraction:P0}) NOT below {tuning.MpFraction:P0}");
-        if (state.Bound)
-        {
-            parts.Add("BOUND");
-        }
-
-        if (state.Dead)
-        {
-            parts.Add("DEAD");
-        }
-
-        if (state.Paused)
-        {
-            parts.Add("PAUSED");
-        }
-
-        if (state.Cinematic)
-        {
-            parts.Add("CINEMATIC");
-        }
-
-        return string.Join(", ", parts);
     }
 
     /// <summary>Whether the game currently has the player in a defeat state.</summary>

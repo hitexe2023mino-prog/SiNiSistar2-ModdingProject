@@ -52,8 +52,8 @@ In-game verification steps live in [`docs/testing/SPEC004-test-scenarios.md`](..
 | FR-328 | IMGUI限定、Canvas・`timeScale` に触れない | `SpawnHud`（`GUI.Box` / `GUI.Label` のみ） | `ForbiddenSurfaceTests.TheHudNeverReachesIntoTheGamesUi`（4件）、AC-308 実機 | Design-time / unverified |
 | FR-329 | 描画例外でHUDを停止し1回提示 | `SpawnHud.OnGUI` の catch（`Mode=Off`、`_faultLogged`） | 実機（例外誘発は再現困難のためコードレビュー） | Implemented / unverified |
 | FR-330 | `Full` は停滞・上限・疑似宝箱・候補数を表示 | `HudModel.Full` | `HudModelTests.FullCoversStagnationBudgetCandidatesAndBoxes` ほか6件 | Tested |
-| FR-331 | デバッグ操作は設定有効時のみ、無効時は表示のみ | `SpawnHud.HandleKeys`（`commandsEnabled` ガード）、`HudModel.DebugPanel` | `HudModelTests.DebugPanelDropsTheNoticeOnceCommandsAreOn`、AC-319 実機 | Tested / unverified |
-| FR-334 | 無効時の押下を提示し、有効化手順を示す | `SpawnHud.HandleKeys`（`PressedWhileDisabled` と警告ログ）、`HudModel.DebugPanel`（設定キー・ファイル名・開き直し） | `HudModelTests.DebugPanelSpellsOutHowToEnableCommands` / `...AcknowledgesAPressMadeWhileDisabled`、AC-322 実機 | Tested / unverified |
+| FR-331 | デバッグ操作は設定有効時のみ、無効時は表示のみ | `SpawnHud.HandleKeys`（`commandsEnabled` ガード）、`HudModel.DebugHeader` | `HudModelTests.DebugHeaderStatesTheCapsStillApplyWhenOn`、AC-319 実機 | Tested / unverified |
+| FR-334 | 無効時の押下を提示し、有効化手順を示す | `SpawnHud.HandleKeys`（`PressedWhileDisabled` と警告ログ）、`HudModel.DebugHeader`（設定キー・ファイル名・開き直し） | `HudModelTests.DebugHeaderPointsAtTheSwitchWhenCommandsAreOff` / `.DebugHeaderAcknowledgesAnAttemptMadeWhileDisabled`、AC-322 実機 | Tested / unverified |
 | FR-335 | パネル開放時に設定を読み直す | `SpawnRuntime.ReloadConfig`（`SpawnPlugin` が設定）、`SpawnObserver.OnGUI` の開放遷移検知 | AC-322 実機 | Implemented / unverified |
 | FR-336 | 数字段とテンキーの双方を受け付ける | `SpawnHud.IsDigitKey`（`Alpha0+n` と `Keypad0+n`） | AC-322 実機 | Implemented / unverified |
 | FR-337 | スイッチで有効・無効を切り替え永続化、状態と結果を表示 | `HudModel.ToggleLabel`、`SpawnHud.DrawDebugPanel`（スイッチボタン）、`SpawnObserver.Dispatch`、`SpawnRuntime.SetDebugCommands`（`ConfigEntry.Value` 書き込み＝BepInEx が保存） | `HudModelTests.TheSwitchLabelSaysWhatAClickWillDo`、AC-322 実機 | Tested / unverified |

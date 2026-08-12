@@ -3,6 +3,7 @@ using BepInEx.Configuration;
 using BepInEx.Logging;
 using BepInEx.Unity.IL2CPP;
 using SiNiSistar2.Edi.Core;
+using SiNiSistar2.Shared;
 using UnityEngine;
 
 namespace SiNiSistar2.Edi.Plugin;
@@ -90,8 +91,10 @@ public sealed class EdiPlugin : BasePlugin
         string metadataHash;
         try
         {
-            gameAssemblyHash = BuildFingerprint.ComputeSha256(gameAssemblyPath);
-            metadataHash = BuildFingerprint.ComputeSha256(metadataPath);
+            // Through the shared guard so the 51 MB hash is computed once per process however
+            // many of this repository's MODs are installed (REFACTOR001 RF-001).
+            gameAssemblyHash = StartupGuard.Sha256(gameAssemblyPath);
+            metadataHash = StartupGuard.Sha256(metadataPath);
             if (!string.Equals(
                     gameAssemblyHash,
                     mappings.Document.TargetGameBuild.GameAssemblySha256,

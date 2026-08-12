@@ -13,6 +13,13 @@
     <Error Condition="!Exists('$(BepInExRoot)\interop\SiNiSistar2.dll')" Text="The selected BepInExRoot does not contain SiNiSistar2 interop assemblies. Start the game once with BepInEx 6 first." />
   </Target>
 
+  <!-- REFACTOR001 RF-001: shared by source, not by assembly. Every MOD needs the same
+       once-per-process startup work, but a shared DLL would make each MOD depend on it and
+       break single-MOD installs and independent updates (RJ-903). Linking the file keeps the
+       assemblies self-contained. -->
+  <ItemGroup>
+    <Compile Include="..\Shared\StartupGuard.cs" Link="StartupGuard.cs" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\SiNiSistar2.Spawn.Core\SiNiSistar2.Spawn.Core.csproj" />
     <Reference Include="BepInEx.Core" HintPath="$(BepInExRoot)\core\BepInEx.Core.dll" Private="false" />
