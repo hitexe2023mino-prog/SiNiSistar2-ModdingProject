@@ -7,6 +7,7 @@ using SiNiSistar2.Damage;
 using SiNiSistar2.Difficulty.Core;
 using SiNiSistar2.Manager;
 using SiNiSistar2.Obj;
+using SiNiSistar2.Shared;
 
 namespace SiNiSistar2.Difficulty.Plugin;
 

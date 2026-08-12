@@ -110,13 +110,13 @@ Normative source: [`docs/specifications/SPEC005.md`](../specifications/SPEC005.m
 | FR-406 | イベント中・敗北演出中・`timeScale=0` で停止。拘束中は継続 | `PleasureObserver.UpdateRegenBuff` | `RegenBuffTrackTests.NotAdvancingDoesNotSpendTheBuff`、実機 | Tested / unverified |
 | FR-407 | 永続化しない。スロット読込・新規開始・セーブポイントで破棄 | `PleasureRuntime.DiscardRegen`、`LoadSlot` / `EnterNoSlot` / `SavePointPatches` | `RegenBuffTrackTests.DiscardEnds...`、AC-406 実機 | Tested / unverified |
 | FR-408 | 快楽は 5.2.1 の式。淫紋係数は昇華済みのみ、段階連動禁止 | `PleasureMeter.AddSexualHit`、`DamageProbePatches` | `CrestPleasureAndValidationTests`（4件、AC-407・AC-415 を含む） | Tested |
-| FR-409 | 装着・堕落閾値・MP0・通常プレイ・生存のAND | `PleasureObserver.UpdateMpPenalty`、`PlayerVitals.IsMpEmpty` | `MpZeroStunSchedulerTests`、AC-408・409 実機 | Tested / unverified |
+| FR-409 | 装着・堕落閾値・MP0・通常プレイ・生存のAND | `PleasureObserver.UpdateMpPenalty`、`PlayerVitals.IsMpLow` | `MpZeroStunSchedulerTests`、AC-408・409 実機 | Tested / unverified |
 | FR-410 | 押下エッジのみ。押しっぱなしで再抽選しない。クールダウン | `MpZeroStunScheduler.Evaluate` | `MpZeroStunSchedulerTests`（4件、AC-410 を含む） | Tested |
 | FR-411 | 硬直はゲーム既存モーションの流用。新規モーションを作らない | `PleasureObserver.PlayStagger` → `MagicSword.PressedThisFrame()` / `Pressed()`。アニメータ状態は書かず、ゲームが空撃ち分岐で `AnimState.Magic_Sword1_Empty` を再生する | A-401 解決、実機確認待ち | Implemented / unverified |
 | FR-412 | バニラのMP0魔法硬直を変更しない。二重発生させない | `StunInputs.Defaults` から `Magic` を除外。ゲーム側へ一切介入しない | `MpZeroStunSchedulerTests.InputsOutsideTheConfiguredSetNeverTrigger`、AC-411 実機 | Tested / unverified |
 | FR-413 | ストック増加・昇華でピンクの靄。濃度は段階に応じる | `PleasureObserver.RaiseCrestProgressEffect` / `DrawCrestProgressFlash`、`CrestProgressEffect` | AC-412 実機 | Implemented / unverified |
 | FR-414 | 描画できなくても状態変化を妨げない。保留時は成立時に1回 | 演出は `ApplyPendingLustCrest` の付与成立後にのみ発火。描画は `OnGUI` の try/catch 内 | AC-412 実機 | Implemented / unverified |
-| FR-415 | 未確定値の既定は挙動不変。`Enabled` が偽なら介入しない | `PleasureOptions` の既定値、各 `*Tuning.HasEffect` | `CrestPleasureAndValidationTests.ShippedDefaultsLeaveEveryNewMechanismInert`、AC-413 | Tested |
+| FR-415 | 未確定値の既定は挙動不変。`Enabled` が偽なら介入しない | `PleasureOptions` の既定値、各 `*Tuning.HasEffect` | `CrestPleasureAndValidationTests.ShippedDefaultsLeaveOnlyTheUnmeasuredMechanismsInert`、AC-413 | Tested |
 | FR-416 | `Unload`・シーン遷移・例外でバフ・クールダウン・演出を破棄 | `PleasureRuntime.Reset`、`PleasureObserver.Suspend` | `MpZeroStunSchedulerTests.ResetClears...`、AC-414 実機 | Tested / unverified |
 | FR-417 | SPEC003 の既存規範を変更しない（FR-267 の適用規則を除く） | 基準増加量・単調非減少・上限・絶頂・サイドカーに変更なし | SPEC003 既存テスト 151 件が無変更で通過 | Tested |
 | FR-418 | 起動時に有効な機構・確定値・無効理由を記録 | `PleasurePlugin.LogCorruptionBonus` | 実機ログ | Implemented / unverified |

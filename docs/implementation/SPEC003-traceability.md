@@ -41,12 +41,12 @@ Every tuning value ships at no-change (FR-233) **without exception**: `SuppressS
 | FR-206 | 非性的な被弾・攻撃以外の減少・拘束外に介入しない | 前提を `IsBound` と5.3の判別に限定 | AC-204、AC-239、AC-240 実機 | Implemented / unverified |
 | FR-207 | 拘束中かつ性的攻撃のときだけ快楽を上げる | `DamageProbePatches.OneDamagePostfix`、`PleasureMeter` | `PleasureMeterTests`（7件）、AC-205 実機 | Tested / unverified |
 | FR-208 | 5.3の順序で判別、不明は非性的 | `SexualAttackClassifier`、`EnemyAttackCatalog` | `SexualAttackClassifierTests`（6件）、`EnemyAttackCatalogTests`（4件） | Tested |
-| FR-209 | 感度が快楽の上昇量を増やす | `PleasureMeter.AddSexualHit` | `PleasureMeterTests.SensitivityIncreasesTheGainPerHit` | Tested |
+| FR-209 | 感度が快楽の上昇量を増やす | `PleasureMeter.AddSexualHit` | `PleasureMeterTests.CorruptionIncreasesTheGainPerHit` | Tested |
 | FR-210 | 拘束外で減衰、拘束中は減衰しない | `PleasureObserver.DecayWhenFree`、`PleasureMeter.Decay` | `PleasureMeterTests`（2件）、AC-208 実機 | Tested / unverified |
 | FR-211 | 上限到達で1回だけ絶頂処理 | `PleasureMeter.ConsumeClimax`、`PleasureObserver.ConsumeClimax` | `PleasureMeterTests.AFullGaugeYieldsExactlyOneClimax` | Tested |
 | FR-212 | 絶頂演出はMOD描画、`timeScale` を変えない | `PleasureObserver.DrawClimaxFlash` / `DrawVignette`、`PleasureArt` | AC-210 実機 | Implemented / unverified |
 | FR-213 | 演出が出なくても状態変化と判定は行う | `PleasureObserver.ConsumeClimax`（演出に依存しない） | AC-211 | Implemented / unverified |
-| FR-214 | 限界は基礎値＋耐久から算出、読めなければ基礎値 | `ClimaxLimit.Compute`、`PleasureObserver.IsAtClimaxLimit` | `SensitivityAndClimaxTests`（4件）、3.3 の A-6 | Tested / unverified |
+| FR-214 | 限界は基礎値＋耐久から算出、読めなければ基礎値 | `ClimaxLimit.Compute`、`PleasureObserver.ApplyClimaxLimit` | `CorruptionAndClimaxTests.TheLimitGrowsWithDurability` / `.AnUnreadableDurabilityLeavesTheBaseIntact` / `.TheLimitIsReachedOnlyAtOrAboveTheCount`、3.3 の A-6 | Tested / unverified |
 | FR-215 | 限界到達でMODがHPを `0` にする。ゲームオーバー処理は呼ばない | `PleasureObserver.ApplyClimaxLimit`、`PlayerHealth.Kill` | `ClimaxLethalityTests`（8件）、3.1.2 の A-51、AC-213 実機 | Tested / unverified |
 | FR-216 | 契機は絶頂の成立時のみ。死亡中・発火済みは行わない | `ClimaxLethality.ShouldBeLethal`、`PleasureRuntime.ClimaxDeathFired` | `ClimaxLethalityTests`、AC-229、AC-243 実機 | Tested / unverified |
 | FR-275 | HP操作はゲーム自身のAPI。効かなければ次の手段へ | `PlayerHealth`（`DontSub`→書き戻し、`SubAll`→`SetCurrentValue`→`RequestCommonDead`） | A-50、A-51 実機 | Implemented / unverified |
@@ -55,7 +55,7 @@ Every tuning value ships at no-change (FR-233) **without exception**: `SuppressS
 | FR-278 | 快楽が上がらない設定では抑止しない | `PleasureProfile.BlocksSexualHpDamage` | `PleasureProfileTests`（3件）、AC-242 実機 | Tested / unverified |
 | FR-279 | `EnableClimaxGameOver` が偽なら致死化しない。事実は記録する | `ClimaxLethality.ShouldBeLethal`、`ApplyClimaxLimit` のログ | `ClimaxLethalityTests.TheLimitDoesNothingWhenTheGameOverIsOff`、AC-244 実機 | Tested / unverified |
 | FR-217 | セーブポイント／オベリスクで絶頂回数を0へ、感度は戻さない | `SavePointPatches.SetObeliskModePostfix` | `SensitivityAndClimaxTests.ResettingTheCount...`、3.4 の A-7 | Tested / unverified |
-| FR-218 | 絶頂と性的被弾で感度が増える | `PleasureObserver.ConsumeClimax`、`DamageProbePatches` | `SensitivityAndClimaxTests` | Tested / unverified |
+| FR-218 | 絶頂と性的被弾で感度が増える | `PleasureObserver.ConsumeClimax`、`DamageProbePatches` | `CorruptionAndClimaxTests` | Tested / unverified |
 | FR-219 | 感度を減少させる経路を持たない | `SensitivityTrack.Add`（非正を無視） | `SensitivityAndClimaxTests.SensitivityNeverFalls`、AC-215 実機 | Tested |
 | FR-220 | 感度は上限で頭打ち、減少ではない | `SensitivityTrack` | `SensitivityAndClimaxTests.TheCapStopsGrowth...` | Tested |
 | FR-221 | 条件成立で `BreastSuper` へ遷移、正規経路で付与 | `BreastEscalation`、`BreastPatches`、`PleasureObserver.ApplyPendingBreastSuper` | `BreastEscalationTests`（7件）、AC-217 実機 | Tested / unverified |

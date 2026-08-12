@@ -1,0 +1,4 @@
+interface:
+  display_name: "リファクタ計画の実装"
+  short_description: "確定した施策台帳をコードへ反映し、挙動保存を検証する"
+  default_prompt: "$implement-refactor-plan を使って、この確定したリファクタ計画の施策をコードへ実装し、挙動が変わっていないことを検証してください。"

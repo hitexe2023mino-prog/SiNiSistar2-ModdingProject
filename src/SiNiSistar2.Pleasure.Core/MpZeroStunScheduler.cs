@@ -91,8 +91,10 @@ public sealed class MpZeroStunScheduler
     /// </summary>
     /// <param name="conditionsMet">
     /// Everything 5.3 requires at once: the crest is worn, corruption is at or above the threshold,
-    /// MP is empty, play is ordinary, and the player is alive. Gathered by the caller because every
-    /// one of those is a question only the game can answer.
+    /// MP is below <c>MpPenaltyMpFraction</c> of the bar, play is ordinary, and the player is
+    /// alive. A fraction rather than an empty bar since CHG-517: zero is a state the player passes
+    /// through rather than sits in. Gathered by the caller because every one of those is a question
+    /// only the game can answer.
     /// </param>
     /// <param name="heldInputs">Trigger inputs held down this frame.</param>
     /// <param name="now">Unscaled seconds, used for the cooldown.</param>

@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 
-namespace SiNiSistar2.Difficulty.Plugin;
+namespace SiNiSistar2.Shared;
 
 /// <summary>
 /// Startup work that every MOD in this repository needs but that must not be done more than once
